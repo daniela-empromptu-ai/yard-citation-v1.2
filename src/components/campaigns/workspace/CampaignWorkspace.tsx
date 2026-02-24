@@ -28,6 +28,23 @@ const TABS = [
   { id: 'activity', label: 'Activity' },
 ];
 
+interface CampaignCreatorRow {
+  id: string; creator_id: string; creator_name: string; primary_handle: string | null;
+  pipeline_stage: string; is_dormant: boolean; is_autodubbed_suspected: boolean;
+  competitor_affiliated: boolean; last_content_date: string | null;
+  creator_topics: string[]; languages: string[];
+  ingestion_status: string; ingestion_error: string | null; updated_at: string;
+  scoring_status: string; overall_score: number | null; evidence_coverage: string | null;
+  needs_manual_review: boolean | null; evaluated_at: string | null;
+  outreach_state: string; next_followup_due_at: string | null; owner_name: string | null;
+}
+
+interface ActivityRow {
+  id: string; event_type: string; actor_name: string | null; created_at: string;
+  event_data_json: Record<string, unknown>; campaign_creator_id: string | null;
+  creator_id: string | null;
+}
+
 interface Props {
   campaign: {
     id: string; name: string; status: string; stage: string;
@@ -35,12 +52,12 @@ interface Props {
     language: string; client_name: string; owner_name: string; collaborator_name: string | null;
     additional_prompt_context: string | null; updated_at: string; owner_user_id: string;
   };
-  personas: unknown[];
-  topics: unknown[];
-  promptGaps: unknown[];
-  searchTerms: unknown[];
-  campaignCreators: unknown[];
-  activityLog: unknown[];
+  personas: { id: string; campaign_id: string; persona_name: string }[];
+  topics: { id: string; campaign_id: string; topic: string; source: string; confidence: number | null; rationale: string | null; order_index: number; approved: boolean }[];
+  promptGaps: { id: string; campaign_id: string; prompt_text: string; priority: string; persona: string | null; geo: string[]; gap_note: string | null; status: string; updated_at: string }[];
+  searchTerms: { id: string; campaign_id: string; term: string; category_tag: string; why_it_helps: string; order_index: number; approved: boolean; approved_by_user_id: string | null; approved_at: string | null; notes: string | null }[];
+  campaignCreators: CampaignCreatorRow[];
+  activityLog: ActivityRow[];
   initialTab: string;
 }
 

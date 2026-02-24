@@ -69,6 +69,16 @@ export function CoverageBadge({ coverage }: { coverage: string }) {
   return <Badge variant={map[coverage] || 'default'}>{coverage}</Badge>
 }
 
+// Coverage tag (alias for CoverageBadge)
+export function CoverageTag({ coverage }: { coverage: string }) {
+  return <CoverageBadge coverage={coverage} />
+}
+
+// Flag badge
+export function FlagBadge({ flag }: { flag: string }) {
+  return <Badge variant="danger" size="sm">{flag.replace(/_/g, ' ')}</Badge>
+}
+
 // Platform badge
 export function PlatformBadge({ platform }: { platform: string }) {
   const map: Record<string, BadgeVariant> = {

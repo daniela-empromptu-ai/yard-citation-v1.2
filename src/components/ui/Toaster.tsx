@@ -5,7 +5,7 @@ import { CheckCircle, XCircle, X } from 'lucide-react'
 
 interface Toast {
   id: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   message: string;
 }
 
@@ -43,6 +43,7 @@ export function Toaster() {
           className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border max-w-sm animate-fade-in ${
             t.type === 'success' ? 'bg-green-50 border-green-200' :
             t.type === 'error' ? 'bg-red-50 border-red-200' :
+            t.type === 'warning' ? 'bg-amber-50 border-amber-200' :
             'bg-blue-50 border-blue-200'
           }`}
         >
@@ -51,6 +52,7 @@ export function Toaster() {
           <span className={`text-sm flex-1 ${
             t.type === 'success' ? 'text-green-800' :
             t.type === 'error' ? 'text-red-800' :
+            t.type === 'warning' ? 'text-amber-800' :
             'text-blue-800'
           }`}>{t.message}</span>
           <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600">

@@ -5,9 +5,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const [settingsRes, integrationsRes, seedRunRes] = await Promise.all([
-    dbQuery(`SELECT * FROM ${t('app_settings')} LIMIT 1`),
-    dbQuery(`SELECT * FROM ${t('integration_status')} ORDER BY integration_key`),
-    dbQuery(`
+    dbQuery<{ id: string; mask_pii_by_default: boolean; outreach_ready_score_threshold: number; min_evidence_coverage: string; default_ai_model: string }>(`SELECT * FROM ${t('app_settings')} LIMIT 1`),
+    dbQuery<{ id: string; integration_key: string; is_configured: boolean; last_tested_at: string | null; last_test_result: string | null; last_test_message: string | null }>(`SELECT * FROM ${t('integration_status')} ORDER BY integration_key`),
+    dbQuery<{ seed_version: string; seeded_at: string; seeded_by_name: string; notes: string | null }>(`
       SELECT dsr.*, u.name as seeded_by_name
       FROM ${t('demo_seed_runs')} dsr
       LEFT JOIN ${t('app_users')} u ON u.id = dsr.seeded_by_user_id

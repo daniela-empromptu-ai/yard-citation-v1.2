@@ -59,7 +59,7 @@ export default function CampaignLayout({ children }: { children: React.ReactNode
               <span>{String(campaign.client_name)}</span>
               <span>Â·</span>
               <span>Owner: {String(campaign.owner_name)}</span>
-              {campaign.language && <><span>Â·</span><span>{String(campaign.language)}</span></>}
+              {Boolean(campaign.language) && <><span>Â·</span><span>{String(campaign.language)}</span></>}
             </div>
           )}
         </div>

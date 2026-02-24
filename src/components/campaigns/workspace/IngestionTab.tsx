@@ -185,7 +185,7 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
                       <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
                         {ci.word_count && <span>{ci.word_count.toLocaleString()} words</span>}
                         {ci.published_at && <span>{formatDateTime(ci.published_at)}</span>}
-                        {ci.metadata_json?.view_count && <span>{Number(ci.metadata_json.view_count).toLocaleString()} views</span>}
+                        {Boolean(ci.metadata_json?.view_count) && <span>{Number(ci.metadata_json.view_count).toLocaleString()} views</span>}
                       </div>
                     </div>
                     <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">â</span>
