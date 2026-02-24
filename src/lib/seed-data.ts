@@ -402,15 +402,15 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
     [IDS.ST_2, 'kubecost vs alternative comparison', 'competitor', 'Captures high-intent searchers evaluating Kubecost alternativesâprime audience for CloudForge positioning.', NOW],
     [IDS.ST_3, 'kubernetes cost optimization hpa cluster autoscaler', 'problem_solution', 'Targets engineers trying to reduce costs via autoscalingâa natural entry point for CloudForge recommendations.', NOW],
     [IDS.ST_4, 'finops kubernetes showback chargeback implementation', 'implementation', 'FinOps practitioners implementing showback/chargeback are ideal CloudForge prospects.', NOW],
-    [IDS.ST_5, 'opentelemetry cost attribution kubernetes', 'integration', 'CloudForge's OTel compatibility is a key differentiator; this term reaches the observability-savvy audience.', NOW],
-    [IDS.ST_6, 'prometheus cost monitoring kubernetes', 'integration', 'Prometheus-heavy teams are natural CloudForge adopters given the tool's monitoring integration story.', NOW],
+    [IDS.ST_5, 'opentelemetry cost attribution kubernetes', 'integration', "CloudForge's OTel compatibility is a key differentiator; this term reaches the observability-savvy audience.", NOW],
+    [IDS.ST_6, 'prometheus cost monitoring kubernetes', 'integration', "Prometheus-heavy teams are natural CloudForge adopters given the tool's monitoring integration story.", NOW],
     [IDS.ST_7, 'gke cost optimization tutorial', 'tutorial_format', 'GKE-specific cost tutorials reach a large segment of the Kubernetes market using Google Cloud.', NOW],
     [IDS.ST_8, 'eks cost optimization workload rightsizing', 'tutorial_format', 'AWS EKS users looking for rightsizing tutorials are a high-value audience for CloudForge.', NOW],
     [IDS.ST_9, 'terraform kubernetes cost monitoring setup', 'programming_language', 'Infrastructure-as-code users who manage Kubernetes via Terraform are a technically sophisticated, high-fit segment.', NOW],
     [IDS.ST_10, 'helm install kubecost alternative', 'implementation', 'Helm-based installation queries indicate teams evaluating toolingâready to switch if shown a better option.', NOW],
     [IDS.ST_11, 'kubernetes cost anomaly detection prometheus', 'problem_solution', 'Cost anomaly detection is a CloudForge differentiator; this term finds teams who have already felt the pain.', NOW],
     [IDS.ST_12, 'platform engineering finops kubernetes', 'product_category', 'Platform engineering + FinOps intersection is the exact ICP for CloudForge; strong brand-fit signal.', NOW],
-    [IDS.ST_13, 'kubernetes namespace cost dashboard grafana', 'integration', 'Grafana dashboard builders are likely to appreciate CloudForge's visualization and integration capabilities.', NOW],
+    [IDS.ST_13, 'kubernetes namespace cost dashboard grafana', 'integration', "Grafana dashboard builders are likely to appreciate CloudForge's visualization and integration capabilities.", NOW],
     [IDS.ST_14, 'reduce cloud bill kubernetes without downtime', 'problem_solution', 'Captures engineers with the exact problem CloudForge solvesâcost reduction without reliability risk.', NOW],
     [IDS.ST_15, 'kubernetes multi-cloud cost visibility', 'product_category', 'Multi-cloud cost visibility is another CloudForge differentiator; this term attracts enterprise platform teams.', NOW],
   ]
@@ -531,7 +531,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   }
 
   // ---- PLATFORM ACCOUNTS ----
-  const platformAccounts: [string, string, string, string | null, string, number | null][] = [
+  const platformAccounts: [string, string, string | null, string | null, string | null, number | null][] = [
     // Nina
     [IDS.CREATOR_NINA, 'youtube', 'KubeCraft', 'https://youtube.com/@kubecraft', null, 58000],
     [IDS.CREATOR_NINA, 'blog', null, 'https://kubecraft.dev/blog', null, null],

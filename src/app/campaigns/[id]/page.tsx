@@ -29,11 +29,24 @@ export default async function CampaignPage({ params, searchParams }: Props) {
       LEFT JOIN ${t('app_users')} u2 ON u2.id = camp.collaborator_user_id
       WHERE camp.id = $1
     `, [id]),
-    dbQuery(`SELECT * FROM ${t('campaign_personas')} WHERE campaign_id = $1`, [id]),
-    dbQuery(`SELECT * FROM ${t('campaign_topics')} WHERE campaign_id = $1 ORDER BY order_index`, [id]),
-    dbQuery(`SELECT * FROM ${t('campaign_prompt_gaps')} WHERE campaign_id = $1 ORDER BY priority, created_at`, [id]),
-    dbQuery(`SELECT * FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 ORDER BY order_index`, [id]),
-    dbQuery(`
+    dbQuery<{ id: string; campaign_id: string; persona_name: string }>(
+      `SELECT * FROM ${t('campaign_personas')} WHERE campaign_id = $1`, [id]),
+    dbQuery<{ id: string; campaign_id: string; topic: string; source: string; confidence: number | null; rationale: string | null; order_index: number; approved: boolean }>(
+      `SELECT * FROM ${t('campaign_topics')} WHERE campaign_id = $1 ORDER BY order_index`, [id]),
+    dbQuery<{ id: string; campaign_id: string; prompt_text: string; priority: string; persona: string | null; geo: string[]; gap_note: string | null; status: string; updated_at: string }>(
+      `SELECT * FROM ${t('campaign_prompt_gaps')} WHERE campaign_id = $1 ORDER BY priority, created_at`, [id]),
+    dbQuery<{ id: string; campaign_id: string; term: string; category_tag: string; why_it_helps: string; order_index: number; approved: boolean; approved_by_user_id: string | null; approved_at: string | null; notes: string | null }>(
+      `SELECT * FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 ORDER BY order_index`, [id]),
+    dbQuery<{
+      id: string; creator_id: string; campaign_id: string; creator_name: string;
+      primary_handle: string | null; pipeline_stage: string;
+      is_dormant: boolean; is_autodubbed_suspected: boolean; competitor_affiliated: boolean;
+      last_content_date: string | null; creator_topics: string[]; languages: string[];
+      ingestion_status: string; ingestion_error: string | null; updated_at: string;
+      scoring_status: string; overall_score: number | null; evidence_coverage: string | null;
+      needs_manual_review: boolean | null; evaluated_at: string | null;
+      outreach_state: string; next_followup_due_at: string | null; owner_name: string | null;
+    }>(`
       SELECT
         cc.*,
         c.display_name as creator_name, c.primary_handle, c.is_dormant, c.is_autodubbed_suspected,
@@ -47,7 +60,7 @@ export default async function CampaignPage({ params, searchParams }: Props) {
       WHERE cc.campaign_id = $1
       ORDER BY cc.created_at DESC
     `, [id]),
-    dbQuery(`
+    dbQuery<{ id: string; event_type: string; actor_name: string | null; created_at: string; event_data_json: Record<string, unknown>; campaign_creator_id: string | null; creator_id: string | null }>(`
       SELECT al.*, u.name as actor_name
       FROM ${t('activity_log')} al
       LEFT JOIN ${t('app_users')} u ON u.id = al.actor_user_id

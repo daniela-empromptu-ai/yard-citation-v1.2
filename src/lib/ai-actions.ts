@@ -346,18 +346,18 @@ Return ONLY valid JSON:
 }
 
 // ---- Stub: YouTube Search ----
-export function stubYoutubeSearch(term: string): Array<{
+export async function stubYoutubeSearch(term: string): Promise<Array<{
   channelName: string; channelUrl: string; subscriberCount: number; lastVideoDate: string; topics: string[]
-}> {
+}>> {
   return [
     { channelName: `Creator for "${term}"`, channelUrl: `https://youtube.com/@creator-stub`, subscriberCount: 15000, lastVideoDate: '2026-01-15', topics: [term] },
   ]
 }
 
 // ---- Stub: Reddit Fetch ----
-export function stubRedditFetch(subreddits: string[], keywords: string[]): Array<{
+export async function stubRedditFetch(subreddits: string[], keywords: string[]): Promise<Array<{
   title: string; url: string; subreddit: string; karma: number; comment_count: number; reddit_post_id: string;
-}> {
+}>> {
   return subreddits.flatMap(sr =>
     keywords.map((kw, i) => ({
       title: `[Stub] ${kw} discussion in r/${sr}`,

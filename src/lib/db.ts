@@ -12,6 +12,7 @@ export interface QueryResult<T = Record<string, unknown>> {
   row_count: number
   affected_rows: number
   message: string
+  error?: string
 }
 
 export async function dbQuery<T = Record<string, unknown>>(
@@ -42,6 +43,10 @@ export async function dbSchema(schema: object): Promise<{ ok: boolean; message: 
   }
   const text = await res.text()
   throw new Error(`Schema failed (${res.status}): ${text}`)
+}
+
+export function t(tableName: string): string {
+  return tableName
 }
 
 export async function callAIApi(endpoint: string, body: object): Promise<unknown> {

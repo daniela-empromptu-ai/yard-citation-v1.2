@@ -8,7 +8,7 @@ interface Props {
   personas: { persona_name: string }[];
   topics: { topic: string; approved: boolean }[];
   campaignCreators: { pipeline_stage: string; scoring_status: string; outreach_state: string }[];
-  activityLog: { id: string; event_type: string; actor_name?: string; created_at: string; event_data_json: Record<string, unknown> }[];
+  activityLog: { id: string; event_type: string; actor_name?: string | null; created_at: string; event_data_json: Record<string, unknown> }[];
   [key: string]: unknown;
 }
 

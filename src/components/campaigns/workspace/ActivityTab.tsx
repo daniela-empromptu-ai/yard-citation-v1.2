@@ -3,7 +3,7 @@
 import { formatDateTime } from '@/lib/utils';
 
 interface ActivityEntry {
-  id: string; event_type: string; actor_name?: string; created_at: string;
+  id: string; event_type: string; actor_name?: string | null; created_at: string;
   event_data_json: Record<string, unknown>; campaign_creator_id: string | null;
   creator_id: string | null;
 }
@@ -41,7 +41,7 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
     return (
       <span className="text-xs text-gray-500">
         Score: <strong className="text-gray-700">{data.score as number}</strong> Â· Coverage: {data.coverage as string}
-        {data.needs_manual_review && ' Â· â  NMR'}
+        {Boolean(data.needs_manual_review) && ' Â· â  NMR'}
       </span>
     );
   }
@@ -49,7 +49,7 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
     return (
       <span className="text-xs text-gray-500">
         Decision: <strong className="text-gray-700">{(data.decision as string)?.replace(/_/g, ' ')}</strong>
-        {data.notes_md && ` Â· "${data.notes_md as string}"`}
+        {Boolean(data.notes_md) && ` Â· "${data.notes_md as string}"`}
       </span>
     );
   }

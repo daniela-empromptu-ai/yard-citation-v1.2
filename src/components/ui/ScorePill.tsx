@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 
 interface ScorePillProps {
-  score: number;
+  score: number | null;
   size?: 'sm' | 'md' | 'lg';
   showBar?: boolean;
 }
@@ -12,7 +12,8 @@ function getScoreColor(score: number) {
   return { text: 'text-red-700', bg: 'bg-red-100', bar: 'bg-red-500', border: 'border-red-200' }
 }
 
-export function ScorePill({ score, size = 'sm', showBar = false }: ScorePillProps) {
+export function ScorePill({ score: scoreProp, size = 'sm', showBar = false }: ScorePillProps) {
+  const score = scoreProp ?? 0
   const c = getScoreColor(score)
   return (
     <div className={clsx('inline-flex flex-col items-center gap-0.5', size === 'lg' ? 'min-w-[64px]' : '')}>
@@ -33,6 +34,8 @@ export function ScorePill({ score, size = 'sm', showBar = false }: ScorePillProp
     </div>
   )
 }
+
+export default ScorePill
 
 interface RubricBarsProps {
   scores: {

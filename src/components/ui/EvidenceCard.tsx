@@ -4,9 +4,15 @@ interface EvidenceCardProps {
   quote: string;
   url: string;
   title?: string;
+  platform?: string;
+  published_at?: string | null;
+  // Accept both camelCase and snake_case for flexibility
   timestampStart?: number | null;
   timestampEnd?: number | null;
+  timestamp_start?: number | null;
+  timestamp_end?: number | null;
   whyItMatters?: string;
+  why_it_matters?: string;
   dimension?: string;
 }
 
@@ -27,8 +33,13 @@ const DIMENSION_COLORS: Record<string, string> = {
 }
 
 export function EvidenceCard({
-  quote, url, title, timestampStart, timestampEnd, whyItMatters, dimension
+  quote, url, title, platform,
+  timestampStart, timestampEnd, timestamp_start, timestamp_end,
+  whyItMatters, why_it_matters, dimension
 }: EvidenceCardProps) {
+  const tsStart = timestampStart ?? timestamp_start
+  const tsEnd = timestampEnd ?? timestamp_end
+  const whyMatters = whyItMatters ?? why_it_matters
   const colorClass = dimension ? (DIMENSION_COLORS[dimension] || DIMENSION_COLORS.general) : DIMENSION_COLORS.general
 
   return (
@@ -42,17 +53,17 @@ export function EvidenceCard({
       </div>
 
       {/* Timestamp */}
-      {(timestampStart !== null && timestampStart !== undefined) && (
+      {(tsStart !== null && tsStart !== undefined) && (
         <div className="flex items-center gap-1.5 text-[11px] text-blue-600 mb-1.5">
           <Clock size={11} />
           <a
-            href={`${url}?t=${timestampStart}`}
+            href={`${url}?t=${tsStart}`}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:underline font-medium"
           >
-            [{formatTime(timestampStart)}
-            {timestampEnd ? ` â ${formatTime(timestampEnd)}` : ''}]
+            [{formatTime(tsStart)}
+            {tsEnd ? ` → ${formatTime(tsEnd)}` : ''}]
           </a>
         </div>
       )}
@@ -69,12 +80,13 @@ export function EvidenceCard({
         >
           {title || url}
         </a>
+        {platform && <span className="text-slate-400 shrink-0">· {platform}</span>}
       </div>
 
       {/* Why it matters */}
-      {whyItMatters && (
+      {whyMatters && (
         <p className="text-[11px] text-slate-600 mt-1.5 pt-1.5 border-t border-slate-200">
-          <span className="font-semibold">Why it matters:</span> {whyItMatters}
+          <span className="font-semibold">Why it matters:</span> {whyMatters}
         </p>
       )}
 
@@ -89,3 +101,5 @@ export function EvidenceCard({
     </div>
   )
 }
+
+export default EvidenceCard

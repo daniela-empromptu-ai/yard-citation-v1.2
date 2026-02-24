@@ -40,7 +40,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
   const [personaInput, setPersonaInput] = useState('');
   const [topics, setTopics] = useState<string[]>([]);
   const [topicInput, setTopicInput] = useState('');
-  const [aiTopics, setAiTopics] = useState<{ topic: string; confidence: number; rationale: string }[]>([]);
+  const [aiTopics, setAiTopics] = useState<{ topic: string; confidence: number; rationale: string; approved?: boolean }[]>([]);
 
   // Step 4
   const [gaps, setGaps] = useState<{ prompt_text: string; priority: string; persona: string; status: string }[]>([]);

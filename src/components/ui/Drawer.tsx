@@ -42,3 +42,5 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
     </>
   )
 }
+
+export default Drawer
