@@ -1,4 +1,4 @@
-import { dbSchema } from './db'
+import { dbSchema, dbQuery } from './db'
 
 export async function initSchema(): Promise<void> {
   const schema = {
@@ -509,4 +509,19 @@ export async function initSchema(): Promise<void> {
   }
 
   await dbSchema(schema)
+
+  // Ensure default users exist
+  const { IDS } = await import('./seed-ids')
+  const users = [
+    { id: IDS.USER_JACK, name: 'Jack Scrivener', email: 'jack@yard.internal', role: 'qualifier' },
+    { id: IDS.USER_ARYA, name: 'Arya', email: 'arya@yard.internal', role: 'outreach' },
+    { id: IDS.USER_KARL, name: 'Karl McCarthy', email: 'karl@yard.internal', role: 'admin' },
+    { id: IDS.USER_EMPROMPTU, name: 'Empromptu', email: 'admin@empromptu.internal', role: 'admin' },
+  ]
+  for (const u of users) {
+    await dbQuery(
+      `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,now(),now()) ON CONFLICT (email) DO NOTHING`,
+      [u.id, u.name, u.email, u.role]
+    )
+  }
 }

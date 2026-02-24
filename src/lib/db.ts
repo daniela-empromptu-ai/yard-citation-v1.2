@@ -49,6 +49,11 @@ export function t(tableName: string): string {
   return tableName
 }
 
+export function pgArray(arr: string[]): string {
+  if (!arr || arr.length === 0) return '{}';
+  return '{' + arr.map(v => '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"').join(',') + '}';
+}
+
 export async function callAIApi(endpoint: string, body: object): Promise<unknown> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',

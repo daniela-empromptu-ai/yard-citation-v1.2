@@ -86,7 +86,13 @@ export default function NewCampaignWizard({ clients, users }: Props) {
           prompt_gaps: gaps,
         }),
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        addToast('error', `Server error (${res.status})`);
+        return;
+      }
       if (data.campaign_id) {
         setCreatedId(data.campaign_id);
         addToast('success', 'Campaign created!');
@@ -94,6 +100,8 @@ export default function NewCampaignWizard({ clients, users }: Props) {
       } else {
         addToast('error', data.error || 'Failed to create campaign');
       }
+    } catch (e) {
+      addToast('error', (e as Error).message || 'Network error');
     } finally {
       setLoading(false);
     }
