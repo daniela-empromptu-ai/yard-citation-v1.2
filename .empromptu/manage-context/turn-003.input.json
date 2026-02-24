@@ -1,0 +1,486 @@
+{
+  "turn": 3,
+  "most_recent_context_snapshot_messages": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Extend the existing Next.js (App Router) + TypeScript internal ops app with a new preview configuration manifest at .empromptu/manifest.json. The manifest should specify the setup command (e.g., npm install), the start command (e.g., npm run dev), and the server port to run on, enabling a dedicated preview environment. This addition complements the current scope, which includes: 34 exact Postgres tables seeded with v0-demo-1, admin tools to seed/clear data, role-based UI (Qualifier, Outreach, Admin) with a desktop-first layout, routes (/, /campaigns, /campaigns/new, /campaigns/[id] with tabs, /creators, /outreach, /reddit, /metrics, /settings), core workflows (campaign setup, 15 exact YouTube search terms per campaign, discovery and ingestion of YouTube transcripts, blogs, Reddit, with Reddit read-only), AI-driven prompts (Suggest Topics, Generate 15 Search Terms, Score Creator with evidence validation against ingested content, Outreach Draft) via the base API at builder-api.staging.empromptu.ai using /setup_ai_prompt and /apply_prompt_to_data, plus admin/api endpoints (/create-agent, /chat, /analyze_image, /get_data_from_url). Seed data per Section 9 (users, clients, Campaign A with 12 creators and 6+ content items with exact quotes for evidence), AI seed data, and integration details for YouTube/Reddit with environment variables ANTHROPIC_API_KEY, YOUTUBE_API_KEY, REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET read from .env.local (stubbed calls for placeholder keys; real Anthropic calls otherwise). Include Reddit integration (read-only), admin UI to Clear/Seed Demo Data, auditable DB-backed actions, and a full campaign workflow with human approval gates before outreach and copy-only outreach (no sends), ending in metrics. Also ensure the preview config supports the existing architecture, including the required environment and data flows. \n\nThe user provided the following instructions above. You are an AI assistant that helps users solve problems using code skills, and a powerful data pipeline API system. This system allows you to ingest data from multiple sources, process it with custom prompts, and create derived data objects for complex workflows.\n\nGenerated App ID: 81cf7fb7-67cd-4de2-bf73-193203e3ddb4\n\nYour task:\n1. The user has put together a requirements doc and wants your help putting functions together to create an app that does some task and then returns results to them. This may or may not require the API system. Help the user no matter what they need.\n\n## Your Role\n\nAs an AI assistant using this system:\n1. **Design efficient pipelines** that minimize API calls while maximizing insight\n2. **Provide clear API calls** with proper JSON formatting\n3. **Explain your reasoning** for the chosen approach\n4. **Suggest follow-up steps** or alternative approaches when helpful\n\n\n## Framework\n\nIMPORTANT: Build this project using nextjs. Follow nextjs best practices and conventions.\n\n## Base API Templates\n\n## Available API Endpoints (all API endpoints are at https://builder-api.staging.empromptu.ai)\n\n**CRITICAL - Required Authentication Headers for ALL API calls:**\n```javascript\nconst API_BASE_URL = 'https://builder-api.staging.empromptu.ai';\nconst AUTH_HEADERS = {\n'Content-Type': 'application/json',\n'Authorization': 'Bearer d4d5ed47d417b7e549dd4d2437410203',\n'X-Generated-App-ID': '81cf7fb7-67cd-4de2-bf73-193203e3ddb4',\n'X-Usage-Key': 'e59f58ae3bfc0374ac121f49a55d1354'\n};\n\n// Example fetch call:\nconst response = await fetch(`${API_BASE_URL}/apply_prompt_to_data`, {\nmethod: 'POST',\nheaders: AUTH_HEADERS,\nbody: JSON.stringify(data)\n});\n```\n\nWithout these headers, API calls will fail with 401 Unauthorized.\n\n### 1. AI prompt setup: '/setup_ai_prompt'\ninput_variables: List[str]\nprompt_text: str\n\n**Purpose**: Set up an AI prompt to be applied to text-only data later on.\n**Method**: POST\n**Parameters**:\n- \"prompt_name\" (string): Name of the new prompt.  Should be short and the same each time it is called.\n- \"input_variables\" (list): List of strings. Each of these will be included in the prompt text.\n- \"prompt_text\" (string): Text of the new prompt. Only one unique string should ever be associated with each prompt_name.  Each input variable should be included in this text, in curly braces.\n**Example Usage**:\nRequest body:\n{\n\"prompt_name\": \"summarize_info\",\n\"input_variables\": [\"num_points\",\"raw_info\"],\n\"prompt_text\": \"Please summarize the following data using {num_points} bullet points: {raw_info}\"\n}\n\n### 2. Data Processing: '/apply_prompt_to_data'\n**Purpose**: Apply AI prompts to data to generate new insights\n**Method**: POST\n**Parameters**:\n- 'prompt_name' (string): Name of the prompt to use\n- 'input_data' (object): Names of new objects to create from results. Should be short and the same each time it is called.\n- 'return_type' (string): Format to retrieve object in. The actual data will be in a key called \"value\" returned from this call.\n**Object Formats for return_type**:\nThese determine how the data in the key called 'value' will be formatted.  Options:\n- 'pretty_text': Text formatted for human reading. Should be used where easily readable text is desired.\n- 'pretty_html': Data formatted as an array of HTML strings (each line of the HTML document is a separate array element), to be read by a browser or injected into a web page.\n- 'raw_text': Merge all data from the object into one combined text. Only suitable for additional analysis or parsing.\n- 'structured': Returns a native JavaScript array of objects, like [{\"key1\":\"val1\",\"key2\":\"val2\"},{...}]. Designed to use when the answer has multiple parts or elements. If you use this be sure to write a robust data handler that can handle format variations.\n\n**Example Usage**:\nRequest body:\n{\n\"prompt_name\": \"summarize_info\",\n\"input_data\": {\n\"num_points\": \"5\",\n\"raw_info\": \"Here is some information about a topic of interest......\",\n\"return_type\": \"pretty_text\"\n}\n}\nHeaders must include Authorization and X-Generated-App-ID as shown above.\n\n### 3. Agent Creation\n\nMake a new agent: /create-agent\n**Purpose**: Create a new chatbot to handle a specific question or problem\n**Method**: POST\n**Parameters**:\n- 'instructions' (string): Brief description of what the chatbot or agent should accomplish.\n- 'agent_name' (string): What this agent calls itself in conversation.\n**Returned Values**\n- 'agent_id' (string): ID for using this agent.\n\n**Example Usage**:\n{\n\"instructions\": \"\"\"You are a professional data processing assistant for Impromptu Labs.\nYou help users store, manage, and process data using our MongoDB system.\"\"\",\n\"agent_name\": \"Data Processing Assistant\"\n}\n\nTalk to an existing agent: /chat\n**Purpose**: Continue the conversation with an agent\n**Method**: POST\n**Parameters**:\n- 'agent_id' (string): The system name for the agent, returned from create-agent\n- 'message' (string): Input text to send to the agent.\n- 'session_id' (string): ID string representing this session. Use a new one for each conversation.\n**Returned Values**\n- 'response' (string): The text response from the agent.\n\n**Example Usage**:\n{\n\"agent_id\": agent_id,\n\"message\": \"Hi! I'm new to this system. Can you help me understand how to store data?\"\n}\n\n### 4. Image Analysis\nAnalyze the contents of an Image: /analyze_image\n**Purpose**: Do all extraction of information from images in one step.  This is a standalone step to go from image to text.  It requires image data as input, so extract images from documents as necessary before using this method.\n**Method**: POST\n**Parameters**:\n- 'image' (binary): Binary image file data. Note that you need to send the data as multipart form data with an actual file, not as JSON with a base64 string. Additionally, the API expects an image field, not \"file.\"\n- 'prompt' (string): A prompt to analyze the image, e.g. \"Descibe the contents of this image\" or \"how many dogs are in this image\".\n**Returned Values**\n- 'value' (string): Text response from the image analyzer.\n\n### 5. URL/Webpage Reading: /get_data_from_url\ninput_data (string): URL to retrieve the text from.\n**Purpose**: Extract text from a web page\n**Method**: POST\n**Parameters**:\ninput_data (string): URL to retrieve the text from.\n**Returned Values**\n- 'text' (string): Text from the web page.\n\n## Step 1: Analyze the Problem\n- What data sources are involved? (text, files, websites, etc.)\n- What processing or analysis is needed?\n- What output format or insights are desired?\n- Are there multiple steps or transformations required?\n\n### Step 2: Plan the Pipeline\n1. **Data Ingestion**: Identify what needs to be imported and how\n2. **Processing Steps**: Determine what prompts/transformations are needed\n3. **Output Goals**: Define what final objects should be created\n\n### Step 3: Execute the Solution\n- Set up the AI prompts using '/setup_ai_prompt'\n- Apply the AI prompts to input text using '/apply_prompt_to_data'\n- Chain multiple processing steps if needed\n- Verify results using the management endpoints\n\n## Iterative Processing\nBuild complex workflows by chaining operations:\n1. Ingest raw data\n2. Extract key points\n3. Categorize points\n4. Generate final report\n\n## Competitive Intelligence\n**User**: \"Compare our product features with 5 competitor websites\"\n**Solution**:\n1. Use '/get_data_from_url' to scrape competitor sites\n2. Use '/setup_ai_prompt' to prepare a prompt that extracts product info\n3. Use '/apply_prompt_to_data' to extract features from each web page's data\n4. Compare the resulting data\n\n### Document Processing\n**User**: \"Extract action items from 20 meeting transcripts and categorize them\"\n**Solution**:\n1. Upload transcripts and process them locally\n2. Use '/setup_ai_prompt' to prepare a prompt that extracts action items\n3. Use '/setup_ai_prompt' to prepare a prompt that categorizes action items\n3. Use '/apply_prompt_to_data' with 'structured' return_type\n4. Iterate through each output and use '/apply_prompt_to_data' to categorize each item\n\n## Best Practices\n\n### Naming Conventions\n- Use descriptive object names: 'meeting_transcripts', 'competitor_analysis'\n- Include processing step in names: 'raw_articles' â 'article_summaries' â 'final_report'\n\n### Prompt Engineering\n- Use clear placeholders: '{object_name}'\n- Anywhere an object name is needed, use a single consistent name instead of appending UIDs or timestamps.\n- Specify desired output format in prompts\n- Include example outputs when helpful\n- Request structured data when building pipelines\n\n### Efficiency\n- Use existing capabilities as they are rather than rewriting them\n- All error messages displayed in the app should include the direct output from the API function being called.\n- Ensure you set up any AI prompts before you use them.\n- If PDF parsing is necessary, add it using the client-side library pdfjs-dist, and the line: import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url'\n- If plots and charts are necessary, add them using Chart.js with react-chartjs-2.\n- Combine related processing steps when possible\n\n## Additional functions and APIs:\n\n\n## Database Requirements\n\n# DATABASE CONNECTION INFORMATION\n\nYou have access to a postgres database, that can be accessed with 2 api endpoints:\n\n## Create or change schema: /database/schema\n\n- This endpoint sets up or changes the database. It takes a schema in json format. Call this when the app starts, to declare the database structure.\n- This endpoint will return 3 types of responses. a success response (status code 200), a 304 or an error (either 400s or 500s).\n- Important: you should treat the 304 Error as ok, and not block because of it.\n\n**Request body example:**\n\n{\n\"tables\": [\n{\n\"name\": \"products\",\n\"columns\": [\n{\n\"name\": \"id\",\n\"type\": \"uuid\",\n\"nullable\": false,\n\"default\": \"gen_random_uuid()\"\n},\n{ \"name\": \"name\", \"type\": \"text\", \"nullable\": false },\n{\n\"name\": \"price\",\n\"type\": \"numeric\",\n\"nullable\": false,\n\"default\": \"0\"\n}\n]\n},\n{\n\"name\": \"events\",\n\"columns\": [\n{ \"name\": \"id\", \"type\": \"bigint\", \"nullable\": false },\n{ \"name\": \"occurred_at\", \"type\": \"timestamptz\", \"default\": \"now()\" },\n{ \"name\": \"processed\", \"type\": \"boolean\", \"default\": \"false\" }\n]\n}\n],\n\"indexes\": [\n{\n\"table\": \"products\",\n\"columns\": [\"name\"],\n\"name\": \"products_name_uq\",\n\"unique\": true\n}\n]\n}\n\n## Query the database: /database/query\n\nThis endpoint queries the database. Use this for INSERT or SELECT operations.\n\n**Request body example:**\n\n{\n\"query\": \"SELECT \\* FROM public_table WHERE id = $1 AND username = $2\",\n\"params\": [123, \"steve\"]\n}\n\n**Response example:**\n\n{\n\"success\": true,\n\"data\": [{ \"id\": 1, \"name\": \"a\" }],\n\"row_count\": 1,\n\"affected_rows\": 0,\n\"message\": \"ok\"\n}\n\n## Changing the Schema\n\nFor adding columns, send the new schema to /database/schema. Do not drop or alter existing columns in place.\nFor destructive changes (dropping columns, changing types), instead create a new table with the new schema you want, add data to that new table, and then use that table.\nAllowed operations: CREATE TABLE/INDEX/VIEW; ALTER TABLE ADD COLUMN; ALTER TABLE RENAME\nBlocked Operations: DROP and ALTER COLUMN modifications\n\nFor dates and times, use ISO 8601 format:\n\n- Dates: YYYY-MM-DD (e.g., 2024-03-15)\n- Times: HH:MM:SS (e.g., 14:30:00)\n- Datetimes: YYYY-MM-DD HH:MM:SS (e.g., 2024-03-15 14:30:00)\n- Timezone-aware: Add Z for UTC (e.g., 2024-03-15 14:30:00Z)\n- Do not send explicit timezone-offsets, translate to UTC instead if necessary.\n\nHandle responses by:\n\n- Check response.data.length > 0 to see if data was returned\n- Check response.affected_rows to see if rows were modified\n- If a /database/query call returns a 400, the error message comes from Postgresâfix the SQL or schema and retry.\n- Column type allowlist (includes parameterized and array forms): text, varchar/character/char, numeric/decimal, integer/bigint/smallint, boolean, date/time/timestamp/timestamptz, uuid, json/jsonb, bytea, vector or vector(n).\n- Prefer unlimited-size data types (bigint, text, and numeric) to ensure there is always enough space.\n- You can use the vector data type for columns, vector similarity search operations, and standard pgvector SQL functions and operators.\n\nSchema: app_81cf7fb767cd4de2bf73193203e3ddb4"
+        }
+      ],
+      "metadata": {
+        "buildOptions": {}
+      },
+      "id": "4udErbvTbuAQlOx7"
+    },
+    {
+      "id": "fAGdfyKJPGnYCs4b",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "No files available yet. Ready to help create your project.",
+          "state": "done"
+        }
+      ],
+      "metadata": {
+        "system": true,
+        "codeSnapshot": true
+      }
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Please analyze this project and create a .empromptu/manifest.json file to configure the preview system. The manifest should specify the setup command (e.g., npm install), the start command (e.g., npm run dev), and the port the server runs on.\nDon't alter anything but what you need to to make this happen, and say why you changed the lines you did.  Only modify files you have the contents of, do not rewrite summarized files."
+        }
+      ],
+      "metadata": {
+        "buildOptions": {}
+      },
+      "id": "azPgX74V54jxhqFU"
+    }
+  ],
+  "most_recent_messages_unrecorded": [
+    {
+      "id": "V7aMckJ4zB57sG6S",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "data-manageContextFiles",
+          "id": "561d3027-16f7-46bc-abb7-2ae54c6f7ce2",
+          "data": {
+            "status": "completed",
+            "files": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "GhAZgEjZaBCDUvdq",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "data-manageContextFiles",
+          "id": "561d3027-16f7-46bc-abb7-2ae54c6f7ce2",
+          "data": {
+            "status": "completed",
+            "files": []
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Let me first inspect the project structure to understand what's already there.",
+          "state": "done"
+        },
+        {
+          "type": "tool-fs_list",
+          "toolCallId": "toolu_018Ra7GXzhSCJZ6XWgGYfJ9H",
+          "state": "output-available",
+          "input": {},
+          "output": {
+            "path": ".",
+            "count": 10,
+            "truncated": false,
+            "entries": [
+              ".empromptu/",
+              ".next/",
+              "src/",
+              ".env.local",
+              "next.config.js",
+              "package-lock.json",
+              "package.json",
+              "postcss.config.mjs",
+              "tailwind.config.ts",
+              "tsconfig.json"
+            ]
+          },
+          "callProviderMetadata": {
+            "anthropic": {
+              "caller": {
+                "type": "direct"
+              }
+            }
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "tool-fs_read",
+          "toolCallId": "toolu_0186hM8u5DEvw455UAk4qrmh",
+          "state": "output-available",
+          "input": {
+            "path": "package.json"
+          },
+          "output": {
+            "filePath": "package.json",
+            "totalLines": 33,
+            "segments": [
+              {
+                "startLine": 1,
+                "endLine": 33,
+                "requestedEndLine": 33,
+                "content": "{\n  \"name\": \"yard-creator-ops\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\",\n    \"lint\": \"next lint\"\n  },\n  \"dependencies\": {\n    \"next\": \"14.2.5\",\n    \"react\": \"^18\",\n    \"react-dom\": \"^18\",\n    \"typescript\": \"^5\",\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^18\",\n    \"@types/react-dom\": \"^18\",\n    \"tailwindcss\": \"^3.4.1\",\n    \"autoprefixer\": \"^10.0.1\",\n    \"postcss\": \"^8\",\n    \"clsx\": \"^2.1.1\",\n    \"react-markdown\": \"^9.0.1\",\n    \"lucide-react\": \"^0.395.0\",\n    \"chart.js\": \"^4.4.3\",\n    \"react-chartjs-2\": \"^5.2.0\",\n    \"date-fns\": \"^3.6.0\",\n    \"react-hot-toast\": \"^2.4.1\",\n    \"uuid\": \"^10.0.0\",\n    \"@types/uuid\": \"^10.0.0\"\n  }\n}\n",
+                "lines": [
+                  {
+                    "number": 1,
+                    "content": "{"
+                  },
+                  {
+                    "number": 2,
+                    "content": "  \"name\": \"yard-creator-ops\","
+                  },
+                  {
+                    "number": 3,
+                    "content": "  \"version\": \"0.1.0\","
+                  },
+                  {
+                    "number": 4,
+                    "content": "  \"private\": true,"
+                  },
+                  {
+                    "number": 5,
+                    "content": "  \"scripts\": {"
+                  },
+                  {
+                    "number": 6,
+                    "content": "    \"dev\": \"next dev\","
+                  },
+                  {
+                    "number": 7,
+                    "content": "    \"build\": \"next build\","
+                  },
+                  {
+                    "number": 8,
+                    "content": "    \"start\": \"next start\","
+                  },
+                  {
+                    "number": 9,
+                    "content": "    \"lint\": \"next lint\""
+                  },
+                  {
+                    "number": 10,
+                    "content": "  },"
+                  },
+                  {
+                    "number": 11,
+                    "content": "  \"dependencies\": {"
+                  },
+                  {
+                    "number": 12,
+                    "content": "    \"next\": \"14.2.5\","
+                  },
+                  {
+                    "number": 13,
+                    "content": "    \"react\": \"^18\","
+                  },
+                  {
+                    "number": 14,
+                    "content": "    \"react-dom\": \"^18\","
+                  },
+                  {
+                    "number": 15,
+                    "content": "    \"typescript\": \"^5\","
+                  },
+                  {
+                    "number": 16,
+                    "content": "    \"@types/node\": \"^20\","
+                  },
+                  {
+                    "number": 17,
+                    "content": "    \"@types/react\": \"^18\","
+                  },
+                  {
+                    "number": 18,
+                    "content": "    \"@types/react-dom\": \"^18\","
+                  },
+                  {
+                    "number": 19,
+                    "content": "    \"tailwindcss\": \"^3.4.1\","
+                  },
+                  {
+                    "number": 20,
+                    "content": "    \"autoprefixer\": \"^10.0.1\","
+                  },
+                  {
+                    "number": 21,
+                    "content": "    \"postcss\": \"^8\","
+                  },
+                  {
+                    "number": 22,
+                    "content": "    \"clsx\": \"^2.1.1\","
+                  },
+                  {
+                    "number": 23,
+                    "content": "    \"react-markdown\": \"^9.0.1\","
+                  },
+                  {
+                    "number": 24,
+                    "content": "    \"lucide-react\": \"^0.395.0\","
+                  },
+                  {
+                    "number": 25,
+                    "content": "    \"chart.js\": \"^4.4.3\","
+                  },
+                  {
+                    "number": 26,
+                    "content": "    \"react-chartjs-2\": \"^5.2.0\","
+                  },
+                  {
+                    "number": 27,
+                    "content": "    \"date-fns\": \"^3.6.0\","
+                  },
+                  {
+                    "number": 28,
+                    "content": "    \"react-hot-toast\": \"^2.4.1\","
+                  },
+                  {
+                    "number": 29,
+                    "content": "    \"uuid\": \"^10.0.0\","
+                  },
+                  {
+                    "number": 30,
+                    "content": "    \"@types/uuid\": \"^10.0.0\""
+                  },
+                  {
+                    "number": 31,
+                    "content": "  }"
+                  },
+                  {
+                    "number": 32,
+                    "content": "}"
+                  },
+                  {
+                    "number": 33,
+                    "content": ""
+                  }
+                ]
+              }
+            ],
+            "content": "{\n  \"name\": \"yard-creator-ops\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\",\n    \"lint\": \"next lint\"\n  },\n  \"dependencies\": {\n    \"next\": \"14.2.5\",\n    \"react\": \"^18\",\n    \"react-dom\": \"^18\",\n    \"typescript\": \"^5\",\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^18\",\n    \"@types/react-dom\": \"^18\",\n    \"tailwindcss\": \"^3.4.1\",\n    \"autoprefixer\": \"^10.0.1\",\n    \"postcss\": \"^8\",\n    \"clsx\": \"^2.1.1\",\n    \"react-markdown\": \"^9.0.1\",\n    \"lucide-react\": \"^0.395.0\",\n    \"chart.js\": \"^4.4.3\",\n    \"react-chartjs-2\": \"^5.2.0\",\n    \"date-fns\": \"^3.6.0\",\n    \"react-hot-toast\": \"^2.4.1\",\n    \"uuid\": \"^10.0.0\",\n    \"@types/uuid\": \"^10.0.0\"\n  }\n}\n"
+          },
+          "callProviderMetadata": {
+            "anthropic": {
+              "caller": {
+                "type": "direct"
+              }
+            }
+          }
+        },
+        {
+          "type": "tool-fs_list",
+          "toolCallId": "toolu_01CzH971Vfr7wzj2JWDAzTKv",
+          "state": "output-available",
+          "input": {
+            "path": ".empromptu"
+          },
+          "output": {
+            "path": ".empromptu",
+            "count": 9,
+            "truncated": false,
+            "entries": [
+              "chats/",
+              "code/",
+              "context/",
+              "manage-context/",
+              "project-files/",
+              "snapshots/",
+              "managed-files.json",
+              "meta.json",
+              "turns.jsonl"
+            ]
+          },
+          "callProviderMetadata": {
+            "anthropic": {
+              "caller": {
+                "type": "direct"
+              }
+            }
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "No existing `manifest.json` is present. The `dev` script in `package.json` runs `next dev` without a port flag, so I need to confirm there's no `next.config.js` port override either.",
+          "state": "done"
+        },
+        {
+          "type": "tool-fs_read",
+          "toolCallId": "toolu_01V5q1crZdoKvbBbLAUAJ8Kg",
+          "state": "output-available",
+          "input": {
+            "path": "next.config.js"
+          },
+          "output": {
+            "filePath": "next.config.js",
+            "totalLines": 11,
+            "segments": [
+              {
+                "startLine": 1,
+                "endLine": 11,
+                "requestedEndLine": 11,
+                "content": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  experimental: {\n    serverActions: {\n      bodySizeLimit: '10mb',\n    },\n  },\n};\n\nmodule.exports = nextConfig;\n",
+                "lines": [
+                  {
+                    "number": 1,
+                    "content": "/** @type {import('next').NextConfig} */"
+                  },
+                  {
+                    "number": 2,
+                    "content": "const nextConfig = {"
+                  },
+                  {
+                    "number": 3,
+                    "content": "  experimental: {"
+                  },
+                  {
+                    "number": 4,
+                    "content": "    serverActions: {"
+                  },
+                  {
+                    "number": 5,
+                    "content": "      bodySizeLimit: '10mb',"
+                  },
+                  {
+                    "number": 6,
+                    "content": "    },"
+                  },
+                  {
+                    "number": 7,
+                    "content": "  },"
+                  },
+                  {
+                    "number": 8,
+                    "content": "};"
+                  },
+                  {
+                    "number": 9,
+                    "content": ""
+                  },
+                  {
+                    "number": 10,
+                    "content": "module.exports = nextConfig;"
+                  },
+                  {
+                    "number": 11,
+                    "content": ""
+                  }
+                ]
+              }
+            ],
+            "content": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  experimental: {\n    serverActions: {\n      bodySizeLimit: '10mb',\n    },\n  },\n};\n\nmodule.exports = nextConfig;\n"
+          },
+          "callProviderMetadata": {
+            "anthropic": {
+              "caller": {
+                "type": "direct"
+              }
+            }
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Everything I need is clear. The project is a standard Next.js 14 app with `npm run dev` as the dev script and no custom port set anywhere. I only need to create the manifest â no existing files need modification.",
+          "state": "done"
+        },
+        {
+          "type": "tool-fs_write",
+          "toolCallId": "toolu_01Q7v7vzfHd55NRmHHgqPGCu",
+          "state": "output-available",
+          "input": {
+            "path": ".empromptu/manifest.json",
+            "content": "{\n  \"processes\": {\n    \"web\": {\n      \"setup\": \"npm install\",\n      \"command\": \"npm run dev -- --port 1913\",\n      \"port\": 1913\n    }\n  }\n}\n"
+          },
+          "output": {
+            "filePath": ".empromptu/manifest.json",
+            "bytesWritten": 140
+          },
+          "callProviderMetadata": {
+            "anthropic": {
+              "caller": {
+                "type": "direct"
+              }
+            }
+          }
+        },
+        {
+          "type": "data-heartbeat",
+          "id": "5b2415d5-822f-42b9-a793-165457313f56",
+          "data": {
+            "count": 2
+          }
+        },
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "**Only one file was created: `.empromptu/manifest.json`.** No existing files were touched.\n\nHere's why each field is set the way it is:\n\n- **`setup: \"npm install\"`** â installs all dependencies declared in `package.json` before the server starts; this is the standard one-time bootstrap step for any Node/Next.js project.\n- **`command: \"npm run dev -- --port 1913\"`** â invokes the existing `dev` script from `package.json` (`next dev`) and appends `--port 1913` via the `--` separator so Next.js binds to the required preview port (1913) rather than its default 3000.\n- **`port: 1913`** â tells the preview system which port to health-check and expose; it must match the port passed in the command above.",
+          "state": "done"
+        },
+        {
+          "type": "data-mainStreamComplete",
+          "data": {
+            "timestamp": 1771895597867
+          }
+        },
+        {
+          "type": "data-deploy",
+          "data": {
+            "status": "synced",
+            "timestamp": 1771895597867
+          }
+        },
+        {
+          "type": "data-gitCommitComplete",
+          "data": {
+            "turn": 2,
+            "persisted": {
+              "mongodb": true,
+              "git_local": true,
+              "git_remote": true
+            }
+          }
+        },
+        {
+          "type": "data-completion",
+          "data": {
+            "finishReason": "stop",
+            "timestamp": 1771895604159
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Unhandled Runtime Error\nTypeError: Cannot read properties of undefined (reading 'analyzed_week')\n\nSource\nsrc/app/page.tsx (100:63) @ analyzed_week\n\n   98 |           {/* Stats */}\n   99 |           <div className=\"grid grid-cols-4 gap-4 mb-6\">\n> 100 |             <StatCard label=\"Analyzed this week\" value={stats.analyzed_week || 0} icon={BarChart3} color=\"bg-blue-500\" />\n      |                                                               ^\n  101 |             <StatCard label=\"Needs manual review\" value={stats.needs_review || 0} icon={AlertTriangle} color=\"bg-amber-500\" />\n  102 |             <StatCard label=\"Approved for outreach\" value={stats.outreach_ready || 0} icon={CheckCircle} color=\"bg-green-500\" />\n  103 |             <StatCard label=\"Active campaigns\" value={stats.active_campaigns || 0} icon={Megaphone} color=\"bg-purple-500\" />\n"
+        }
+      ],
+      "id": "KkIuG71wjNaDFWh0"
+    }
+  ],
+  "most_recent_user_intent": "build",
+  "most_recent_user_summary_request": "Extend the existing Next.js (App Router) + TypeScript internal ops app with a new preview configuration manifest at .empromptu/manifest.json. The manifest should specify the setup command (e.g., npm install), the start command (e.g., npm run dev), and the server port to run on, enabling a dedicated preview environment. This addition complements the current scope, which includes: 34 exact Postgres tables seeded with v0-demo-1, admin tools to seed/clear data, role-based UI (Qualifier, Outreach, Admin) with a desktop-first layout, routes (/, /campaigns, /campaigns/new, /campaigns/[id] with tabs, /creators, /outreach, /reddit, /metrics, /settings), core workflows (campaign setup, 15 exact YouTube search terms per campaign, discovery and ingestion of YouTube transcripts, blogs, Reddit, with Reddit read-only), AI-driven prompts (Suggest Topics, Generate 15 Search Terms, Score Creator with evidence validation against ingested content, Outreach Draft) via the base API at builder-api.staging.empromptu.ai using /setup_ai_prompt and /apply_prompt_to_data, plus admin/api endpoints (/create-agent, /chat, /analyze_image, /get_data_from_url). Seed data per Section 9 (users, clients, Campaign A with 12 creators and 6+ content items with exact quotes for evidence), AI seed data, and integration details for YouTube/Reddit with environment variables ANTHROPIC_API_KEY, YOUTUBE_API_KEY, REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET read from .env.local (stubbed calls for placeholder keys; real Anthropic calls otherwise). Include Reddit integration (read-only), admin UI to Clear/Seed Demo Data, auditable DB-backed actions, and a full campaign workflow with human approval gates before outreach and copy-only outreach (no sends), ending in metrics. Also ensure the preview config supports the existing architecture, including the required environment and data flows. ",
+  "latest_user_statement": "Unhandled Runtime Error\nTypeError: Cannot read properties of undefined (reading 'analyzed_week')\n\nSource\nsrc/app/page.tsx (100:63) @ analyzed_week\n\n   98 |           {/* Stats */}\n   99 |           <div className=\"grid grid-cols-4 gap-4 mb-6\">\n> 100 |             <StatCard label=\"Analyzed this week\" value={stats.analyzed_week || 0} icon={BarChart3} color=\"bg-blue-500\" />\n      |                                                               ^\n  101 |             <StatCard label=\"Needs manual review\" value={stats.needs_review || 0} icon={AlertTriangle} color=\"bg-amber-500\" />\n  102 |             <StatCard label=\"Approved for outreach\" value={stats.outreach_ready || 0} icon={CheckCircle} color=\"bg-green-500\" />\n  103 |             <StatCard label=\"Active campaigns\" value={stats.active_campaigns || 0} icon={Megaphone} color=\"bg-purple-500\" />\n",
+  "updated_code": [],
+  "api_instructions": "\n\nThe user provided the following instructions above. You are an AI assistant that helps users solve problems using code skills, and a powerful data pipeline API system. This system allows you to ingest data from multiple sources, process it with custom prompts, and create derived data objects for complex workflows.\n\nGenerated App ID: 81cf7fb7-67cd-4de2-bf73-193203e3ddb4\n\nYour task:\n1. The user has put together a requirements doc and wants your help putting functions together to create an app that does some task and then returns results to them. This may or may not require the API system. Help the user no matter what they need.\n\n## Your Role\n\nAs an AI assistant using this system:\n1. **Design efficient pipelines** that minimize API calls while maximizing insight\n2. **Provide clear API calls** with proper JSON formatting\n3. **Explain your reasoning** for the chosen approach\n4. **Suggest follow-up steps** or alternative approaches when helpful\n\n\n## Framework\n\nIMPORTANT: Build this project using nextjs. Follow nextjs best practices and conventions.\n\n## Base API Templates\n\n## Available API Endpoints (all API endpoints are at https://builder-api.staging.empromptu.ai)\n\n**CRITICAL - Required Authentication Headers for ALL API calls:**\n```javascript\nconst API_BASE_URL = 'https://builder-api.staging.empromptu.ai';\nconst AUTH_HEADERS = {\n'Content-Type': 'application/json',\n'Authorization': 'Bearer d4d5ed47d417b7e549dd4d2437410203',\n'X-Generated-App-ID': '81cf7fb7-67cd-4de2-bf73-193203e3ddb4',\n'X-Usage-Key': 'e59f58ae3bfc0374ac121f49a55d1354'\n};\n\n// Example fetch call:\nconst response = await fetch(`${API_BASE_URL}/apply_prompt_to_data`, {\nmethod: 'POST',\nheaders: AUTH_HEADERS,\nbody: JSON.stringify(data)\n});\n```\n\nWithout these headers, API calls will fail with 401 Unauthorized.\n\n### 1. AI prompt setup: '/setup_ai_prompt'\ninput_variables: List[str]\nprompt_text: str\n\n**Purpose**: Set up an AI prompt to be applied to text-only data later on.\n**Method**: POST\n**Parameters**:\n- \"prompt_name\" (string): Name of the new prompt.  Should be short and the same each time it is called.\n- \"input_variables\" (list): List of strings. Each of these will be included in the prompt text.\n- \"prompt_text\" (string): Text of the new prompt. Only one unique string should ever be associated with each prompt_name.  Each input variable should be included in this text, in curly braces.\n**Example Usage**:\nRequest body:\n{\n\"prompt_name\": \"summarize_info\",\n\"input_variables\": [\"num_points\",\"raw_info\"],\n\"prompt_text\": \"Please summarize the following data using {num_points} bullet points: {raw_info}\"\n}\n\n### 2. Data Processing: '/apply_prompt_to_data'\n**Purpose**: Apply AI prompts to data to generate new insights\n**Method**: POST\n**Parameters**:\n- 'prompt_name' (string): Name of the prompt to use\n- 'input_data' (object): Names of new objects to create from results. Should be short and the same each time it is called.\n- 'return_type' (string): Format to retrieve object in. The actual data will be in a key called \"value\" returned from this call.\n**Object Formats for return_type**:\nThese determine how the data in the key called 'value' will be formatted.  Options:\n- 'pretty_text': Text formatted for human reading. Should be used where easily readable text is desired.\n- 'pretty_html': Data formatted as an array of HTML strings (each line of the HTML document is a separate array element), to be read by a browser or injected into a web page.\n- 'raw_text': Merge all data from the object into one combined text. Only suitable for additional analysis or parsing.\n- 'structured': Returns a native JavaScript array of objects, like [{\"key1\":\"val1\",\"key2\":\"val2\"},{...}]. Designed to use when the answer has multiple parts or elements. If you use this be sure to write a robust data handler that can handle format variations.\n\n**Example Usage**:\nRequest body:\n{\n\"prompt_name\": \"summarize_info\",\n\"input_data\": {\n\"num_points\": \"5\",\n\"raw_info\": \"Here is some information about a topic of interest......\",\n\"return_type\": \"pretty_text\"\n}\n}\nHeaders must include Authorization and X-Generated-App-ID as shown above.\n\n### 3. Agent Creation\n\nMake a new agent: /create-agent\n**Purpose**: Create a new chatbot to handle a specific question or problem\n**Method**: POST\n**Parameters**:\n- 'instructions' (string): Brief description of what the chatbot or agent should accomplish.\n- 'agent_name' (string): What this agent calls itself in conversation.\n**Returned Values**\n- 'agent_id' (string): ID for using this agent.\n\n**Example Usage**:\n{\n\"instructions\": \"\"\"You are a professional data processing assistant for Impromptu Labs.\nYou help users store, manage, and process data using our MongoDB system.\"\"\",\n\"agent_name\": \"Data Processing Assistant\"\n}\n\nTalk to an existing agent: /chat\n**Purpose**: Continue the conversation with an agent\n**Method**: POST\n**Parameters**:\n- 'agent_id' (string): The system name for the agent, returned from create-agent\n- 'message' (string): Input text to send to the agent.\n- 'session_id' (string): ID string representing this session. Use a new one for each conversation.\n**Returned Values**\n- 'response' (string): The text response from the agent.\n\n**Example Usage**:\n{\n\"agent_id\": agent_id,\n\"message\": \"Hi! I'm new to this system. Can you help me understand how to store data?\"\n}\n\n### 4. Image Analysis\nAnalyze the contents of an Image: /analyze_image\n**Purpose**: Do all extraction of information from images in one step.  This is a standalone step to go from image to text.  It requires image data as input, so extract images from documents as necessary before using this method.\n**Method**: POST\n**Parameters**:\n- 'image' (binary): Binary image file data. Note that you need to send the data as multipart form data with an actual file, not as JSON with a base64 string. Additionally, the API expects an image field, not \"file.\"\n- 'prompt' (string): A prompt to analyze the image, e.g. \"Descibe the contents of this image\" or \"how many dogs are in this image\".\n**Returned Values**\n- 'value' (string): Text response from the image analyzer.\n\n### 5. URL/Webpage Reading: /get_data_from_url\ninput_data (string): URL to retrieve the text from.\n**Purpose**: Extract text from a web page\n**Method**: POST\n**Parameters**:\ninput_data (string): URL to retrieve the text from.\n**Returned Values**\n- 'text' (string): Text from the web page.\n\n## Step 1: Analyze the Problem\n- What data sources are involved? (text, files, websites, etc.)\n- What processing or analysis is needed?\n- What output format or insights are desired?\n- Are there multiple steps or transformations required?\n\n### Step 2: Plan the Pipeline\n1. **Data Ingestion**: Identify what needs to be imported and how\n2. **Processing Steps**: Determine what prompts/transformations are needed\n3. **Output Goals**: Define what final objects should be created\n\n### Step 3: Execute the Solution\n- Set up the AI prompts using '/setup_ai_prompt'\n- Apply the AI prompts to input text using '/apply_prompt_to_data'\n- Chain multiple processing steps if needed\n- Verify results using the management endpoints\n\n## Iterative Processing\nBuild complex workflows by chaining operations:\n1. Ingest raw data\n2. Extract key points\n3. Categorize points\n4. Generate final report\n\n## Competitive Intelligence\n**User**: \"Compare our product features with 5 competitor websites\"\n**Solution**:\n1. Use '/get_data_from_url' to scrape competitor sites\n2. Use '/setup_ai_prompt' to prepare a prompt that extracts product info\n3. Use '/apply_prompt_to_data' to extract features from each web page's data\n4. Compare the resulting data\n\n### Document Processing\n**User**: \"Extract action items from 20 meeting transcripts and categorize them\"\n**Solution**:\n1. Upload transcripts and process them locally\n2. Use '/setup_ai_prompt' to prepare a prompt that extracts action items\n3. Use '/setup_ai_prompt' to prepare a prompt that categorizes action items\n3. Use '/apply_prompt_to_data' with 'structured' return_type\n4. Iterate through each output and use '/apply_prompt_to_data' to categorize each item\n\n## Best Practices\n\n### Naming Conventions\n- Use descriptive object names: 'meeting_transcripts', 'competitor_analysis'\n- Include processing step in names: 'raw_articles' â 'article_summaries' â 'final_report'\n\n### Prompt Engineering\n- Use clear placeholders: '{object_name}'\n- Anywhere an object name is needed, use a single consistent name instead of appending UIDs or timestamps.\n- Specify desired output format in prompts\n- Include example outputs when helpful\n- Request structured data when building pipelines\n\n### Efficiency\n- Use existing capabilities as they are rather than rewriting them\n- All error messages displayed in the app should include the direct output from the API function being called.\n- Ensure you set up any AI prompts before you use them.\n- If PDF parsing is necessary, add it using the client-side library pdfjs-dist, and the line: import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url'\n- If plots and charts are necessary, add them using Chart.js with react-chartjs-2.\n- Combine related processing steps when possible\n\n## Additional functions and APIs:\n\n\n## Database Requirements\n\n# DATABASE CONNECTION INFORMATION\n\nYou have access to a postgres database, that can be accessed with 2 api endpoints:\n\n## Create or change schema: /database/schema\n\n- This endpoint sets up or changes the database. It takes a schema in json format. Call this when the app starts, to declare the database structure.\n- This endpoint will return 3 types of responses. a success response (status code 200), a 304 or an error (either 400s or 500s).\n- Important: you should treat the 304 Error as ok, and not block because of it.\n\n**Request body example:**\n\n{\n\"tables\": [\n{\n\"name\": \"products\",\n\"columns\": [\n{\n\"name\": \"id\",\n\"type\": \"uuid\",\n\"nullable\": false,\n\"default\": \"gen_random_uuid()\"\n},\n{ \"name\": \"name\", \"type\": \"text\", \"nullable\": false },\n{\n\"name\": \"price\",\n\"type\": \"numeric\",\n\"nullable\": false,\n\"default\": \"0\"\n}\n]\n},\n{\n\"name\": \"events\",\n\"columns\": [\n{ \"name\": \"id\", \"type\": \"bigint\", \"nullable\": false },\n{ \"name\": \"occurred_at\", \"type\": \"timestamptz\", \"default\": \"now()\" },\n{ \"name\": \"processed\", \"type\": \"boolean\", \"default\": \"false\" }\n]\n}\n],\n\"indexes\": [\n{\n\"table\": \"products\",\n\"columns\": [\"name\"],\n\"name\": \"products_name_uq\",\n\"unique\": true\n}\n]\n}\n\n## Query the database: /database/query\n\nThis endpoint queries the database. Use this for INSERT or SELECT operations.\n\n**Request body example:**\n\n{\n\"query\": \"SELECT \\* FROM public_table WHERE id = $1 AND username = $2\",\n\"params\": [123, \"steve\"]\n}\n\n**Response example:**\n\n{\n\"success\": true,\n\"data\": [{ \"id\": 1, \"name\": \"a\" }],\n\"row_count\": 1,\n\"affected_rows\": 0,\n\"message\": \"ok\"\n}\n\n## Changing the Schema\n\nFor adding columns, send the new schema to /database/schema. Do not drop or alter existing columns in place.\nFor destructive changes (dropping columns, changing types), instead create a new table with the new schema you want, add data to that new table, and then use that table.\nAllowed operations: CREATE TABLE/INDEX/VIEW; ALTER TABLE ADD COLUMN; ALTER TABLE RENAME\nBlocked Operations: DROP and ALTER COLUMN modifications\n\nFor dates and times, use ISO 8601 format:\n\n- Dates: YYYY-MM-DD (e.g., 2024-03-15)\n- Times: HH:MM:SS (e.g., 14:30:00)\n- Datetimes: YYYY-MM-DD HH:MM:SS (e.g., 2024-03-15 14:30:00)\n- Timezone-aware: Add Z for UTC (e.g., 2024-03-15 14:30:00Z)\n- Do not send explicit timezone-offsets, translate to UTC instead if necessary.\n\nHandle responses by:\n\n- Check response.data.length > 0 to see if data was returned\n- Check response.affected_rows to see if rows were modified\n- If a /database/query call returns a 400, the error message comes from Postgresâfix the SQL or schema and retry.\n- Column type allowlist (includes parameterized and array forms): text, varchar/character/char, numeric/decimal, integer/bigint/smallint, boolean, date/time/timestamp/timestamptz, uuid, json/jsonb, bytea, vector or vector(n).\n- Prefer unlimited-size data types (bigint, text, and numeric) to ensure there is always enough space.\n- You can use the vector data type for columns, vector similarity search operations, and standard pgvector SQL functions and operators.\n\nSchema: app_81cf7fb767cd4de2bf73193203e3ddb4",
+  "api_instruct_injected": true,
+  "timestamp": "2026-02-24T01:15:31.113553Z"
+}

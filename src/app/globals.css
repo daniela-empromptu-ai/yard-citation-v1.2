@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sidebar-width: 264px;
+  --topbar-height: 56px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  min-width: 1280px;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+}
+
+.main-content {
+  margin-left: var(--sidebar-width);
+  padding-top: var(--topbar-height);
+  min-height: 100vh;
+}
+
+.topbar {
+  left: var(--sidebar-width);
+  height: var(--topbar-height);
+  right: 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Dense table */
+.dense-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+
+.dense-table td {
+  font-size: 13px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.dense-table tr:hover td {
+  background: #f8fafc;
+}
+
+/* Evidence card */
+.evidence-card {
+  border-left: 3px solid #3b82f6;
+  background: #eff6ff;
+  padding: 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+
+/* Drawer */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 40;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.1);
+  z-index: 50;
+  overflow-y: auto;
+}
+
+/* Score gauge */
+.score-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dim bars */
+.dim-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.dim-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+}
+
+/* Markdown content */
+.markdown-content h1 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+.markdown-content h2 { font-size: 16px; font-weight: 600; margin-top: 16px; margin-bottom: 8px; }
+.markdown-content h3 { font-size: 14px; font-weight: 600; margin-top: 12px; margin-bottom: 6px; }
+.markdown-content p { margin-bottom: 8px; line-height: 1.6; }
+.markdown-content ul { padding-left: 20px; margin-bottom: 8px; }
+.markdown-content li { margin-bottom: 4px; line-height: 1.5; }
+.markdown-content a { color: #2563eb; text-decoration: underline; }
+.markdown-content strong { font-weight: 600; }

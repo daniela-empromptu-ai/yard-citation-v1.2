@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.1.0",
+  "min_reader_version": "1.0.0",
+  "created_by_version": "1.1.0",
+  "project_key": 1913099354,
+  "url_id": "empromptu-builder-citation-intelligence-creator-ops-v0-internal",
+  "generated_app_id": "81cf7fb7-67cd-4de2-bf73-193203e3ddb4",
+  "description": "Empromptu Builder â Citation Intelligence Creator Ops (V0, Internal)",
+  "owner_id": "d4d5ed47d417b7e549dd4d2437410203",
+  "created_at": "2026-02-24T00:23:02.040Z",
+  "last_updated_at": "2026-02-24T01:16:36.437Z"
+}

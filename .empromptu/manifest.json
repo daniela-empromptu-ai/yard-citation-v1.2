@@ -1,0 +1,9 @@
+{
+  "processes": {
+    "web": {
+      "setup": "npm install",
+      "command": "npm run dev -- --port 1913",
+      "port": 1913
+    }
+  }
+}
