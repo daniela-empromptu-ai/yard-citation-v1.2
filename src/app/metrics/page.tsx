@@ -27,7 +27,7 @@ export default async function MetricsPage() {
       JOIN ${t('clients')} cl ON cl.id = camp.client_id
       LEFT JOIN ${t('campaign_creators')} cc ON cc.campaign_id = camp.id
       LEFT JOIN ${t('outreach_activity')} oa ON oa.campaign_creator_id = cc.id
-      GROUP BY camp.id, cl.name
+      GROUP BY camp.id, cl.name, camp.name
       ORDER BY analyzed DESC
     `),
     dbQuery<{ total_sent: number; total_booked: number }>(`
