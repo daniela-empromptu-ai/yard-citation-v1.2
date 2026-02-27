@@ -66,7 +66,19 @@ export async function POST(req: NextRequest) {
       [campaignId, owner_user_id, JSON.stringify({ name }), now]
     );
 
-    return NextResponse.json({ campaign_id: campaignId });
+    // Fire discovery scan in background (non-blocking)
+    let scanStatus: 'started' | 'skipped' = 'skipped';
+    if (process.env.GOOGLE_SHEETS_SPREADSHEET_ID && topics.length > 0) {
+      const origin = req.nextUrl.origin;
+      fetch(`${origin}/api/campaigns/${campaignId}/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: owner_user_id }),
+      }).catch(err => console.error('Background discovery scan failed:', err));
+      scanStatus = 'started';
+    }
+
+    return NextResponse.json({ campaign_id: campaignId, scan_status: scanStatus });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

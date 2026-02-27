@@ -95,8 +95,11 @@ export default function NewCampaignWizard({ clients, users }: Props) {
       }
       if (data.campaign_id) {
         setCreatedId(data.campaign_id);
-        addToast('success', 'Campaign created!');
-        router.push(`/campaigns/${data.campaign_id}`);
+        if (data.scan_status === 'started') {
+          addToast('success', 'Campaign created! Discovery scan is running in the background.');
+        } else {
+          addToast('success', 'Campaign created!');
+        }
       } else {
         addToast('error', data.error || 'Failed to create campaign');
       }
@@ -106,6 +109,33 @@ export default function NewCampaignWizard({ clients, users }: Props) {
       setLoading(false);
     }
   };
+
+  if (createdId) {
+    return (
+      <div className="card p-8 text-center space-y-4 max-w-lg mx-auto mt-12">
+        <div className="text-4xl">&#10003;</div>
+        <h2 className="text-lg font-semibold text-gray-900">Campaign Created</h2>
+        <p className="text-sm text-gray-600">
+          Your campaign is being set up. A discovery scan is running in the background to find matching creators from the database.
+          This may take a minute or two.
+        </p>
+        <div className="flex gap-3 justify-center pt-2">
+          <button
+            className="btn-primary"
+            onClick={() => router.push(`/campaigns/${createdId}/discovery`)}
+          >
+            View Discovery Tab
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => router.push(`/campaigns/${createdId}`)}
+          >
+            Go to Campaign
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

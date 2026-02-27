@@ -5,13 +5,12 @@ import CampaignWorkspace from '@/components/campaigns/workspace/CampaignWorkspac
 export const dynamic = 'force-dynamic';
 
 interface Props {
-  params: { id: string };
-  searchParams: { tab?: string };
+  params: { id: string; tab?: string[] };
 }
 
-export default async function CampaignPage({ params, searchParams }: Props) {
+export default async function CampaignPage({ params }: Props) {
   const { id } = params;
-  const tab = searchParams.tab || 'overview';
+  const tab = params.tab?.[0] || 'overview';
 
   // Load campaign + related data in parallel
   const [campRes, personasRes, topicsRes, gapsRes, searchTermsRes, ccRes, activityRes] = await Promise.all([

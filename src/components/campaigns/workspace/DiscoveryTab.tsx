@@ -30,6 +30,8 @@ export default function DiscoveryTab({ campaign, searchTerms, campaignCreators }
   const [addLoading, setAddLoading] = useState(false);
   const [filterDormant, setFilterDormant] = useState(true);
   const [filterAutodub, setFilterAutodub] = useState(true);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanResult, setScanResult] = useState<{ discovered?: number; total_sheet_rows?: number; warnings?: string[] } | null>(null);
   const router = useRouter();
   const { addToast } = useToast();
   const { userId } = useRole();
@@ -64,8 +66,62 @@ export default function DiscoveryTab({ campaign, searchTerms, campaignCreators }
     }
   };
 
+  const handleScanSheet = async () => {
+    setScanLoading(true);
+    setScanResult(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setScanResult({ discovered: data.discovered, total_sheet_rows: data.total_sheet_rows, warnings: data.warnings });
+        addToast('success', `Found ${data.discovered} matching creators from ${data.total_sheet_rows} rows`);
+        router.refresh();
+      } else {
+        addToast('error', data.error || 'Scan failed');
+      }
+    } catch (e) {
+      addToast('error', (e as Error).message || 'Scan failed');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Google Sheet Scan Card */}
+      <div className="card p-4 border-l-4 border-l-accent">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Google Sheet Creator Scan</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {scanLoading
+                ? 'Scanning sheet and matching creators to campaign topics...'
+                : scanResult
+                  ? `Found ${scanResult.discovered} matches from ${scanResult.total_sheet_rows} creator rows`
+                  : 'Scan the creator database sheet to discover topic-matched creators'}
+            </p>
+            {scanResult?.warnings && scanResult.warnings.length > 0 && (
+              <div className="mt-2 space-y-0.5">
+                {scanResult.warnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-600">Warning: {w}</p>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleScanSheet}
+            disabled={scanLoading}
+            className="btn-primary text-xs whitespace-nowrap"
+          >
+            {scanLoading ? 'Scanning...' : scanResult ? 'Re-scan Sheet' : 'Scan Google Sheet'}
+          </button>
+        </div>
+      </div>
+
       <div className="notice-box">
         <span>Discover creators per approved search term. Filter out dormant, autodubbed, and competitor-affiliated channels. Add creators to the campaign pipeline.</span>
       </div>
