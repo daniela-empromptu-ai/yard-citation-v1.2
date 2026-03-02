@@ -516,7 +516,6 @@ export async function initSchema(): Promise<void> {
     { id: IDS.USER_JACK, name: 'Jack Scrivener', email: 'jack@yard.internal', role: 'qualifier' },
     { id: IDS.USER_ARYA, name: 'Arya', email: 'arya@yard.internal', role: 'outreach' },
     { id: IDS.USER_KARL, name: 'Karl McCarthy', email: 'karl@yard.internal', role: 'admin' },
-    { id: IDS.USER_EMPROMPTU, name: 'Empromptu', email: 'admin@empromptu.internal', role: 'admin' },
   ]
   for (const u of users) {
     await dbQuery(
