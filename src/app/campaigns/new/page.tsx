@@ -64,9 +64,14 @@ export default function NewCampaignPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: form.newClientName }),
     })
-    const client = await res.json()
-    setClients(prev => [...prev, client])
-    update('client_id', client.id)
+    if (!res.ok) return
+    // Re-fetch client list to ensure correct data shape
+    const listRes = await fetch(`/api/clients?_t=${Date.now()}`)
+    const allClients = await listRes.json()
+    setClients(allClients)
+    // Auto-select the newly created client
+    const created = allClients.find((c: Record<string, string>) => c.name === form.newClientName.trim())
+    if (created) update('client_id', created.id)
     update('newClientName', '')
   }
 
