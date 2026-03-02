@@ -1,15 +1,10 @@
 import clsx from 'clsx'
+import { getScoreColor } from '@/lib/utils'
 
 interface ScorePillProps {
   score: number | null;
   size?: 'sm' | 'md' | 'lg';
   showBar?: boolean;
-}
-
-function getScoreColor(score: number) {
-  if (score >= 80) return { text: 'text-green-700', bg: 'bg-green-100', bar: 'bg-green-500', border: 'border-green-200' }
-  if (score >= 65) return { text: 'text-amber-700', bg: 'bg-amber-100', bar: 'bg-amber-500', border: 'border-amber-200' }
-  return { text: 'text-red-700', bg: 'bg-red-100', bar: 'bg-red-500', border: 'border-red-200' }
 }
 
 export function ScorePill({ score: scoreProp, size = 'sm', showBar = false }: ScorePillProps) {
@@ -37,28 +32,38 @@ export function ScorePill({ score: scoreProp, size = 'sm', showBar = false }: Sc
 
 export default ScorePill
 
-interface RubricBarsProps {
-  scores: {
-    technical_relevance: number;
-    audience_alignment: number;
-    content_quality: number;
-    channel_performance: number;
-    brand_fit: number;
-  }
+interface RubricScores {
+  technical_relevance?: number;
+  audience_alignment?: number;
+  content_quality?: number;
+  channel_performance?: number;
+  brand_fit?: number;
+  score_technical_relevance?: number;
+  score_audience_alignment?: number;
+  score_content_quality?: number;
+  score_channel_performance?: number;
+  score_brand_fit?: number;
 }
 
+interface RubricBarsProps {
+  scores: RubricScores
+}
+
+const DIMS = [
+  { key: 'technical_relevance', label: 'Technical Relevance', weight: 30 },
+  { key: 'audience_alignment', label: 'Audience Alignment', weight: 25 },
+  { key: 'content_quality', label: 'Content Quality', weight: 20 },
+  { key: 'channel_performance', label: 'Channel Performance', weight: 15 },
+  { key: 'brand_fit', label: 'Brand Fit', weight: 10 },
+] as const
+
 export function RubricBars({ scores }: RubricBarsProps) {
-  const dims = [
-    { key: 'technical_relevance', label: 'Technical Relevance', weight: 30 },
-    { key: 'audience_alignment', label: 'Audience Alignment', weight: 25 },
-    { key: 'content_quality', label: 'Content Quality', weight: 20 },
-    { key: 'channel_performance', label: 'Channel Performance', weight: 15 },
-    { key: 'brand_fit', label: 'Brand Fit', weight: 10 },
-  ]
   return (
     <div className="space-y-3">
-      {dims.map(d => {
-        const score = scores[d.key as keyof typeof scores] || 0
+      {DIMS.map(d => {
+        const score = (scores as Record<string, number>)[d.key]
+          ?? (scores as Record<string, number>)[`score_${d.key}`]
+          ?? 0
         const c = getScoreColor(score)
         return (
           <div key={d.key}>

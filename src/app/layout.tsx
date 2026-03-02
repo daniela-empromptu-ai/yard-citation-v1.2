@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/Toaster'
 import { SchemaInitializer } from '@/components/layout/SchemaInitializer'
 
 export const metadata: Metadata = {
-  title: 'Yard â Creator Ops (Internal V0)',
+  title: 'Yard — Creator Ops (Internal V0)',
   description: 'Citation Intelligence Creator Ops Tool',
 }
 

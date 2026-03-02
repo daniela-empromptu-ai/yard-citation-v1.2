@@ -13,7 +13,7 @@ const NINA_TRANSCRIPT_1 = `Kubernetes Cost Allocation by Namespace - Full Transc
 
 [03:00] The first thing you need is visibility. Which namespaces are consuming the most?
 
-[05:12] Cost allocation per namespace is only step oneâwhat matters is tying that spend to SLO risk. If your payment-service namespace spikes in cost, you need to know if that's from traffic growth, a misconfiguration, or a new deployment. Context is everything.
+[05:12] Cost allocation per namespace is only step one—what matters is tying that spend to SLO risk. If your payment-service namespace spikes in cost, you need to know if that's from traffic growth, a misconfiguration, or a new deployment. Context is everything.
 
 [07:45] Tools like Kubecost give you the allocation view. But allocation without reliability context is just a number.
 
@@ -86,7 +86,7 @@ The challenge with Kubernetes cost anomalies is baseline instability. If your wo
 
 The answer is per-workload baselining.
 
-Anomaly detection works best when you baseline per workload and per namespace. A cluster-level baseline is too coarseâit masks the signal. A per-pod baseline is too granularâit's noisy. The workload and namespace level is where you get actionable signal.
+Anomaly detection works best when you baseline per workload and per namespace. A cluster-level baseline is too coarse—it masks the signal. A per-pod baseline is too granular—it's noisy. The workload and namespace level is where you get actionable signal.
 
 Practical implementation:
 - Compute rolling 7-day median and 95th percentile for each workload's cost
@@ -100,7 +100,7 @@ const JAE_TRANSCRIPT_1 = `SLO-Driven Cost Management in Kubernetes - SRE Notes
 
 [00:00] Hey everyone, Jae here from SRE Notes. Today's topic is one I'm passionate about: treating cost as an SLO problem.
 
-[03:44] You cannot optimize cost in isolation from reliabilityâevery budget decision is also an SLO decision. When you cut resource requests to save money, you are trading reliability headroom for cost savings. The question is: is that trade explicitly accounted for in your SRE budget?
+[03:44] You cannot optimize cost in isolation from reliability—every budget decision is also an SLO decision. When you cut resource requests to save money, you are trading reliability headroom for cost savings. The question is: is that trade explicitly accounted for in your SRE budget?
 
 [06:00] Most teams optimize cost and manage SLOs separately. This is the root cause of the "we saved 30% on cloud costs but our error rate doubled" disaster story.
 
@@ -286,7 +286,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT DO NOTHING`,
     [
       IDS.CAMPAIGN_A, IDS.CLIENT_CLOUDFORGE,
-      'CloudForge â Kubernetes Cost Optimization (US + UK)',
+      'CloudForge — Kubernetes Cost Optimization (US + UK)',
       IDS.USER_JACK, IDS.USER_ARYA, 'active', 'scoring',
       '{United States,United Kingdom}', 'English',
       'FinOps / Kubernetes cost optimization', BRIEF_A, NOW, NOW,
@@ -297,7 +297,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   await run(
     `INSERT INTO campaigns (id, client_id, name, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
-    [IDS.CAMPAIGN_B, IDS.CLIENT_NEBULADB, 'NebulaDB â Vector Search Launch', IDS.USER_ARYA,
+    [IDS.CAMPAIGN_B, IDS.CLIENT_NEBULADB, 'NebulaDB — Vector Search Launch', IDS.USER_ARYA,
       'active', 'discovery', '{United States}', 'English', 'Vector databases',
       '# NebulaDB Vector Search\n\nHelp developers understand vector search for AI applications.',
       NOW, NOW],
@@ -306,7 +306,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   await run(
     `INSERT INTO campaigns (id, client_id, name, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
-    [IDS.CAMPAIGN_C, IDS.CLIENT_SECURINEST, 'SecuriNest â DevSecOps Awareness', IDS.USER_JACK,
+    [IDS.CAMPAIGN_C, IDS.CLIENT_SECURINEST, 'SecuriNest — DevSecOps Awareness', IDS.USER_JACK,
       'active', 'ingestion', '{United States,Canada}', 'English', 'DevSecOps',
       '# SecuriNest\n\nShift-left security for Kubernetes and cloud-native teams.',
       NOW, NOW],
@@ -315,7 +315,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   await run(
     `INSERT INTO campaigns (id, client_id, name, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING`,
-    [IDS.CAMPAIGN_D, IDS.CLIENT_VECTORSHIFT, 'VectorShift â AI Pipeline Creator Push', IDS.USER_ARYA,
+    [IDS.CAMPAIGN_D, IDS.CLIENT_VECTORSHIFT, 'VectorShift — AI Pipeline Creator Push', IDS.USER_ARYA,
       'active', 'outreach', '{United States}', 'English', 'AI/ML Pipelines',
       '# VectorShift\n\nNo-code AI pipeline builder for enterprise teams.',
       NOW, NOW],
@@ -368,7 +368,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   const citations: [string, string, string, string][] = [
     // Gap 1
     [IDS.PG_1, 'Kubernetes Cost Optimization Guide (CNCF)', 'https://cncf.io/blog/kubernetes-cost-guide', 'docs'],
-    [IDS.PG_1, 'OpenCost â Open Source Cost Monitoring', 'https://opencost.io/docs', 'docs'],
+    [IDS.PG_1, 'OpenCost — Open Source Cost Monitoring', 'https://opencost.io/docs', 'docs'],
     [IDS.PG_1, 'FinOps Foundation: Kubernetes FinOps', 'https://finops.org/k8s', 'blog'],
     // Gap 2
     [IDS.PG_2, 'Kubecost Documentation', 'https://kubecost.com/docs', 'docs'],
@@ -399,19 +399,19 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
   // ---- CAMPAIGN A SEARCH TERMS ----
   const searchTerms: [string, string, string, string, string][] = [
     [IDS.ST_1, 'kubecost tutorial cost allocation namespaces', 'implementation', 'Directly targets the core use case: teams searching for hands-on Kubecost setup will find CloudForge comparisons compelling.', NOW],
-    [IDS.ST_2, 'kubecost vs alternative comparison', 'competitor', 'Captures high-intent searchers evaluating Kubecost alternativesâprime audience for CloudForge positioning.', NOW],
-    [IDS.ST_3, 'kubernetes cost optimization hpa cluster autoscaler', 'problem_solution', 'Targets engineers trying to reduce costs via autoscalingâa natural entry point for CloudForge recommendations.', NOW],
+    [IDS.ST_2, 'kubecost vs alternative comparison', 'competitor', 'Captures high-intent searchers evaluating Kubecost alternatives—prime audience for CloudForge positioning.', NOW],
+    [IDS.ST_3, 'kubernetes cost optimization hpa cluster autoscaler', 'problem_solution', 'Targets engineers trying to reduce costs via autoscaling—a natural entry point for CloudForge recommendations.', NOW],
     [IDS.ST_4, 'finops kubernetes showback chargeback implementation', 'implementation', 'FinOps practitioners implementing showback/chargeback are ideal CloudForge prospects.', NOW],
     [IDS.ST_5, 'opentelemetry cost attribution kubernetes', 'integration', "CloudForge's OTel compatibility is a key differentiator; this term reaches the observability-savvy audience.", NOW],
     [IDS.ST_6, 'prometheus cost monitoring kubernetes', 'integration', "Prometheus-heavy teams are natural CloudForge adopters given the tool's monitoring integration story.", NOW],
     [IDS.ST_7, 'gke cost optimization tutorial', 'tutorial_format', 'GKE-specific cost tutorials reach a large segment of the Kubernetes market using Google Cloud.', NOW],
     [IDS.ST_8, 'eks cost optimization workload rightsizing', 'tutorial_format', 'AWS EKS users looking for rightsizing tutorials are a high-value audience for CloudForge.', NOW],
     [IDS.ST_9, 'terraform kubernetes cost monitoring setup', 'programming_language', 'Infrastructure-as-code users who manage Kubernetes via Terraform are a technically sophisticated, high-fit segment.', NOW],
-    [IDS.ST_10, 'helm install kubecost alternative', 'implementation', 'Helm-based installation queries indicate teams evaluating toolingâready to switch if shown a better option.', NOW],
+    [IDS.ST_10, 'helm install kubecost alternative', 'implementation', 'Helm-based installation queries indicate teams evaluating tooling—ready to switch if shown a better option.', NOW],
     [IDS.ST_11, 'kubernetes cost anomaly detection prometheus', 'problem_solution', 'Cost anomaly detection is a CloudForge differentiator; this term finds teams who have already felt the pain.', NOW],
     [IDS.ST_12, 'platform engineering finops kubernetes', 'product_category', 'Platform engineering + FinOps intersection is the exact ICP for CloudForge; strong brand-fit signal.', NOW],
     [IDS.ST_13, 'kubernetes namespace cost dashboard grafana', 'integration', "Grafana dashboard builders are likely to appreciate CloudForge's visualization and integration capabilities.", NOW],
-    [IDS.ST_14, 'reduce cloud bill kubernetes without downtime', 'problem_solution', 'Captures engineers with the exact problem CloudForge solvesâcost reduction without reliability risk.', NOW],
+    [IDS.ST_14, 'reduce cloud bill kubernetes without downtime', 'problem_solution', 'Captures engineers with the exact problem CloudForge solves—cost reduction without reliability risk.', NOW],
     [IDS.ST_15, 'kubernetes multi-cloud cost visibility', 'product_category', 'Multi-cloud cost visibility is another CloudForge differentiator; this term attracts enterprise platform teams.', NOW],
   ]
   for (let i = 0; i < searchTerms.length; i++) {
@@ -711,7 +711,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
      VALUES ($1,$2,$3,'youtube','youtube_video',$4,$5,$6,$7,'en',$8,$9,$10,'seed','complete',$11,$12) ON CONFLICT (url) DO NOTHING`,
     [
       IDS.CI_MEI_1, IDS.CREATOR_MEI, IDS.CAMPAIGN_A,
-      'OpenTelemetry and Cost Attribution â Observability Lab',
+      'OpenTelemetry and Cost Attribution — Observability Lab',
       'https://youtube.com/watch?v=obslab-otel-cost-001',
       '2026-02-01 00:00:00Z', NOW, MEI_TRANSCRIPT_1, 260,
       JSON.stringify({ view_count: 43200, duration_seconds: 680, channel: 'Observability Lab' }),
@@ -842,7 +842,7 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
       JSON.stringify([
         { text: 'Deep technical depth on namespace cost allocation with actionable recommendations', evidence_snippet_id: IDS.ES_NINA_1 },
         { text: 'Strong OpenTelemetry integration knowledge directly relevant to CloudForge differentiator', evidence_snippet_id: IDS.ES_NINA_3 },
-        { text: 'Clearly addresses the SLO â cost trade-off that resonates with DevOps leads', evidence_snippet_id: IDS.ES_NINA_2 },
+        { text: 'Clearly addresses the SLO ↔ cost trade-off that resonates with DevOps leads', evidence_snippet_id: IDS.ES_NINA_2 },
         { text: 'High-performing channel (124k views on primary video) in exact ICP', evidence_snippet_id: IDS.ES_NINA_4 },
         { text: 'Pragmatic, dev-first tone that aligns with CloudForge brand voice', evidence_snippet_id: IDS.ES_NINA_5 },
       ]),
@@ -850,11 +850,11 @@ Market rate. Avoid creators quoting > $7k/video unless exceptional.`
         { text: 'Some content skews toward Kubecost-first framing; needs positioning nudge for CloudForge', evidence_snippet_id: IDS.ES_NINA_2 },
         { text: 'Blog presence less prominent than video; outreach draft should emphasize video-first', evidence_snippet_id: null },
       ]),
-      `## Nina Patel (KubeCraft) â CloudForge Evaluation
+      `## Nina Patel (KubeCraft) — CloudForge Evaluation
 
 Nina is an exceptional fit for the CloudForge Kubernetes cost optimization campaign. Her content demonstrates rare depth at the intersection of FinOps, SRE, and Kubernetes operations.
 
-**Technical alignment:** Nina's transcript on namespace cost allocation explicitly bridges allocation to SLO riskâexactly the framing CloudForge needs. Her OpenTelemetry blog post is production-ready guidance that mirrors CloudForge's OTel-first positioning.
+**Technical alignment:** Nina's transcript on namespace cost allocation explicitly bridges allocation to SLO risk—exactly the framing CloudForge needs. Her OpenTelemetry blog post is production-ready guidance that mirrors CloudForge's OTel-first positioning.
 
 **Audience fit:** 58k subscribers in the DevOps/Platform Engineering space with strong US + UK GEO match. Engagement metrics (124k views on top video) indicate an active, engaged audience.
 
@@ -879,7 +879,7 @@ Nina is an exceptional fit for the CloudForge Kubernetes cost optimization campa
         { text: 'Smaller channel (24.5k subs) compared to Nina; lower reach', evidence_snippet_id: null },
         { text: 'Less direct Kubernetes cost tooling coverage; more observability-first angle', evidence_snippet_id: null },
       ]),
-      `## Mei Tan (Observability Lab) â CloudForge Evaluation
+      `## Mei Tan (Observability Lab) — CloudForge Evaluation
 
 Mei is a strong technical fit, particularly for the OpenTelemetry + cost attribution angle. Her content is precise, evidence-based, and targets the exact audience asking about OTel + FinOps integration.`,
       NOW, NOW,
@@ -902,9 +902,9 @@ Mei is a strong technical fit, particularly for the OpenTelemetry + cost attribu
         { text: 'SRE audience may be slightly more reliability-focused than cost-optimization-focused', evidence_snippet_id: null },
         { text: 'Less direct Kubernetes tooling comparison content', evidence_snippet_id: null },
       ]),
-      `## Jae Park (SRE Notes) â CloudForge Evaluation
+      `## Jae Park (SRE Notes) — CloudForge Evaluation
 
-Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SLO" framing is unique and differentiatingâit positions CloudForge naturally as the tool that bridges both worlds.`,
+Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SLO" framing is unique and differentiating—it positions CloudForge naturally as the tool that bridges both worlds.`,
       NOW, NOW,
     ],
     'eval_jae'
@@ -921,13 +921,13 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
         { text: 'Content was previously well-aligned with Kubernetes cost optimization', evidence_snippet_id: IDS.ES_LUCAS_1 },
       ]),
       JSON.stringify([
-        { text: 'Dormant since September 2025 â no content in 5+ months', evidence_snippet_id: null },
+        { text: 'Dormant since September 2025 — no content in 5+ months', evidence_snippet_id: null },
         { text: 'Insufficient evidence coverage for reliable scoring', evidence_snippet_id: null },
         { text: 'Channel performance metrics unavailable due to dormancy', evidence_snippet_id: null },
       ]),
-      `## Lucas Varga (Cloud Cost Clinic) â CloudForge Evaluation
+      `## Lucas Varga (Cloud Cost Clinic) — CloudForge Evaluation
 
-**â  Needs Manual Review:** Lucas has been dormant since September 2025. Only 1 content item available for evaluation. Evidence coverage is weak. Score of 74 is below threshold. Manual review required to determine if outreach is appropriate given the dormancy risk.`,
+**⚠ Needs Manual Review:** Lucas has been dormant since September 2025. Only 1 content item available for evaluation. Evidence coverage is weak. Score of 74 is below threshold. Manual review required to determine if outreach is appropriate given the dormancy risk.`,
       NOW, NOW,
     ],
     'eval_lucas'
@@ -937,20 +937,20 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
   // Nina snippets (6)
   const ninaSnippets: [string, string, string, number | null, number | null, string, string, string][] = [
     [IDS.ES_NINA_1, IDS.EVAL_NINA, IDS.CI_NINA_1, 312, 330,
-      'Cost allocation per namespace is only step oneâwhat matters is tying that spend to SLO risk.',
-      'technical_relevance', 'Directly demonstrates understanding of cost-reliability couplingâcore CloudForge value proposition.'],
+      'Cost allocation per namespace is only step one—what matters is tying that spend to SLO risk.',
+      'technical_relevance', 'Directly demonstrates understanding of cost-reliability coupling—core CloudForge value proposition.'],
     [IDS.ES_NINA_2, IDS.EVAL_NINA, IDS.CI_NINA_2, 240, 260,
       'Kubecost is great for allocation, but it won\'t tell you which deployment caused the spike without additional context.',
-      'technical_relevance', 'Identifies the gap that CloudForge fillsâdeployment-level context for cost anomalies.'],
+      'technical_relevance', 'Identifies the gap that CloudForge fills—deployment-level context for cost anomalies.'],
     [IDS.ES_NINA_3, IDS.EVAL_NINA, IDS.CI_NINA_3, null, null,
       'If you can tag spans to workloads, you can attribute cost to ownership boundaries.',
-      'technical_relevance', 'Demonstrates OpenTelemetry cost attribution knowledgeâdirectly relevant to CloudForge\'s OTel integration.'],
+      'technical_relevance', 'Demonstrates OpenTelemetry cost attribution knowledge—directly relevant to CloudForge\'s OTel integration.'],
     [IDS.ES_NINA_4, IDS.EVAL_NINA, IDS.CI_NINA_1, 420, 460,
       'label your namespaces by team and service tier. This makes showback possible and chargeback tractable.',
-      'audience_alignment', 'Prescriptive, practical advice targeting Platform Engineers and DevOps Leadsâthe exact CloudForge ICP.'],
+      'audience_alignment', 'Prescriptive, practical advice targeting Platform Engineers and DevOps Leads—the exact CloudForge ICP.'],
     [IDS.ES_NINA_5, IDS.EVAL_NINA, IDS.CI_NINA_2, 480, 510,
       'My recommendation: start with Kubecost for the 80% case, then build custom queries for the spikes and anomalies that matter most.',
-      'content_quality', 'Shows balanced, opinionated technical guidanceâbrand-fit voice that resonates as pragmatic and dev-first.'],
+      'content_quality', 'Shows balanced, opinionated technical guidance—brand-fit voice that resonates as pragmatic and dev-first.'],
     [IDS.ES_NINA_6, IDS.EVAL_NINA, IDS.CI_NINA_1, 540, 570,
       'Tools like Kubecost give you the allocation view. But allocation without reliability context is just a number.',
       'brand_fit', 'Framing reinforces the CloudForge positioning that cost alone is insufficient without operational context.'],
@@ -968,7 +968,7 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
   const meiSnippets: [string, string, string, number | null, number | null, string, string, string][] = [
     [IDS.ES_MEI_1, IDS.EVAL_MEI, IDS.CI_MEI_1, 135, 150,
       'OpenTelemetry gives you the metadata hooks; cost attribution is a mapping problem, not a metrics problem.',
-      'technical_relevance', 'Reframes OTel cost attribution preciselyâmatches CloudForge\'s integration narrative.'],
+      'technical_relevance', 'Reframes OTel cost attribution precisely—matches CloudForge\'s integration narrative.'],
     [IDS.ES_MEI_2, IDS.EVAL_MEI, IDS.CI_MEI_2, null, null,
       'Anomaly detection works best when you baseline per workload and per namespace.',
       'technical_relevance', 'Per-workload baselining matches CloudForge\'s cost anomaly detection feature description exactly.'],
@@ -988,14 +988,14 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
   // Jae snippets (3)
   const jaeSnippets: [string, string, string, number | null, number | null, string, string, string][] = [
     [IDS.ES_JAE_1, IDS.EVAL_JAE, IDS.CI_JAE_1, 224, 240,
-      'You cannot optimize cost in isolation from reliabilityâevery budget decision is also an SLO decision.',
-      'technical_relevance', 'Unique SRE framing of FinOpsâpositions cost optimization as SRE work, not just finance.'],
+      'You cannot optimize cost in isolation from reliability—every budget decision is also an SLO decision.',
+      'technical_relevance', 'Unique SRE framing of FinOps—positions cost optimization as SRE work, not just finance.'],
     [IDS.ES_JAE_2, IDS.EVAL_JAE, IDS.CI_JAE_2, null, null,
       'Over-provisioned resource requests are the single biggest source of wasted cloud spend in most Kubernetes clusters.',
-      'technical_relevance', 'Identifies the #1 cost driver with authorityâcreates urgency for CloudForge\'s rightsizing recommendations.'],
+      'technical_relevance', 'Identifies the #1 cost driver with authority—creates urgency for CloudForge\'s rightsizing recommendations.'],
     [IDS.ES_JAE_3, IDS.EVAL_JAE, IDS.CI_JAE_1, 480, 510,
       'treat cost optimization as an SRE task, not a FinOps task',
-      'audience_alignment', 'Speaks directly to SRE and DevOps Lead audienceâexactly CloudForge\'s DevOps Lead persona.'],
+      'audience_alignment', 'Speaks directly to SRE and DevOps Lead audience—exactly CloudForge\'s DevOps Lead persona.'],
   ]
   for (const [id, evalId, ciId, tsStart, tsEnd, quote, dim, why] of jaeSnippets) {
     await run(
@@ -1160,7 +1160,7 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
   )
   await run(
     `INSERT INTO human_reviews (id, campaign_creator_id, reviewed_by_user_id, reviewed_at, decision, notes_md, created_at)
-     VALUES ($1,$2,$3,$4,'needs_manual_review','Dormant since Sept 2025. Insufficient evidence. Flag for manual checkâreach out only if they publish again.',$5) ON CONFLICT DO NOTHING`,
+     VALUES ($1,$2,$3,$4,'needs_manual_review','Dormant since Sept 2025. Insufficient evidence. Flag for manual check—reach out only if they publish again.',$5) ON CONFLICT DO NOTHING`,
     [IDS.HR_LUCAS, IDS.CC_LUCAS, IDS.USER_JACK, WEEK_AGO, NOW], 'hr_lucas'
   )
   await run(
@@ -1186,7 +1186,7 @@ Jae brings a distinctive SRE lens to Kubernetes cost management. The "cost as SL
       'Collaboration: Hands-on CloudForge + Kubernetes Cost Optimization',
       `Hi Nina,
 
-I came across your video on **Kubernetes Cost Allocation by Namespace** â your point about cost allocation being "only step one" and the need to tie spend to SLO risk is exactly the framing our audience resonates with.
+I came across your video on **Kubernetes Cost Allocation by Namespace** — your point about cost allocation being "only step one" and the need to tie spend to SLO risk is exactly the framing our audience resonates with.
 
 I'm reaching out on behalf of **CloudForge**, a Kubernetes cost optimization platform that does exactly this: it shows cost drivers per namespace and workload, with actionable recommendations tied to reliability context.
 
@@ -1222,7 +1222,7 @@ Creator Partnerships, CloudForge`,
       'Collaboration idea: SLO-Aware Kubernetes Cost Optimization (CloudForge)',
       `Hi Jae,
 
-Your take that **"every budget decision is also an SLO decision"** is something I haven't seen anyone in the Kubernetes space articulate as clearly â it resonates deeply with the platform engineering teams we work with.
+Your take that **"every budget decision is also an SLO decision"** is something I haven't seen anyone in the Kubernetes space articulate as clearly — it resonates deeply with the platform engineering teams we work with.
 
 I'm from **CloudForge**, a Kubernetes cost optimization tool built for SRE-minded teams. Our cost anomaly detection and namespace-level recommendations are specifically designed to help teams right-size without burning their error budget.
 
@@ -1291,7 +1291,7 @@ Arya`,
   )
   await run(
     `INSERT INTO outreach_activity (id, campaign_creator_id, performed_by_user_id, channel, action_type, state_after, occurred_at, notes)
-     VALUES (gen_random_uuid(),$1,$2,'email','reply_logged','replied',$3,'Jae replied â interested, wants to see product demo first.') ON CONFLICT DO NOTHING`,
+     VALUES (gen_random_uuid(),$1,$2,'email','reply_logged','replied',$3,'Jae replied — interested, wants to see product demo first.') ON CONFLICT DO NOTHING`,
     [IDS.CC_JAE, IDS.USER_ARYA, NOW], 'oa_jae_reply'
   )
   await run(

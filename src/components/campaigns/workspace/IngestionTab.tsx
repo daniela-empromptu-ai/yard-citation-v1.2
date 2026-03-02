@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { formatDateTime, pipelineStageColor, stageLabel } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
+import { IngestionStatusBadge } from '@/components/ui/Badge';
 
 interface CC {
   id: string; creator_id: string; creator_name: string; pipeline_stage: string;
@@ -79,14 +80,6 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
     }
   };
 
-  const statusColor: Record<string, string> = {
-    not_started: 'bg-gray-100 text-gray-600',
-    queued: 'bg-blue-100 text-blue-700',
-    running: 'bg-yellow-100 text-yellow-700',
-    complete: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-  };
-
   return (
     <div className="space-y-4">
       <div className="notice-box">
@@ -120,9 +113,7 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
                       </button>
                     </td>
                     <td>
-                      <span className={`badge text-xs ${statusColor[cc.ingestion_status] || 'bg-gray-100 text-gray-600'}`}>
-                        {cc.ingestion_status.replace(/_/g, ' ')}
-                      </span>
+                      <IngestionStatusBadge status={cc.ingestion_status} />
                     </td>
                     <td>
                       <button
@@ -158,12 +149,12 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
             </div>
           ) : loadingContent ? (
             <div className="text-center py-12 text-gray-400">
-              <div className="animate-spin text-2xl mb-2">â³</div>
-              <p className="text-sm">Loading contentâ¦</p>
+              <div className="animate-spin text-2xl mb-2">⟳</div>
+              <p className="text-sm">Loading content…</p>
             </div>
           ) : contentItems.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-3xl mb-2">ð</div>
+              <div className="text-3xl mb-2">📄</div>
               <p className="text-sm text-gray-600 font-medium">No content ingested yet</p>
               <p className="text-xs text-gray-400 mb-3">Add YouTube, blog, or Reddit URLs to ingest content.</p>
               <button className="btn-primary text-xs" onClick={() => setAddUrlModal(true)}>+ Add Content</button>
@@ -188,7 +179,7 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
                         {Boolean(ci.metadata_json?.view_count) && <span>{Number(ci.metadata_json.view_count).toLocaleString()} views</span>}
                       </div>
                     </div>
-                    <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">â</span>
+                    <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">✓</span>
                   </div>
                 </div>
               ))}
@@ -198,7 +189,7 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
       </div>
 
       {/* Add content modal */}
-      <Modal open={addUrlModal} onClose={() => setAddUrlModal(false)} title={`Add Content â ${selectedCc?.creator_name || ''}`} size="lg">
+      <Modal open={addUrlModal} onClose={() => setAddUrlModal(false)} title={`Add Content — ${selectedCc?.creator_name || ''}`} size="lg">
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">URL</label>
@@ -214,13 +205,13 @@ export default function IngestionTab({ campaign, campaignCreators }: Props) {
               className="input-field h-32 resize-none text-xs font-mono"
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
-              placeholder="Paste the transcript or article text here for AI analysisâ¦"
+              placeholder="Paste the transcript or article text here for AI analysis…"
             />
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn-secondary" onClick={() => setAddUrlModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={addContent} disabled={addLoading || !newUrl}>
-              {addLoading ? 'Addingâ¦' : 'Add Content'}
+              {addLoading ? 'Adding…' : 'Add Content'}
             </button>
           </div>
         </div>

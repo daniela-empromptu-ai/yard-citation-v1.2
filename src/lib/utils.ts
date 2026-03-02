@@ -1,5 +1,11 @@
 import { format, parseISO } from 'date-fns'
 
+export function getScoreColor(score: number) {
+  if (score >= 80) return { text: 'text-green-700', bg: 'bg-green-100', bar: 'bg-green-500', border: 'border-green-200' }
+  if (score >= 65) return { text: 'text-amber-700', bg: 'bg-amber-100', bar: 'bg-amber-500', border: 'border-amber-200' }
+  return { text: 'text-red-700', bg: 'bg-red-100', bar: 'bg-red-500', border: 'border-red-200' }
+}
+
 export function formatDate(date: string | null | undefined): string {
   if (!date) return '—'
   try {

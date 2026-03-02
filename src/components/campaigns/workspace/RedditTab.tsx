@@ -75,7 +75,7 @@ export default function RedditTab({ campaign }: Props) {
         </div>
         <div className="flex gap-2 mt-3">
           <button onClick={fetchThreads} disabled={fetching} className="btn-primary text-xs">
-            {fetching ? 'â³ Fetchingâ¦' : 'ð Fetch Reddit Threads'}
+            {fetching ? '⟳ Fetching…' : '🔍 Fetch Reddit Threads'}
           </button>
           {!loaded && (
             <button onClick={loadThreads} className="btn-secondary text-xs">Load Existing Threads</button>
@@ -88,7 +88,7 @@ export default function RedditTab({ campaign }: Props) {
       {loaded && (
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-            <span className="text-xs font-semibold text-gray-700">Reddit Threads â Campaign {campaign.id.slice(0, 8)}</span>
+            <span className="text-xs font-semibold text-gray-700">Reddit Threads — Campaign {campaign.id.slice(0, 8)}</span>
           </div>
           {threads.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
@@ -121,7 +121,7 @@ export default function RedditTab({ campaign }: Props) {
                       <td className="font-mono text-sm">{t.metadata_json?.comment_count || 0}</td>
                       <td className="text-xs text-gray-400">{formatDateTime(t.published_at)}</td>
                       <td>
-                        <a href={t.url} target="_blank" rel="noopener" className="btn-ghost text-xs py-1 px-2">â</a>
+                        <a href={t.url} target="_blank" rel="noopener" className="btn-ghost text-xs py-1 px-2">→</a>
                       </td>
                     </tr>
                   ))}

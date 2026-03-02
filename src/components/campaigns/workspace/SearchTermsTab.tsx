@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { categoryTagColor, stageLabel } from '@/lib/utils';
 import { useRole } from '@/components/layout/Shell';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface SearchTerm {
   id: string; term: string; category_tag: string; why_it_helps: string;
@@ -85,34 +86,34 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
         <div className="flex items-center gap-2">
           <button onClick={handleGenerate} disabled={generating} className="btn-primary">
             {generating ? (
-              <span className="flex items-center gap-1.5"><span className="animate-spin">â³</span> Generatingâ¦</span>
+              <span className="flex items-center gap-1.5"><span className="animate-spin">⟳</span> Generating…</span>
             ) : (
-              'â¨ Generate 15 Terms (AI)'
+              '✨ Generate 15 Terms (AI)'
             )}
           </button>
           {terms.length > 0 && (
             <button onClick={handleApproveAll} disabled={approving} className="btn-secondary">
-              â Approve All
+              ✓ Approve All
             </button>
           )}
         </div>
         <div className="text-sm text-gray-500">
-          {terms.length} terms Â· {approvedCount} approved
+          {terms.length} terms · {approvedCount} approved
           {terms.length > 0 && terms.length !== 15 && (
-            <span className="text-orange-600 ml-2">â  Expected 15</span>
+            <span className="text-orange-600 ml-2">⚠ Expected 15</span>
           )}
         </div>
       </div>
 
       {/* Terms table */}
       {terms.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-4xl mb-3">ð</div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">No search terms yet</h3>
-          <p className="text-xs text-gray-500 mb-4">Generate 15 YouTube search terms from your campaign context.</p>
-          <button onClick={handleGenerate} disabled={generating} className="btn-primary">
-            {generating ? 'Generatingâ¦' : 'â¨ Generate 15 Terms'}
-          </button>
+        <div className="card">
+          <EmptyState
+            icon="\ud83d\udd0d"
+            title="No search terms yet"
+            description="Generate 15 YouTube search terms from your campaign context."
+            action={{ label: '\u2728 Generate 15 Terms', onClick: handleGenerate, loading: generating }}
+          />
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -140,7 +141,7 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
                     <td className="text-gray-600 text-xs max-w-xs">{term.why_it_helps}</td>
                     <td>
                       <span className={`badge text-xs ${term.approved ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                        {term.approved ? 'â Yes' : 'No'}
+                        {term.approved ? '✓ Yes' : 'No'}
                       </span>
                     </td>
                   </tr>

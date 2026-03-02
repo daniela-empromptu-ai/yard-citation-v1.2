@@ -110,7 +110,7 @@ export default function BriefInputsTab({ campaign, personas, topics, promptGaps 
                         'bg-gray-100 text-gray-600 border-gray-200'
                       }`}>{gap.priority}</span>
                     </td>
-                    <td className="text-gray-600 text-xs">{gap.persona || 'â'}</td>
+                    <td className="text-gray-600 text-xs">{gap.persona || '—'}</td>
                     <td>
                       <span className={`badge text-xs ${
                         gap.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :

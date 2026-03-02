@@ -51,7 +51,7 @@ export function TopBar() {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search campaigns, creators, promptsâ¦"
+          placeholder="Search campaigns, creators, prompts…"
           className="w-full pl-8 pr-3 h-8 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
         />
       </form>

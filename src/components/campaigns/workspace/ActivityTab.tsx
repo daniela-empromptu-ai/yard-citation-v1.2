@@ -1,6 +1,7 @@
 'use client';
 
 import { formatDateTime } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface ActivityEntry {
   id: string; event_type: string; actor_name?: string | null; created_at: string;
@@ -14,15 +15,15 @@ interface Props {
 }
 
 const EVENT_ICONS: Record<string, string> = {
-  campaign_created: 'ð¯',
-  evaluation_completed: 'ð§®',
-  review_decision: 'ð¤',
-  outreach_sent: 'âï¸',
-  outreach_replied: 'ð¬',
-  outreach_booked: 'ð',
-  outreach_state_changed: 'ð',
-  ingestion_completed: 'ð¥',
-  default: 'ð',
+  campaign_created: '🎯',
+  evaluation_completed: '🧮',
+  review_decision: '👤',
+  outreach_sent: '✉️',
+  outreach_replied: '💬',
+  outreach_booked: '🎉',
+  outreach_state_changed: '🔄',
+  ingestion_completed: '📥',
+  default: '📝',
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -40,8 +41,8 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
   if (event_type === 'evaluation_completed') {
     return (
       <span className="text-xs text-gray-500">
-        Score: <strong className="text-gray-700">{data.score as number}</strong> Â· Coverage: {data.coverage as string}
-        {Boolean(data.needs_manual_review) && ' Â· â  NMR'}
+        Score: <strong className="text-gray-700">{data.score as number}</strong> · Coverage: {data.coverage as string}
+        {Boolean(data.needs_manual_review) && ' · ⚠ NMR'}
       </span>
     );
   }
@@ -49,17 +50,17 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
     return (
       <span className="text-xs text-gray-500">
         Decision: <strong className="text-gray-700">{(data.decision as string)?.replace(/_/g, ' ')}</strong>
-        {Boolean(data.notes_md) && ` Â· "${data.notes_md as string}"`}
+        {Boolean(data.notes_md) && ` · "${data.notes_md as string}"`}
       </span>
     );
   }
   if (event_type === 'outreach_state_changed') {
-    return <span className="text-xs text-gray-500">State â <strong className="text-gray-700">{data.state as string}</strong></span>;
+    return <span className="text-xs text-gray-500">State → <strong className="text-gray-700">{data.state as string}</strong></span>;
   }
   if (event_type === 'outreach_booked') {
     return (
       <span className="text-xs text-gray-500">
-        Booked ð {data.deal_value ? `$${data.deal_value}` : ''}
+        Booked 🎉 {data.deal_value ? `$${data.deal_value}` : ''}
       </span>
     );
   }
@@ -67,7 +68,7 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
   if (keys.length === 0) return null;
   return (
     <span className="text-xs text-gray-400">
-      {keys.slice(0, 2).map(k => `${k}: ${data[k]}`).join(' Â· ')}
+      {keys.slice(0, 2).map(k => `${k}: ${data[k]}`).join(' · ')}
     </span>
   );
 }
@@ -75,10 +76,12 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
 export default function ActivityTab({ activityLog }: Props) {
   if ((activityLog as ActivityEntry[]).length === 0) {
     return (
-      <div className="card text-center py-16">
-        <div className="text-4xl mb-3">ð</div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">No activity yet</h3>
-        <p className="text-xs text-gray-500">Campaign events will appear here as work progresses.</p>
+      <div className="card">
+        <EmptyState
+          icon="\ud83d\udcc4"
+          title="No activity yet"
+          description="Campaign events will appear here as work progresses."
+        />
       </div>
     );
   }

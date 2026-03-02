@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import { outreachStateColor, stageLabel, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { OutreachBadge } from '@/components/ui/Badge';
 import Drawer from '@/components/ui/Drawer';
 import ReactMarkdown from 'react-markdown';
 import { useRole } from '@/components/layout/Shell';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface CC {
   id: string; creator_id: string; creator_name: string; pipeline_stage: string;
@@ -112,14 +114,16 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
   return (
     <div className="space-y-4">
       <div className="notice-box">
-        <span>â ï¸ This tool does not send emails. Copy drafts and send manually through your own email client. All state changes are logged for tracking.</span>
+        <span>⚠️ This tool does not send emails. Copy drafts and send manually through your own email client. All state changes are logged for tracking.</span>
       </div>
 
       {eligibleCreators.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-4xl mb-3">âï¸</div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">No creators in outreach</h3>
-          <p className="text-xs text-gray-500">Approve creators in the Review tab first.</p>
+        <div className="card">
+          <EmptyState
+            icon="\u2709\ufe0f"
+            title="No creators in outreach"
+            description="Approve creators in the Review tab first."
+          />
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -139,12 +143,10 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
                   <tr key={cc.id}>
                     <td className="font-medium text-gray-900">{cc.creator_name}</td>
                     <td>
-                      <span className={`badge text-xs ${outreachStateColor(cc.outreach_state)}`}>
-                        {stageLabel(cc.outreach_state)}
-                      </span>
+                      <OutreachBadge state={cc.outreach_state} />
                     </td>
                     <td className="text-xs text-gray-500">{formatDate(cc.next_followup_due_at)}</td>
-                    <td className="text-xs text-gray-500">{cc.owner_name || 'â'}</td>
+                    <td className="text-xs text-gray-500">{cc.owner_name || '—'}</td>
                     <td>
                       <div className="flex gap-1">
                         <button onClick={() => openPacket(cc)} className="btn-secondary text-xs py-1 px-2">
@@ -155,7 +157,7 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
                           disabled={generatingPacket === cc.id}
                           className="btn-primary text-xs py-1 px-2"
                         >
-                          {generatingPacket === cc.id ? 'â¦' : 'â¨ Generate'}
+                          {generatingPacket === cc.id ? '…' : '✨ Generate'}
                         </button>
                         <select
                           className="select-field text-xs py-0.5 px-1 w-28"
@@ -179,11 +181,11 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Outreach: ${selectedCc?.creator_name || ''}`} width="w-[640px]">
         {loadingPacket ? (
           <div className="flex items-center justify-center h-32 text-gray-400">
-            <div className="animate-spin text-2xl">â³</div>
+            <div className="animate-spin text-2xl">⟳</div>
           </div>
         ) : !packet ? (
           <div className="p-4 text-center">
-            <div className="text-3xl mb-2">âï¸</div>
+            <div className="text-3xl mb-2">✉️</div>
             <p className="text-sm text-gray-600 font-medium mb-3">No outreach packet yet</p>
             <p className="text-xs text-gray-400 mb-4">Generate an AI-assisted outreach draft based on the creator evaluation and content angles.</p>
             <button
@@ -191,14 +193,14 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
               disabled={generatingPacket === selectedCc?.id}
               className="btn-primary"
             >
-              {generatingPacket ? 'â¨ Generatingâ¦' : 'â¨ Generate Outreach Draft'}
+              {generatingPacket ? '✨ Generating…' : '✨ Generate Outreach Draft'}
             </button>
           </div>
         ) : (
           <div className="p-4 space-y-4">
             {/* Disclaimer */}
             <div className="bg-amber-50 border border-amber-200 rounded-md p-2.5 flex items-center gap-2">
-              <span className="text-amber-600 text-sm">â ï¸</span>
+              <span className="text-amber-600 text-sm">⚠️</span>
               <p className="text-xs text-amber-700 font-medium">This tool does not send emails. Copy the draft and send manually.</p>
             </div>
 
@@ -210,7 +212,7 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
                   onClick={() => copyText(packet.subject, 'subject')}
                   className="btn-ghost text-xs py-0.5 px-2"
                 >
-                  {copied === 'subject' ? 'â Copied' : 'ð Copy'}
+                  {copied === 'subject' ? '✓ Copied' : '📋 Copy'}
                 </button>
               </div>
               <div className="bg-gray-50 rounded-md px-3 py-2 text-sm font-medium text-gray-900 border border-gray-200">
@@ -224,13 +226,13 @@ export default function OutreachTab({ campaign, campaignCreators }: Props) {
                 <label className="text-xs font-semibold text-gray-700">Email Body</label>
                 <div className="flex gap-1">
                   <button onClick={() => copyText(packet.body_md, 'body')} className="btn-ghost text-xs py-0.5 px-2">
-                    {copied === 'body' ? 'â Copied' : 'ð Copy Body'}
+                    {copied === 'body' ? '✓ Copied' : '📋 Copy Body'}
                   </button>
                   <button
                     onClick={() => copyText(`Subject: ${packet.subject}\n\n${packet.body_md}`, 'all')}
                     className="btn-primary text-xs py-0.5 px-2"
                   >
-                    {copied === 'all' ? 'â Copied!' : 'ð Copy Full Email'}
+                    {copied === 'all' ? '✓ Copied!' : '📋 Copy Full Email'}
                   </button>
                 </div>
               </div>

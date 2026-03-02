@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { StageBadge } from '@/components/ui/Badge'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
@@ -40,7 +41,7 @@ export default function CampaignsPage() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Filter campaignsâ¦"
+              placeholder="Filter campaigns…"
               className="pl-8 pr-3 h-8 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
             />
           </div>
@@ -54,7 +55,7 @@ export default function CampaignsPage() {
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-slate-500"><RefreshCw size={14} className="animate-spin" /> Loadingâ¦</div>
+        <div className="flex items-center gap-2 text-slate-500"><RefreshCw size={14} className="animate-spin" /> Loading…</div>
       )}
 
       {error && (
@@ -64,16 +65,14 @@ export default function CampaignsPage() {
       {!loading && !error && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="px-5 py-16 text-center">
-              <div className="text-slate-300 text-4xl mb-3">ð</div>
-              <div className="text-slate-500 font-medium">No campaigns found</div>
-              <p className="text-slate-400 text-sm mt-1">Seed demo data in Settings or create a new campaign</p>
-              <button onClick={() => router.push('/campaigns/new')} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-                Create Campaign
-              </button>
-            </div>
+            <EmptyState
+              icon="\ud83d\udce2"
+              title="No campaigns found"
+              description="Seed demo data in Settings or create a new campaign"
+              action={{ label: 'Create Campaign', onClick: () => router.push('/campaigns/new') }}
+            />
           ) : (
-            <table className="dense-table w-full">
+            <table className="table-dense w-full">
               <thead>
                 <tr>
                   <th className="text-left">Campaign Name</th>
@@ -115,7 +114,7 @@ export default function CampaignsPage() {
                       </span>
                     </td>
                     <td className="text-slate-400 text-xs">
-                      {c.updated_at ? new Date(String(c.updated_at)).toLocaleDateString() : 'â'}
+                      {c.updated_at ? new Date(String(c.updated_at)).toLocaleDateString() : '—'}
                     </td>
                   </tr>
                 ))}

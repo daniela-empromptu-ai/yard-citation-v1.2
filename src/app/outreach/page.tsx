@@ -1,8 +1,10 @@
 import { dbQuery, t } from '@/lib/db';
 import Link from 'next/link';
-import { formatDate, outreachStateColor, stageLabel } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import ScorePill from '@/components/ui/ScorePill';
-import { CoverageTag } from '@/components/ui/Badge';
+import { CoverageTag, OutreachBadge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,12 +35,7 @@ export default async function OutreachQueuePage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Outreach Queue</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Cross-campaign outreach tracking</p>
-        </div>
-      </div>
+      <PageHeader title="Outreach Queue" subtitle="Cross-campaign outreach tracking" />
 
       <div className="notice-box mb-5">
         <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -50,7 +47,7 @@ export default async function OutreachQueuePage() {
       {dueToday.length > 0 && (
         <div className="card mb-5 border-orange-200">
           <div className="px-4 py-3 bg-orange-50 border-b border-orange-200">
-            <h2 className="text-sm font-semibold text-orange-800">â° Follow-ups Due Today ({dueToday.length})</h2>
+            <h2 className="text-sm font-semibold text-orange-800">⏰ Follow-ups Due Today ({dueToday.length})</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -62,9 +59,9 @@ export default async function OutreachQueuePage() {
                   <tr key={r.cc_id} className="bg-orange-50/30">
                     <td className="font-medium text-gray-900">{r.creator_name}</td>
                     <td className="text-xs text-gray-600"><Link href={`/campaigns/${r.campaign_id}`} className="hover:text-accent">{r.campaign_name}</Link></td>
-                    <td><span className={`badge text-xs ${outreachStateColor(r.outreach_state)}`}>{stageLabel(r.outreach_state)}</span></td>
+                    <td><OutreachBadge state={r.outreach_state} /></td>
                     <td className="text-orange-700 font-medium text-xs">{formatDate(r.next_followup_due_at)}</td>
-                    <td className="text-xs text-gray-500">{r.owner_name || 'â'}</td>
+                    <td className="text-xs text-gray-500">{r.owner_name || '—'}</td>
                     <td><Link href={`/campaigns/${r.campaign_id}?tab=outreach`} className="btn-primary text-xs py-1 px-2">Open Packet</Link></td>
                   </tr>
                 ))}
@@ -79,11 +76,11 @@ export default async function OutreachQueuePage() {
           <h2 className="text-sm font-semibold text-gray-900">All Outreach ({queue.length})</h2>
         </div>
         {queue.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-4xl mb-3">âï¸</div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">No outreach in progress</h3>
-            <p className="text-xs">Creators approved in campaigns will appear here.</p>
-          </div>
+          <EmptyState
+            icon="\u2709\ufe0f"
+            title="No outreach in progress"
+            description="Creators approved in campaigns will appear here."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -108,9 +105,9 @@ export default async function OutreachQueuePage() {
                     </td>
                     <td><ScorePill score={r.overall_score} /></td>
                     <td><CoverageTag coverage={r.evidence_coverage || 'none'} /></td>
-                    <td><span className={`badge text-xs ${outreachStateColor(r.outreach_state)}`}>{stageLabel(r.outreach_state)}</span></td>
+                    <td><OutreachBadge state={r.outreach_state} /></td>
                     <td className="text-xs text-gray-500">{formatDate(r.next_followup_due_at)}</td>
-                    <td className="text-xs text-gray-500">{r.owner_name || 'â'}</td>
+                    <td className="text-xs text-gray-500">{r.owner_name || '—'}</td>
                     <td>
                       <Link href={`/campaigns/${r.campaign_id}?tab=outreach`} className="btn-secondary text-xs py-1 px-2">
                         Open Packet

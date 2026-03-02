@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ScorePill } from '@/components/ui/ScorePill'
 import { CoverageBadge, OutreachBadge, PipelineBadge } from '@/components/ui/Badge'
 import { AlertTriangle, CheckCircle, Clock, Users, Megaphone, Send, BarChart3, Calendar, RefreshCw } from 'lucide-react'
+import { StatCard } from '@/components/ui/StatCard'
 
 const USERS = [
   { id: 'a1000000-0000-0000-0000-000000000001', name: 'Jack Scrivener', role: 'qualifier' },
@@ -13,19 +14,6 @@ const USERS = [
   { id: 'a1000000-0000-0000-0000-000000000004', name: 'Empromptu', role: 'admin' },
 ]
 
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: number | string; icon: React.ElementType; color: string }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
-        <Icon size={18} className="text-white" />
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-slate-800">{value}</div>
-        <div className="text-xs text-slate-500">{label}</div>
-      </div>
-    </div>
-  )
-}
 
 export default function DashboardPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null)
@@ -63,7 +51,7 @@ export default function DashboardPage() {
   if (loading) return (
     <div className="flex items-center gap-2 text-slate-500 mt-12">
       <RefreshCw size={16} className="animate-spin" />
-      <span>Loading dashboardâ¦</span>
+      <span>Loading dashboard…</span>
     </div>
   )
   if (error) return <div className="text-red-600 mt-6 p-4 bg-red-50 rounded-lg border border-red-200">Error: {error}</div>
@@ -81,9 +69,9 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-800">
-            {currentUser.role === 'qualifier' && 'ð Qualifier Dashboard'}
-            {currentUser.role === 'outreach' && 'ð¤ Outreach Dashboard'}
-            {currentUser.role === 'admin' && 'âï¸ Admin Dashboard'}
+            {currentUser.role === 'qualifier' && '🔍 Qualifier Dashboard'}
+            {currentUser.role === 'outreach' && '📤 Outreach Dashboard'}
+            {currentUser.role === 'admin' && '⚙️ Admin Dashboard'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Welcome back, {currentUser.name}</p>
         </div>
@@ -120,7 +108,7 @@ export default function DashboardPage() {
                 No creators pending manual review
               </div>
             ) : (
-              <table className="dense-table w-full">
+              <table className="table-dense w-full">
                 <thead>
                   <tr>
                     <th className="text-left">Creator</th>
@@ -138,11 +126,11 @@ export default function DashboardPage() {
                       <td className="font-medium text-slate-800">{String(row.display_name)}</td>
                       <td className="text-slate-600">{String(row.campaign_name)}</td>
                       <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
-                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : 'â'}</td>
-                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || 'â')}</td>
-                      <td className="text-slate-400 text-xs">{row.updated_at ? new Date(String(row.updated_at)).toLocaleDateString() : 'â'}</td>
+                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
+                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || '—')}</td>
+                      <td className="text-slate-400 text-xs">{row.updated_at ? new Date(String(row.updated_at)).toLocaleDateString() : '—'}</td>
                       <td>
-                        <Link href="/campaigns" className="text-xs font-medium text-blue-600 hover:underline">Open Review â</Link>
+                        <Link href="/campaigns" className="text-xs font-medium text-blue-600 hover:underline">Open Review →</Link>
                       </td>
                     </tr>
                   ))}
@@ -160,7 +148,7 @@ export default function DashboardPage() {
             {recentScoring.length === 0 ? (
               <div className="px-5 py-8 text-center text-slate-400 text-sm">No scoring runs yet. Seed demo data in Settings.</div>
             ) : (
-              <table className="dense-table w-full">
+              <table className="table-dense w-full">
                 <thead>
                   <tr>
                     <th className="text-left">Creator</th>
@@ -178,7 +166,7 @@ export default function DashboardPage() {
                       <td className="text-slate-600">{String(row.campaign_name)}</td>
                       <td><ScorePill score={Number(row.overall_score)} /></td>
                       <td><CoverageBadge coverage={String(row.evidence_coverage)} /></td>
-                      <td className="text-slate-400 text-xs">{row.evaluated_at ? new Date(String(row.evaluated_at)).toLocaleDateString() : 'â'}</td>
+                      <td className="text-slate-400 text-xs">{row.evaluated_at ? new Date(String(row.evaluated_at)).toLocaleDateString() : '—'}</td>
                       <td>{row.needs_manual_review ? <span className="text-amber-600 text-xs font-medium">Needs Review</span> : <span className="text-green-600 text-xs font-medium">OK</span>}</td>
                     </tr>
                   ))}
@@ -204,7 +192,7 @@ export default function DashboardPage() {
           <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
             <AlertTriangle size={14} />
             <span className="font-medium">This tool does not send emails.</span>
-            <span className="text-amber-600">Assistive only â human approval required before outreach.</span>
+            <span className="text-amber-600">Assistive only — human approval required before outreach.</span>
           </div>
 
           {/* Outreach Queue */}
@@ -216,7 +204,7 @@ export default function DashboardPage() {
             {outreachQueue.length === 0 ? (
               <div className="px-5 py-8 text-center text-slate-400 text-sm">No creators ready for outreach.</div>
             ) : (
-              <table className="dense-table w-full">
+              <table className="table-dense w-full">
                 <thead>
                   <tr>
                     <th className="text-left">Creator</th>
@@ -235,12 +223,12 @@ export default function DashboardPage() {
                       <td className="font-medium text-slate-800">{String(row.display_name)}</td>
                       <td className="text-slate-600">{String(row.campaign_name)}</td>
                       <td><OutreachBadge state={String(row.outreach_state)} /></td>
-                      <td className="text-slate-500 text-xs">{row.next_followup_due_at ? String(row.next_followup_due_at) : 'â'}</td>
-                      <td className="text-slate-500 text-xs">{String(row.outreach_owner_name || 'â')}</td>
-                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : 'â'}</td>
-                      <td>{row.evidence_coverage ? <CoverageBadge coverage={String(row.evidence_coverage)} /> : 'â'}</td>
+                      <td className="text-slate-500 text-xs">{row.next_followup_due_at ? String(row.next_followup_due_at) : '—'}</td>
+                      <td className="text-slate-500 text-xs">{String(row.outreach_owner_name || '—')}</td>
+                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
+                      <td>{row.evidence_coverage ? <CoverageBadge coverage={String(row.evidence_coverage)} /> : '—'}</td>
                       <td>
-                        <Link href={`/outreach`} className="text-xs font-medium text-blue-600 hover:underline">Open Packet â</Link>
+                        <Link href={`/outreach`} className="text-xs font-medium text-blue-600 hover:underline">Open Packet →</Link>
                       </td>
                     </tr>
                   ))}
@@ -258,7 +246,7 @@ export default function DashboardPage() {
             {recentBooked.length === 0 ? (
               <div className="px-5 py-8 text-center text-slate-400 text-sm">No recent replies or bookings.</div>
             ) : (
-              <table className="dense-table w-full">
+              <table className="table-dense w-full">
                 <thead>
                   <tr>
                     <th className="text-left">Creator</th>
@@ -274,8 +262,8 @@ export default function DashboardPage() {
                       <td className="font-medium text-slate-800">{String(row.display_name)}</td>
                       <td className="text-slate-600">{String(row.campaign_name)}</td>
                       <td><OutreachBadge state={String(row.outreach_state)} /></td>
-                      <td className="text-slate-400 text-xs">{row.last_activity ? new Date(String(row.last_activity)).toLocaleDateString() : 'â'}</td>
-                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.last_notes || 'â')}</td>
+                      <td className="text-slate-400 text-xs">{row.last_activity ? new Date(String(row.last_activity)).toLocaleDateString() : '—'}</td>
+                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.last_notes || '—')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -287,7 +275,7 @@ export default function DashboardPage() {
 
       {/* Evidence disclaimer */}
       <div className="mt-6 text-center text-xs text-slate-400">
-        Evidence required for all scores and recommendations. Â· Assistive only â human approval required before outreach. Â· This tool does not send emails.
+        Evidence required for all scores and recommendations. · Assistive only — human approval required before outreach. · This tool does not send emails.
       </div>
     </div>
   )

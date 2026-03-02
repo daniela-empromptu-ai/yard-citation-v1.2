@@ -334,7 +334,7 @@ Return ONLY valid JSON:
       angle_info: params.selectedAngle
         ? `Title: ${params.selectedAngle.title}\nFormat: ${params.selectedAngle.format}\nKey points: ${params.selectedAngle.key_points.join(', ')}`
         : 'No specific angle selected',
-      evidence_info: params.evidenceSnippets.map(e => `Quote: "${e.quote}" â ${e.why_it_matters}`).join('\n'),
+      evidence_info: params.evidenceSnippets.map(e => `Quote: "${e.quote}" — ${e.why_it_matters}`).join('\n'),
     }, 'raw_text') as string
 
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()

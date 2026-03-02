@@ -148,7 +148,7 @@ export default function NewCampaignPage() {
         {STEPS.map((s, i) => (
           <div key={s} className="flex items-center">
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : i < step ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
-              <span>{i < step ? 'â' : i + 1}</span>
+              <span>{i < step ? '✓' : i + 1}</span>
               <span>{s}</span>
             </div>
             {i < STEPS.length - 1 && <ChevronRight size={14} className="text-slate-300 mx-1" />}
@@ -167,11 +167,11 @@ export default function NewCampaignPage() {
                 onChange={e => update('client_id', e.target.value)}
                 className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select clientâ¦</option>
+                <option value="">Select client…</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input
-                placeholder="Or create newâ¦"
+                placeholder="Or create new…"
                 value={form.newClientName}
                 onChange={e => update('newClientName', e.target.value)}
                 className="w-40 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -186,7 +186,7 @@ export default function NewCampaignPage() {
             <input
               value={form.name}
               onChange={e => update('name', e.target.value)}
-              placeholder="e.g. CloudForge â Kubernetes Cost Optimization (US)"
+              placeholder="e.g. CloudForge — Kubernetes Cost Optimization (US)"
               className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

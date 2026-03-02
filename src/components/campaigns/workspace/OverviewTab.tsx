@@ -66,7 +66,7 @@ export default function OverviewTab({ campaign, personas, topics, campaignCreato
             </div>
             <div className="flex justify-between">
               <dt className="text-gray-500">Category</dt>
-              <dd className="text-gray-900 text-right max-w-32 truncate">{campaign.product_category || 'â'}</dd>
+              <dd className="text-gray-900 text-right max-w-32 truncate">{campaign.product_category || '—'}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-gray-500">GEO</dt>
@@ -97,7 +97,7 @@ export default function OverviewTab({ campaign, personas, topics, campaignCreato
         <div className="card p-4">
           <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Next Actions</h3>
           {nextActions.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">No pending actions â campaign is up to date.</p>
+            <p className="text-xs text-gray-400 italic">No pending actions — campaign is up to date.</p>
           ) : (
             <ol className="space-y-2">
               {nextActions.map((action, i) => (

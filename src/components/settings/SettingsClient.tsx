@@ -23,10 +23,10 @@ interface Props {
 }
 
 const INTEGRATION_DESCRIPTIONS: Record<string, { label: string; description: string; icon: string }> = {
-  anthropic: { label: 'Anthropic (Claude)', description: 'AI scoring, topic suggestions, outreach drafts', icon: 'ð¤' },
-  youtube: { label: 'YouTube API', description: 'Creator discovery and channel search (V0: stubbed)', icon: 'â¶ï¸' },
-  reddit: { label: 'Reddit API', description: 'Reddit thread monitoring (V0: stubbed)', icon: 'ð¡' },
-  gumshoe: { label: 'Gumshoe Import', description: 'CSV import for prompts and citations', icon: 'ð' },
+  anthropic: { label: 'Anthropic (Claude)', description: 'AI scoring, topic suggestions, outreach drafts', icon: '🤖' },
+  youtube: { label: 'YouTube API', description: 'Creator discovery and channel search (V0: stubbed)', icon: '▶️' },
+  reddit: { label: 'Reddit API', description: 'Reddit thread monitoring (V0: stubbed)', icon: '📡' },
+  gumshoe: { label: 'Gumshoe Import', description: 'CSV import for prompts and citations', icon: '📂' },
 };
 
 export default function SettingsClient({ settings, integrations, lastSeedRun }: Props) {
@@ -132,7 +132,7 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
         </div>
         <div className="divide-y divide-gray-100">
           {integrations.map(int => {
-            const info = INTEGRATION_DESCRIPTIONS[int.integration_key] || { label: int.integration_key, description: '', icon: 'ð' };
+            const info = INTEGRATION_DESCRIPTIONS[int.integration_key] || { label: int.integration_key, description: '', icon: '🔌' };
             return (
               <div key={int.id} className="px-5 py-4 flex items-center gap-4">
                 <div className="text-2xl">{info.icon}</div>
@@ -140,11 +140,11 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-900">{info.label}</span>
                     <span className={`badge text-xs ${int.is_configured ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                      {int.is_configured ? 'â Configured' : 'Not configured'}
+                      {int.is_configured ? '✓ Configured' : 'Not configured'}
                     </span>
                     {int.last_test_result && (
                       <span className={`badge text-xs ${int.last_test_result === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                        {int.last_test_result === 'success' ? 'â' : 'â'} {int.last_test_result}
+                        {int.last_test_result === 'success' ? '✓' : '✗'} {int.last_test_result}
                       </span>
                     )}
                   </div>
@@ -162,7 +162,7 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
                   className="btn-secondary text-xs"
                   aria-label={`Test ${info.label} connection`}
                 >
-                  {testingId === int.integration_key ? 'â³ Testingâ¦' : 'Test Connection'}
+                  {testingId === int.integration_key ? '⟳ Testing…' : 'Test Connection'}
                 </button>
               </div>
             );
@@ -195,8 +195,8 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
               Minimum Evidence Coverage
             </label>
             <select className="select-field max-w-xs" value={minCoverage} onChange={e => setMinCoverage(e.target.value)} aria-label="Minimum evidence coverage">
-              <option value="strong">Strong (â¥6 snippets, â¥3 items, â¥3 dimensions)</option>
-              <option value="medium">Medium (â¥3 snippets, â¥2 items, â¥2 dimensions)</option>
+              <option value="strong">Strong (≥6 snippets, ≥3 items, ≥3 dimensions)</option>
+              <option value="medium">Medium (≥3 snippets, ≥2 items, ≥2 dimensions)</option>
               <option value="weak">Weak (any snippets)</option>
             </select>
           </div>
@@ -214,7 +214,7 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
             <p className="text-xs text-gray-400 mt-0.5 ml-5">Contact information will be hidden until explicitly revealed.</p>
           </div>
           <button onClick={saveSettings} disabled={savingSettings} className="btn-primary text-xs">
-            {savingSettings ? 'Savingâ¦' : 'â Save Thresholds'}
+            {savingSettings ? 'Saving…' : '✓ Save Thresholds'}
           </button>
         </div>
       </div>
@@ -228,7 +228,7 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
         {lastSeedRun && (
           <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
             <p className="text-xs font-medium text-green-800">Last seed run:</p>
-            <p className="text-xs text-green-700">{lastSeedRun.seed_version} Â· {formatDateTime(lastSeedRun.seeded_at)} Â· by {lastSeedRun.seeded_by_name}</p>
+            <p className="text-xs text-green-700">{lastSeedRun.seed_version} · {formatDateTime(lastSeedRun.seeded_at)} · by {lastSeedRun.seeded_by_name}</p>
             {lastSeedRun.notes && <p className="text-xs text-green-600">{lastSeedRun.notes}</p>}
           </div>
         )}
@@ -241,21 +241,21 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
             aria-label="Seed demo data"
           >
             {seeding ? (
-              <span className="flex items-center gap-1.5"><span className="animate-spin">â³</span> Seedingâ¦</span>
-            ) : 'ð± Seed Demo Data'}
+              <span className="flex items-center gap-1.5"><span className="animate-spin">⟳</span> Seeding…</span>
+            ) : '🌱 Seed Demo Data'}
           </button>
           <button
             onClick={() => setClearModal(true)}
             className="btn-danger"
             aria-label="Clear demo data"
           >
-            ð Clear Demo Data
+            🗑 Clear Demo Data
           </button>
         </div>
       </div>
 
       {/* Clear confirmation modal */}
-      <Modal open={clearModal} onClose={() => { setClearModal(false); setClearInput(''); }} title="â ï¸ Clear Demo Data" size="sm">
+      <Modal open={clearModal} onClose={() => { setClearModal(false); setClearInput(''); }} title="⚠️ Clear Demo Data" size="sm">
         <div className="space-y-4">
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
             <p className="text-xs font-semibold text-red-800">This will delete all rows from all domain tables.</p>
@@ -279,7 +279,7 @@ export default function SettingsClient({ settings, integrations, lastSeedRun }: 
               disabled={clearInput !== 'CLEAR' || clearing}
               aria-label="Confirm clear data"
             >
-              {clearing ? 'â³ Clearingâ¦' : 'ð Confirm Clear'}
+              {clearing ? '⟳ Clearing…' : '🗑 Confirm Clear'}
             </button>
           </div>
         </div>

@@ -168,7 +168,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
               <label className="block text-xs font-medium text-gray-700 mb-1">Client</label>
               <select className="select-field" value={clientId} onChange={e => setClientId(e.target.value)}>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="new">+ Create new clientâ¦</option>
+                <option value="new">+ Create new client…</option>
               </select>
             </div>
             {clientId === 'new' && (
@@ -179,7 +179,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
             )}
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-700 mb-1">Campaign Name</label>
-              <input className="input-field" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. CloudForge â Kubernetes Cost Optimization (US + UK)" />
+              <input className="input-field" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. CloudForge — Kubernetes Cost Optimization (US + UK)" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Language</label>
@@ -202,16 +202,16 @@ export default function NewCampaignWizard({ clients, users }: Props) {
               {geoTargets.map(g => (
                 <span key={g} className="badge bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1">
                   {g}
-                  <button onClick={() => setGeoTargets(geoTargets.filter(x => x !== g))} className="hover:text-red-500">Ã</button>
+                  <button onClick={() => setGeoTargets(geoTargets.filter(x => x !== g))} className="hover:text-red-500">×</button>
                 </span>
               ))}
             </div>
             <div className="flex gap-2">
               <select className="select-field max-w-xs" value="" onChange={e => { if (e.target.value) addGeo(e.target.value); }}>
-                <option value="">Select regionâ¦</option>
+                <option value="">Select region…</option>
                 {GEO_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-              <input className="input-field max-w-xs" value={geoInput} onChange={e => setGeoInput(e.target.value)} placeholder="Or type customâ¦"
+              <input className="input-field max-w-xs" value={geoInput} onChange={e => setGeoInput(e.target.value)} placeholder="Or type custom…"
                 onKeyDown={e => { if (e.key === 'Enter') addGeo(geoInput); }} />
               <button className="btn-secondary" onClick={() => addGeo(geoInput)}>Add</button>
             </div>
@@ -248,7 +248,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
               {personas.map(p => (
                 <span key={p} className="badge bg-purple-50 text-purple-700 border-purple-200 text-xs flex items-center gap-1">
                   {p}
-                  <button onClick={() => setPersonas(personas.filter(x => x !== p))} className="hover:text-red-500">Ã</button>
+                  <button onClick={() => setPersonas(personas.filter(x => x !== p))} className="hover:text-red-500">×</button>
                 </span>
               ))}
             </div>
@@ -274,7 +274,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
               {topics.map(tp => (
                 <span key={tp} className="badge bg-teal-50 text-teal-700 border-teal-200 text-xs flex items-center gap-1">
                   {tp}
-                  <button onClick={() => setTopics(topics.filter(x => x !== tp))} className="hover:text-red-500">Ã</button>
+                  <button onClick={() => setTopics(topics.filter(x => x !== tp))} className="hover:text-red-500">×</button>
                 </span>
               ))}
             </div>
@@ -291,14 +291,14 @@ export default function NewCampaignWizard({ clients, users }: Props) {
                 if (topicInput.trim()) { setTopics([...topics, topicInput.trim()]); setTopicInput(''); }
               }}>Add</button>
               <button className="btn-primary" onClick={suggestTopics} disabled={aiLoading}>
-                {aiLoading ? 'â¦' : 'â¨ Suggest Topics (AI)'}
+                {aiLoading ? '…' : '✨ Suggest Topics (AI)'}
               </button>
             </div>
 
             {/* AI Topic suggestions */}
             {aiTopics.length > 0 && (
               <div className="border border-blue-100 rounded-lg p-3 bg-blue-50/50 space-y-2">
-                <p className="text-xs font-medium text-blue-700">AI-Suggested Topics â review and approve:</p>
+                <p className="text-xs font-medium text-blue-700">AI-Suggested Topics — review and approve:</p>
                 {aiTopics.map((at, i) => (
                   <div key={i} className="flex items-start gap-2 bg-white rounded border border-gray-200 p-2">
                     <input type="checkbox" className="mt-0.5 rounded"
@@ -350,7 +350,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
-                  <button className="text-xs text-red-500 hover:text-red-700" onClick={() => setGaps(gaps.filter((_, j) => j !== i))}>Ã</button>
+                  <button className="text-xs text-red-500 hover:text-red-700" onClick={() => setGaps(gaps.filter((_, j) => j !== i))}>×</button>
                 </div>
               ))}
             </div>
@@ -367,7 +367,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
           onClick={() => setStep(Math.max(0, step - 1))}
           disabled={step === 0}
         >
-          â Back
+          ← Back
         </button>
 
         <div className="flex items-center gap-2">
@@ -380,7 +380,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
                 setStep(step + 1);
               }}
             >
-              Next â
+              Next →
             </button>
           ) : (
             <button
@@ -388,7 +388,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
               onClick={createCampaign}
               disabled={loading || !campaignName}
             >
-              {loading ? 'Creatingâ¦' : 'â Create Campaign'}
+              {loading ? 'Creating…' : '✓ Create Campaign'}
             </button>
           )}
         </div>

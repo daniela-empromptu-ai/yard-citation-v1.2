@@ -101,13 +101,13 @@ export default function CampaignWorkspace({
                 Stage: {stageLabel(campaign.stage)}
               </span>
               {campaign.geo_targets && (
-                <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' Â· ')}</span>
+                <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' · ')}</span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <span>Owner: {campaign.owner_name}</span>
-            {campaign.collaborator_name && <span>Â· {campaign.collaborator_name}</span>}
+            {campaign.collaborator_name && <span>· {campaign.collaborator_name}</span>}
           </div>
         </div>
 

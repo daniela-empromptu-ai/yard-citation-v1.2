@@ -7,6 +7,7 @@ import { formatDate, pipelineStageColor, stageLabel } from '@/lib/utils';
 import { PlatformBadge, FlagBadge } from '@/components/ui/Badge';
 import Drawer from '@/components/ui/Drawer';
 import { useRole } from '@/components/layout/Shell';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface CampaignCreator {
   id: string; creator_id: string; creator_name: string; primary_handle: string | null;
@@ -323,9 +324,13 @@ export default function DiscoveryTab({ campaign, searchTerms, campaignCreators }
 
           {/* Creators in pipeline */}
           {filteredCreators.length === 0 ? (
-            <div className="card text-center py-12">
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">No creators in pipeline</h3>
-              <p className="text-xs text-gray-500 mb-3">Add creator URLs to discover and shortlist creators.</p>
+            <div className="card">
+              <EmptyState
+                icon="\ud83d\udd0d"
+                title="No creators in pipeline"
+                description="Add creator URLs to discover and shortlist creators."
+                compact
+              />
             </div>
           ) : (
             <div className="card overflow-hidden">

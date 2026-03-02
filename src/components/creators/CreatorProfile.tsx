@@ -44,9 +44,9 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
             <h1 className="text-xl font-semibold text-gray-900">{creator.display_name}</h1>
             {creator.primary_handle && <p className="text-sm text-gray-500">{creator.primary_handle}</p>}
             <div className="flex items-center gap-2 mt-1.5">
-              {creator.is_dormant && <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-xs">ð¤ Dormant</span>}
-              {creator.is_autodubbed_suspected && <span className="badge bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">ð¤ Autodub?</span>}
-              {creator.competitor_affiliated && <span className="badge bg-red-50 text-red-700 border-red-200 text-xs">ð« Competitor</span>}
+              {creator.is_dormant && <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-xs">💤 Dormant</span>}
+              {creator.is_autodubbed_suspected && <span className="badge bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">🤖 Autodub?</span>}
+              {creator.competitor_affiliated && <span className="badge bg-red-50 text-red-700 border-red-200 text-xs">🚫 Competitor</span>}
               {activeFlags.map(f => <FlagBadge key={f.id} flag={f.flag} />)}
             </div>
           </div>
@@ -54,7 +54,7 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
         <div className="text-right">
           <p className="text-xs text-gray-500">Last content: {formatDate(creator.last_content_date)}</p>
           <button className="btn-secondary text-xs mt-1" onClick={() => setPiiModal(true)}>
-            ð Reveal Contact Info
+            🔒 Reveal Contact Info
           </button>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
                       <span className="text-sm font-medium text-gray-700 capitalize">{p.price_type}</span>
                       <span className="text-sm font-mono text-gray-900">${Number(p.price_amount_usd).toLocaleString()}</span>
                       {p.is_too_high && <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">Too High</span>}
-                      {p.notes && <span className="text-xs text-gray-400">Â· {p.notes}</span>}
+                      {p.notes && <span className="text-xs text-gray-400">· {p.notes}</span>}
                     </div>
                   ))}
                 </div>
@@ -167,8 +167,8 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
                     <a href={ci.url} target="_blank" rel="noopener" className="font-medium text-gray-900 hover:text-accent">{ci.title}</a>
                   </td>
                   <td><PlatformBadge platform={ci.platform} /></td>
-                  <td className="text-xs font-mono">{ci.word_count?.toLocaleString() || 'â'}</td>
-                  <td className="text-xs font-mono">{ci.metadata_json?.view_count ? formatNumber(Number(ci.metadata_json.view_count)) : 'â'}</td>
+                  <td className="text-xs font-mono">{ci.word_count?.toLocaleString() || '—'}</td>
+                  <td className="text-xs font-mono">{ci.metadata_json?.view_count ? formatNumber(Number(ci.metadata_json.view_count)) : '—'}</td>
                   <td className="text-xs text-gray-500">{formatDate(ci.published_at)}</td>
                 </tr>
               ))}
@@ -234,7 +234,7 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
           {notes.map(n => (
             <div key={n.id} className="card p-4">
               <p className="text-sm text-gray-800">{n.note_md}</p>
-              <p className="text-xs text-gray-400 mt-1">â {n.created_by_name} Â· {formatDateTime(n.created_at)}</p>
+              <p className="text-xs text-gray-400 mt-1">— {n.created_by_name} · {formatDateTime(n.created_at)}</p>
             </div>
           ))}
           {notes.length === 0 && <p className="text-sm text-gray-400">No notes. Add notes during campaign review.</p>}
@@ -245,7 +245,7 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
       <Modal open={piiModal} onClose={() => setPiiModal(false)} title="Reveal Contact Information" size="sm">
         <div className="space-y-3">
           <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-            <p className="text-xs font-semibold text-amber-800">â  PII Warning</p>
+            <p className="text-xs font-semibold text-amber-800">⚠ PII Warning</p>
             <p className="text-xs text-amber-700 mt-0.5">Accessing contact information is logged. Only access when necessary for outreach.</p>
           </div>
           {!piiRevealed ? (
@@ -256,11 +256,11 @@ export default function CreatorProfileClient({ creator, platforms, flags, pricin
                 addToast('info', 'PII access logged');
               }}
             >
-              ð Confirm â Reveal Contact Info
+              🔓 Confirm — Reveal Contact Info
             </button>
           ) : (
             <div className="space-y-2 text-sm">
-              <p className="text-gray-500">Email: <strong className="text-gray-900 font-mono">[encrypted â decode server-side]</strong></p>
+              <p className="text-gray-500">Email: <strong className="text-gray-900 font-mono">[encrypted — decode server-side]</strong></p>
               <p className="text-xs text-gray-400">Contact information is stored encrypted. Reveal through the outreach workflow.</p>
             </div>
           )}

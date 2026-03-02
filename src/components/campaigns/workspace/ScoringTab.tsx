@@ -8,7 +8,8 @@ import { CoverageTag } from '@/components/ui/Badge';
 import { pipelineStageColor, stageLabel, formatDateTime } from '@/lib/utils';
 import Drawer from '@/components/ui/Drawer';
 import EvidenceCard from '@/components/ui/EvidenceCard';
-import RubricBars from '@/components/ui/RubricBars';
+import { RubricBars } from '@/components/ui/ScorePill';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface CC {
   id: string; creator_id: string; creator_name: string; pipeline_stage: string;
@@ -81,14 +82,16 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
   return (
     <div className="space-y-4">
       <div className="notice-box">
-        <span>Evidence required for all scores and recommendations. Â· Every evidence quote is verified against ingested raw text.</span>
+        <span>Evidence required for all scores and recommendations. · Every evidence quote is verified against ingested raw text.</span>
       </div>
 
       {scoredCcs.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-4xl mb-3">ð§®</div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">No scoring runs yet</h3>
-          <p className="text-xs text-gray-500 mb-4">Ingest content first, then run AI scoring.</p>
+        <div className="card">
+          <EmptyState
+            icon="\ud83e\uddee"
+            title="No scoring runs yet"
+            description="Ingest content first, then run AI scoring."
+          />
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -118,11 +121,11 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
                     <td><CoverageTag coverage={cc.evidence_coverage || 'none'} /></td>
                     <td>
                       {cc.needs_manual_review ? (
-                        <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">â  NMR</span>
+                        <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">⚠ NMR</span>
                       ) : cc.overall_score !== null ? (
-                        <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">â OK</span>
+                        <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">✓ OK</span>
                       ) : (
-                        <span className="text-gray-400 text-xs">â</span>
+                        <span className="text-gray-400 text-xs">—</span>
                       )}
                     </td>
                     <td className="text-xs text-gray-400">{formatDateTime(cc.evaluated_at)}</td>
@@ -138,7 +141,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
                           disabled={scoringId === cc.id}
                           className="btn-primary text-xs py-1 px-2"
                         >
-                          {scoringId === cc.id ? <span className="animate-spin inline-block">â³</span> : 'â¶ Score'}
+                          {scoringId === cc.id ? <span className="animate-spin inline-block">⟳</span> : '▶ Score'}
                         </button>
                       </div>
                     </td>
@@ -154,7 +157,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Evaluation: ${selectedCc?.creator_name || ''}`} width="w-[600px]">
         {loadingEval ? (
           <div className="flex items-center justify-center h-32 text-gray-400">
-            <div className="animate-spin text-2xl">â³</div>
+            <div className="animate-spin text-2xl">⟳</div>
           </div>
         ) : !evaluation ? (
           <div className="p-4 text-center text-gray-400">
@@ -180,7 +183,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
             {/* NMR Warning */}
             {evaluation.needs_manual_review && (
               <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                <p className="text-xs font-semibold text-orange-800">â  Needs Manual Review</p>
+                <p className="text-xs font-semibold text-orange-800">⚠ Needs Manual Review</p>
                 <p className="text-xs text-orange-700 mt-0.5">{evaluation.needs_manual_review_reason}</p>
               </div>
             )}
@@ -191,7 +194,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
               <ul className="space-y-1">
                 {(evaluation.strengths_json || []).map((s: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-green-500 flex-shrink-0 mt-0.5">â</span>{s}
+                    <span className="text-green-500 flex-shrink-0 mt-0.5">✓</span>{s}
                   </li>
                 ))}
               </ul>
@@ -203,7 +206,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
               <ul className="space-y-1">
                 {(evaluation.weaknesses_json || []).map((w: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-red-400 flex-shrink-0 mt-0.5">Ã</span>{w}
+                    <span className="text-red-400 flex-shrink-0 mt-0.5">×</span>{w}
                   </li>
                 ))}
               </ul>
@@ -247,7 +250,7 @@ export default function ScoringTab({ campaign, campaignCreators }: Props) {
                       </div>
                       <ul className="space-y-0.5">
                         {(Array.isArray(angle.key_points_json) ? angle.key_points_json : []).map((kp: string, j: number) => (
-                          <li key={j} className="text-xs text-gray-600">Â· {kp}</li>
+                          <li key={j} className="text-xs text-gray-600">· {kp}</li>
                         ))}
                       </ul>
                     </div>

@@ -2,6 +2,8 @@ import { dbQuery, t } from '@/lib/db';
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 import { PlatformBadge, FlagBadge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,20 +34,15 @@ export default async function CreatorsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Creators Database</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{creators.length} creators across all campaigns</p>
-        </div>
-      </div>
+      <PageHeader title="Creators Database" subtitle={`${creators.length} creators across all campaigns`} />
 
       <div className="card overflow-hidden">
         {creators.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-3">ð¥</div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">No creators yet</h3>
-            <p className="text-xs text-gray-500">Add creators through campaign discovery or manually.</p>
-          </div>
+          <EmptyState
+            icon="\ud83e\udd4c"
+            title="No creators yet"
+            description="Add creators through campaign discovery or manually."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -106,7 +103,7 @@ export default async function CreatorsPage() {
                         {pricingStr ? pricingStr.split(',').map((p: string) => {
                           const [type, amount] = p.split(':');
                           return <div key={type}>{type}: ${Number(amount).toLocaleString()}</div>;
-                        }) : 'â'}
+                        }) : '—'}
                       </td>
                       <td>
                         <Link href={`/creators/${c.id}`} className="btn-secondary text-xs py-1 px-2">Profile</Link>

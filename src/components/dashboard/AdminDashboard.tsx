@@ -2,6 +2,8 @@
 
 import { useRole } from '@/components/layout/Shell';
 import Link from 'next/link';
+import { StatCard } from '@/components/ui/StatCard';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 interface DashData {
   stats: {
@@ -23,28 +25,13 @@ export default function AdminDashboard({ data }: { data: DashData }) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">System overview, integrations, and configuration.</p>
-      </div>
+      <PageHeader title="Admin Dashboard" subtitle="System overview, integrations, and configuration." />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-blue-600 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-sm mb-2">{stats.total_campaigns}</div>
-          <div className="text-xs text-gray-600 font-medium">Total Campaigns</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-green-600 w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-sm mb-2">{stats.active_campaigns}</div>
-          <div className="text-xs text-gray-600 font-medium">Active Campaigns</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-purple-600 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-sm mb-2">{stats.creators_analyzed}</div>
-          <div className="text-xs text-gray-600 font-medium">Creators Scored</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-teal-600 w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-sm mb-2">{stats.booking_rate}%</div>
-          <div className="text-xs text-gray-600 font-medium">Booking Rate (7d)</div>
-        </div>
+        <StatCard label="Total Campaigns" value={stats.total_campaigns} color="blue" />
+        <StatCard label="Active Campaigns" value={stats.active_campaigns} color="green" />
+        <StatCard label="Creators Scored" value={stats.creators_analyzed} color="purple" />
+        <StatCard label="Booking Rate (7d)" value={`${stats.booking_rate}%`} color="teal" />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

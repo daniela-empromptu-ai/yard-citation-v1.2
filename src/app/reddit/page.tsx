@@ -1,5 +1,7 @@
 import { dbQuery, t } from '@/lib/db';
 import { formatDateTime } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,12 +24,7 @@ export default async function RedditMonitorPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Reddit Monitor</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Fetched Reddit threads across all campaigns. Read-only.</p>
-        </div>
-      </div>
+      <PageHeader title="Reddit Monitor" subtitle="Fetched Reddit threads across all campaigns. Read-only." />
 
       <div className="notice-box mb-5">
         <span>Read-only monitoring dashboard. No posting, no commenting, no automation. Fetch threads from within each campaign's Reddit tab.</span>
@@ -38,12 +35,11 @@ export default async function RedditMonitorPage() {
           <h2 className="text-sm font-semibold text-gray-900">All Reddit Threads ({threads.length})</h2>
         </div>
         {threads.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-3">ð¡</div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">No Reddit threads fetched yet</h3>
-            <p className="text-xs text-gray-500 mb-2">Use the Reddit tab within a campaign workspace to fetch threads.</p>
-            <p className="text-xs text-gray-400">You can configure subreddits and keywords per campaign.</p>
-          </div>
+          <EmptyState
+            icon="\ud83d\udca1"
+            title="No Reddit threads fetched yet"
+            description="Use the Reddit tab within a campaign workspace to fetch threads."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -69,7 +65,7 @@ export default async function RedditMonitorPage() {
                       </td>
                       <td>
                         <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                          r/{(meta as {subreddit?: string}).subreddit || 'â'}
+                          r/{(meta as {subreddit?: string}).subreddit || '—'}
                         </span>
                       </td>
                       <td className="font-mono text-sm">{(meta as {karma?: number}).karma || 0}</td>
@@ -79,10 +75,10 @@ export default async function RedditMonitorPage() {
                       <td className="text-xs">
                         {t.campaign_name ? (
                           <a href={`/campaigns/${t.campaign_id}`} className="text-accent hover:underline">{t.campaign_name}</a>
-                        ) : 'â'}
+                        ) : '—'}
                       </td>
                       <td>
-                        <a href={t.url} target="_blank" rel="noopener" className="btn-ghost text-xs py-1 px-2">â View</a>
+                        <a href={t.url} target="_blank" rel="noopener" className="btn-ghost text-xs py-1 px-2">→ View</a>
                       </td>
                     </tr>
                   );

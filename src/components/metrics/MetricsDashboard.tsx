@@ -5,6 +5,7 @@ import {
   PointElement, Title, Tooltip, Legend
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { StatCard } from '@/components/ui/StatCard';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
 
@@ -79,24 +80,10 @@ export default function MetricsDashboard({ weeklyData, campaignPerf, overallBook
     <div className="space-y-6">
       {/* Top stats */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-purple-700">{analyzed.reduce((a, b) => a + b, 0)}</div>
-          <div className="text-xs text-gray-600 mt-1">Total Creators Analyzed</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-green-700">{approved.reduce((a, b) => a + b, 0)}</div>
-          <div className="text-xs text-gray-600 mt-1">Total Approved for Outreach</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-teal-700">{totalSent}</div>
-          <div className="text-xs text-gray-600 mt-1">Total Emails Sent</div>
-          <div className="text-xs text-gray-400 mt-0.5">Baseline: 130/week</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-2xl font-bold text-emerald-700">{overallBookingRate}%</div>
-          <div className="text-xs text-gray-600 mt-1">Overall Booking Rate</div>
-          <div className="text-xs text-gray-400 mt-0.5">Baseline: 7â10%</div>
-        </div>
+        <StatCard label="Total Creators Analyzed" value={analyzed.reduce((a, b) => a + b, 0)} color="purple" />
+        <StatCard label="Total Approved for Outreach" value={approved.reduce((a, b) => a + b, 0)} color="green" />
+        <StatCard label="Total Emails Sent" value={totalSent} color="teal" />
+        <StatCard label="Overall Booking Rate" value={`${overallBookingRate}%`} color="emerald" />
       </div>
 
       {/* Charts */}
@@ -153,7 +140,7 @@ export default function MetricsDashboard({ weeklyData, campaignPerf, overallBook
                       <td className="text-right font-mono text-sm">{Number(cp.booked)}</td>
                       <td className="text-right">
                         <span className={`font-mono text-sm font-semibold ${rate >= 10 ? 'text-green-700' : rate >= 7 ? 'text-yellow-700' : rate > 0 ? 'text-orange-700' : 'text-gray-400'}`}>
-                          {rate > 0 ? `${rate}%` : 'â'}
+                          {rate > 0 ? `${rate}%` : '—'}
                         </span>
                       </td>
                     </tr>

@@ -79,6 +79,14 @@ export function FlagBadge({ flag }: { flag: string }) {
   return <Badge variant="danger" size="sm">{flag.replace(/_/g, ' ')}</Badge>
 }
 
+// Ingestion status badge
+export function IngestionStatusBadge({ status }: { status: string }) {
+  const map: Record<string, BadgeVariant> = {
+    not_started: 'muted', queued: 'info', running: 'warning', complete: 'success', failed: 'danger',
+  }
+  return <Badge variant={map[status] || 'default'}>{status.replace(/_/g, ' ')}</Badge>
+}
+
 // Platform badge
 export function PlatformBadge({ platform }: { platform: string }) {
   const map: Record<string, BadgeVariant> = {

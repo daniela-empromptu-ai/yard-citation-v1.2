@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         content_item_id: ci.id,
         quote: ci.raw_text.slice(0, 80).trim(),
         dimension: 'technical_relevance',
-        why_it_matters: 'Stub evidence â configure AI for real evidence extraction.',
+        why_it_matters: 'Stub evidence — configure AI for real evidence extraction.',
       })),
       content_angles: [
         { title: 'Kubernetes Cost Optimization Tutorial', format: 'tutorial', persona: 'DevOps Lead', key_points: ['Introduction', 'Implementation', 'Results'] },

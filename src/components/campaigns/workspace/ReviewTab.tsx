@@ -7,6 +7,7 @@ import ScorePill from '@/components/ui/ScorePill';
 import { CoverageTag } from '@/components/ui/Badge';
 import { stageLabel, pipelineStageColor } from '@/lib/utils';
 import { useRole } from '@/components/layout/Shell';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface CC {
   id: string; creator_id: string; creator_name: string; pipeline_stage: string;
@@ -60,10 +61,12 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
 
   if (role !== 'qualifier' && role !== 'admin') {
     return (
-      <div className="card text-center py-16">
-        <div className="text-4xl mb-3">ð</div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Qualifier Role Required</h3>
-        <p className="text-xs text-gray-500">Switch to Qualifier role to review creators.</p>
+      <div className="card">
+        <EmptyState
+          icon="\ud83d\udd10"
+          title="Qualifier Role Required"
+          description="Switch to Qualifier role to review creators."
+        />
       </div>
     );
   }
@@ -71,14 +74,16 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
   return (
     <div className="space-y-4">
       <div className="notice-box">
-        <span>Assistive only â human approval required before outreach. Review scored creators and approve, reject, or flag for manual review.</span>
+        <span>Assistive only — human approval required before outreach. Review scored creators and approve, reject, or flag for manual review.</span>
       </div>
 
       {scoredCreators.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-4xl mb-3">ð</div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">No creators ready for review</h3>
-          <p className="text-xs text-gray-500">Score creators first, then they will appear here for review.</p>
+        <div className="card">
+          <EmptyState
+            icon="\ud83d\udccb"
+            title="No creators ready for review"
+            description="Score creators first, then they will appear here for review."
+          />
         </div>
       ) : (
         <div className="space-y-4">
@@ -102,7 +107,7 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
                       <CoverageTag coverage={cc.evidence_coverage || 'none'} />
                     </div>
                     {cc.needs_manual_review && (
-                      <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">â  Needs Manual Review</span>
+                      <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">⚠ Needs Manual Review</span>
                     )}
                   </div>
                 </div>
@@ -116,7 +121,7 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
                       className="input-field w-20 text-xs py-1"
                       value={overrideScore[cc.id] || ''}
                       onChange={e => setOverrideScore({...overrideScore, [cc.id]: e.target.value})}
-                      placeholder="â"
+                      placeholder="—"
                     />
                   </div>
                   {/* Notes */}
@@ -124,7 +129,7 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
                     className="input-field text-xs h-14 resize-none"
                     value={notes[cc.id] || ''}
                     onChange={e => setNotes({...notes, [cc.id]: e.target.value})}
-                    placeholder="Review notes (optional)â¦"
+                    placeholder="Review notes (optional)…"
                   />
                   {/* Decision buttons */}
                   <div className="flex gap-1.5">
@@ -133,21 +138,21 @@ export default function ReviewTab({ campaign, campaignCreators }: Props) {
                       disabled={submitting === cc.id}
                       className="btn-primary text-xs py-1 flex-1"
                     >
-                      â Approve
+                      ✓ Approve
                     </button>
                     <button
                       onClick={() => submitReview(cc, 'needs_manual_review')}
                       disabled={submitting === cc.id}
                       className="btn-secondary text-xs py-1"
                     >
-                      â  NMR
+                      ⚠ NMR
                     </button>
                     <button
                       onClick={() => submitReview(cc, 'rejected')}
                       disabled={submitting === cc.id}
                       className="btn-danger text-xs py-1"
                     >
-                      Ã Reject
+                      × Reject
                     </button>
                     <button
                       onClick={() => submitReview(cc, 'excluded')}

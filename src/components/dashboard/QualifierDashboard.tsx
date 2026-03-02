@@ -5,6 +5,9 @@ import Link from 'next/link';
 import ScorePill from '@/components/ui/ScorePill';
 import { CoverageTag } from '@/components/ui/Badge';
 import { formatDateTime, stageLabel } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { StatCard } from '@/components/ui/StatCard';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 interface DashData {
   stats: {
@@ -32,10 +35,7 @@ export default function QualifierDashboard({ data }: { data: DashData }) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Qualifier Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Review creators, validate evidence, approve for outreach.</p>
-      </div>
+      <PageHeader title="Qualifier Dashboard" subtitle="Review creators, validate evidence, approve for outreach." />
 
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -52,9 +52,7 @@ export default function QualifierDashboard({ data }: { data: DashData }) {
           <span className="text-xs text-gray-500">{nmrQueue.length} creators</span>
         </div>
         {nmrQueue.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
-            <p className="text-sm">No creators pending manual review.</p>
-          </div>
+          <EmptyState title="No creators pending manual review" compact />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -76,7 +74,7 @@ export default function QualifierDashboard({ data }: { data: DashData }) {
                     <td className="text-gray-600">{row.campaign_name}</td>
                     <td><CoverageTag coverage={row.evidence_coverage || 'none'} /></td>
                     <td><ScorePill score={row.overall_score} /></td>
-                    <td className="max-w-xs truncate text-gray-500 text-xs">{row.needs_manual_review_reason || 'â'}</td>
+                    <td className="max-w-xs truncate text-gray-500 text-xs">{row.needs_manual_review_reason || '—'}</td>
                     <td className="text-gray-400 text-xs">{formatDateTime(row.updated_at)}</td>
                     <td>
                       <Link href={`/campaigns?tab=review&cc=${row.cc_id}`} className="btn-primary text-xs py-1 px-2">
@@ -97,9 +95,7 @@ export default function QualifierDashboard({ data }: { data: DashData }) {
           <h2 className="text-sm font-semibold text-gray-900">Recent Scoring Runs</h2>
         </div>
         {scoringRuns.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
-            <p className="text-sm">No scoring runs yet. Run scoring on campaign creators.</p>
-          </div>
+          <EmptyState title="No scoring runs yet" description="Run scoring on campaign creators." compact />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -137,27 +133,10 @@ export default function QualifierDashboard({ data }: { data: DashData }) {
       </div>
 
       <p className="text-xs text-gray-400 mt-4">
-        Evidence required for all scores and recommendations. Â· Assistive only â human approval required before outreach.
+        Evidence required for all scores and recommendations. · Assistive only — human approval required before outreach.
       </p>
     </div>
   );
 }
 
-function StatCard({ label, value, color, urgent }: {
-  label: string; value: number; color: string; urgent?: boolean;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: 'text-blue-600 bg-blue-50',
-    orange: 'text-orange-600 bg-orange-50',
-    green: 'text-green-600 bg-green-50',
-    purple: 'text-purple-600 bg-purple-50',
-  };
-  return (
-    <div className={`card p-4 ${urgent && value > 0 ? 'border-orange-200 bg-orange-50/30' : ''}`}>
-      <div className={`text-2xl font-bold ${colorMap[color] || ''} w-10 h-10 rounded-lg flex items-center justify-center text-sm mb-2`}>
-        {value}
-      </div>
-      <div className="text-xs text-gray-600 font-medium">{label}</div>
-    </div>
-  );
-}
+
