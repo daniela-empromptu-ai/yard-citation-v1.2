@@ -141,7 +141,7 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
       {/* Loading state while terms generate */}
       {polling && terms.length === 0 && (
         <div className="card p-6 text-center">
-          <div className="animate-spin text-2xl mb-3">&#x27F3;</div>
+          <div className="animate-spin text-2xl mb-3">{'\u27F3'}</div>
           <p className="text-sm font-medium text-gray-700">Generating search terms from your campaign brief…</p>
           <p className="text-xs text-gray-500 mt-1">This typically takes 10-20 seconds.</p>
         </div>
@@ -153,30 +153,30 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
           <div className="flex items-center gap-2">
             <button onClick={handleGenerate} disabled={generating} className="btn-primary">
               {generating ? (
-                <span className="flex items-center gap-1.5"><span className="animate-spin">&#x27F3;</span> Generating…</span>
+                <span className="flex items-center gap-1.5"><span className="animate-spin">{'\u27F3'}</span> Generating…</span>
               ) : (
-                '&#x2728; Generate 15 Terms (AI)'
+                'Generate 15 Terms (AI)'
               )}
             </button>
             {terms.length > 0 && approvedCount < terms.length && (
               <button onClick={handleApproveAndRun} disabled={approving} className="btn-primary bg-green-600 hover:bg-green-700">
                 {approving ? (
-                  <span className="flex items-center gap-1.5"><span className="animate-spin">&#x27F3;</span> Starting…</span>
+                  <span className="flex items-center gap-1.5"><span className="animate-spin">{'\u27F3'}</span> Starting…</span>
                 ) : (
-                  '&#x2705; Approve All & Find Creators'
+                  'Approve All & Find Creators'
                 )}
               </button>
             )}
             {terms.length > 0 && approvedCount === terms.length && (
               <span className="text-xs text-green-700 font-medium flex items-center gap-1">
-                &#x2713; All terms approved
+                All terms approved
               </span>
             )}
           </div>
           <div className="text-sm text-gray-500">
             {terms.length} terms · {approvedCount} approved
             {terms.length > 0 && terms.length !== 15 && (
-              <span className="text-orange-600 ml-2">&#x26A0; Expected 15</span>
+              <span className="text-orange-600 ml-2">Expected 15</span>
             )}
           </div>
         </div>
@@ -186,10 +186,10 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
       {terms.length === 0 && !polling ? (
         <div className="card">
           <EmptyState
-            icon="&#x1F50D;"
+            icon=""
             title="No search terms yet"
             description="Generate 15 YouTube search terms from your campaign context."
-            action={{ label: '&#x2728; Generate 15 Terms', onClick: handleGenerate, loading: generating }}
+            action={{ label: 'Generate 15 Terms', onClick: handleGenerate, loading: generating }}
           />
         </div>
       ) : terms.length > 0 ? (
@@ -218,7 +218,7 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
                     <td className="text-gray-600 text-xs max-w-xs">{term.why_it_helps}</td>
                     <td>
                       <span className={`badge text-xs ${term.approved ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                        {term.approved ? '&#x2713; Yes' : 'No'}
+                        {term.approved ? 'Yes' : 'No'}
                       </span>
                     </td>
                   </tr>

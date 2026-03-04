@@ -161,7 +161,7 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
     return (
       <div className="card">
         <EmptyState
-          icon="&#x1F4CB;"
+          icon=""
           title="No creators ready for review"
           description="Score creators first — they will appear here once evaluated."
         />
@@ -229,7 +229,7 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                       <CoverageTag coverage={selectedCc.evidence_coverage || 'none'} />
                     </div>
                     {selectedCc.needs_manual_review && (
-                      <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">&#x26A0; Needs Manual Review</span>
+                      <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">{'\u26A0'} Needs Manual Review</span>
                     )}
                   </div>
                 </div>
@@ -263,21 +263,21 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                       disabled={submitting === selectedCc.id}
                       className="btn-primary text-xs py-1.5 flex-1"
                     >
-                      &#x2713; Approve
+                      {'\u2713'} Approve
                     </button>
                     <button
                       onClick={() => submitReview(selectedCc, 'needs_manual_review')}
                       disabled={submitting === selectedCc.id}
                       className="btn-secondary text-xs py-1.5"
                     >
-                      &#x26A0; NMR
+                      {'\u26A0'} NMR
                     </button>
                     <button
                       onClick={() => submitReview(selectedCc, 'rejected')}
                       disabled={submitting === selectedCc.id}
                       className="btn-danger text-xs py-1.5"
                     >
-                      &#xD7; Reject
+                      {'\u00D7'} Reject
                     </button>
                     <button
                       onClick={() => submitReview(selectedCc, 'excluded')}
@@ -311,13 +311,13 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
 
                 {/* Disclaimer */}
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mb-3 flex items-center gap-2">
-                  <span className="text-amber-600 text-sm">&#x26A0;&#xFE0F;</span>
+                  <span className="text-amber-600 text-sm">{'\u26A0\uFE0F'}</span>
                   <p className="text-xs text-amber-700 font-medium">This tool does not send emails. Copy the draft and send manually.</p>
                 </div>
 
                 {loadingPacket ? (
                   <div className="flex items-center justify-center h-16 text-gray-400">
-                    <div className="animate-spin text-xl">&#x27F3;</div>
+                    <div className="animate-spin text-xl">{'\u27F3'}</div>
                   </div>
                 ) : !packet ? (
                   <div className="text-center py-4">
@@ -327,7 +327,7 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                       disabled={generatingPacket === selectedCc.id}
                       className="btn-primary text-xs"
                     >
-                      {generatingPacket === selectedCc.id ? '&#x2728; Generating…' : '&#x2728; Generate Outreach Draft'}
+                      {generatingPacket === selectedCc.id ? 'Generating\u2026' : 'Generate Outreach Draft'}
                     </button>
                   </div>
                 ) : (
@@ -337,7 +337,7 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-semibold text-gray-700">Subject Line</label>
                         <button onClick={() => copyText(packet.subject, 'subject')} className="btn-ghost text-xs py-0.5 px-2">
-                          {copied === 'subject' ? '&#x2713; Copied' : '&#x1F4CB; Copy'}
+                          {copied === 'subject' ? 'Copied' : 'Copy'}
                         </button>
                       </div>
                       <div className="bg-gray-50 rounded-md px-3 py-2 text-sm font-medium text-gray-900 border border-gray-200">
@@ -351,13 +351,13 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                         <label className="text-xs font-semibold text-gray-700">Email Body</label>
                         <div className="flex gap-1">
                           <button onClick={() => copyText(packet.body_md, 'body')} className="btn-ghost text-xs py-0.5 px-2">
-                            {copied === 'body' ? '&#x2713; Copied' : '&#x1F4CB; Copy Body'}
+                            {copied === 'body' ? 'Copied' : 'Copy Body'}
                           </button>
                           <button
                             onClick={() => copyText(`Subject: ${packet.subject}\n\n${packet.body_md}`, 'all')}
                             className="btn-primary text-xs py-0.5 px-2"
                           >
-                            {copied === 'all' ? '&#x2713; Copied!' : '&#x1F4CB; Copy Full Email'}
+                            {copied === 'all' ? 'Copied!' : 'Copy Full Email'}
                           </button>
                         </div>
                       </div>
@@ -391,7 +391,7 @@ export default function ReviewOutreachTab({ campaign, campaignCreators }: Props)
                       disabled={generatingPacket === selectedCc.id}
                       className="btn-secondary text-xs w-full"
                     >
-                      {generatingPacket === selectedCc.id ? '&#x2728; Regenerating…' : '&#x21BB; Regenerate Draft'}
+                      {generatingPacket === selectedCc.id ? 'Regenerating\u2026' : 'Regenerate Draft'}
                     </button>
                   </div>
                 )}

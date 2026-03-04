@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Upload, UserPlus, ChevronDown } from 'lucide-react'
+import { Search, Plus, ChevronDown } from 'lucide-react'
 
 const USERS = [
   { id: 'a1000000-0000-0000-0000-000000000001', name: 'Jack Scrivener', email: 'jack@yard.internal', role: 'qualifier' as const },
@@ -64,14 +64,6 @@ export function TopBar() {
         >
           <Plus size={13} />
           New Campaign
-        </button>
-        <button className="flex items-center gap-1.5 px-3 h-8 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50">
-          <Upload size={13} />
-          Import CSV
-        </button>
-        <button className="flex items-center gap-1.5 px-3 h-8 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50">
-          <UserPlus size={13} />
-          Add Creator
         </button>
       </div>
 

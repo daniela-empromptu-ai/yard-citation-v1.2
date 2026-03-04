@@ -167,7 +167,7 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
               i === doneIndex && isRunning ? 'bg-blue-100 text-blue-700 animate-pulse' :
               'bg-gray-100 text-gray-400'
             }`}>
-              <span>{i < doneIndex ? '&#x2713;' : i + 1}</span>
+              <span>{i < doneIndex ? '\u2713' : String(i + 1)}</span>
               <span>{step.label}</span>
             </div>
             {i < STEPS.length - 1 && <div className="w-4 h-px bg-gray-200 flex-shrink-0" />}
@@ -377,7 +377,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
       {filteredCreators.length === 0 ? (
         <div className="card">
           <EmptyState
-            icon="&#x1F465;"
+            icon=""
             title={isRunning ? 'Pipeline is running…' : 'No creators yet'}
             description={isRunning ? 'Creators will appear as the pipeline discovers and scores them.' : 'Approve search terms to start the discovery pipeline.'}
           />
@@ -410,7 +410,12 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                       >
                         {cc.creator_name}
                       </button>
-                      {cc.primary_handle && <div className="text-xs text-gray-400">{cc.primary_handle}</div>}
+                      {cc.primary_handle && (
+                        <div className="text-xs text-gray-400 flex items-center gap-1">
+                          <svg viewBox="0 0 24 24" className="w-3 h-3 text-red-500 flex-shrink-0" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81z"/><path d="m9.55 15.5 6.2-3.5-6.2-3.5v7z" fill="white"/></svg>
+                          {cc.primary_handle}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={`badge text-xs ${pipelineStageColor(cc.pipeline_stage)}`}>
@@ -421,9 +426,9 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                     <td><CoverageTag coverage={cc.evidence_coverage || 'none'} /></td>
                     <td>
                       {cc.needs_manual_review ? (
-                        <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">&#x26A0; NMR</span>
+                        <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">{'\u26A0'} NMR</span>
                       ) : cc.overall_score !== null ? (
-                        <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">&#x2713; OK</span>
+                        <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">{'\u2713'} OK</span>
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
                       )}
@@ -440,15 +445,6 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                         {cc.overall_score !== null && (
                           <button onClick={() => loadEvaluation(cc)} className="btn-secondary text-xs py-1 px-2">
                             View
-                          </button>
-                        )}
-                        {cc.pipeline_stage === 'ingested' && (
-                          <button
-                            onClick={() => runScoring(cc)}
-                            disabled={scoringId === cc.id}
-                            className="btn-primary text-xs py-1 px-2"
-                          >
-                            {scoringId === cc.id ? <span className="animate-spin inline-block">{'\u27F3'}</span> : <>{'\u25B6'} Score</>}
                           </button>
                         )}
                       </div>
@@ -469,22 +465,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
           </div>
         ) : !evaluation ? (
           <div className="p-4 text-center text-gray-400">
-            {selectedCc?.overall_score === null ? (
-              <div>
-                <p className="text-sm mb-2">Not scored yet.</p>
-                {selectedCc?.pipeline_stage === 'ingested' && (
-                  <button
-                    onClick={() => selectedCc && runScoring(selectedCc)}
-                    disabled={scoringId === selectedCc?.id}
-                    className="btn-primary text-xs"
-                  >
-                    {'\u25B6'} Score Now
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm">No evaluation found.</p>
-            )}
+            <p className="text-sm">{selectedCc?.overall_score === null ? 'Not scored yet.' : 'No evaluation found.'}</p>
           </div>
         ) : (
           <div className="p-4 space-y-5">
@@ -506,7 +487,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
             {/* NMR Warning */}
             {evaluation.needs_manual_review && (
               <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                <p className="text-xs font-semibold text-orange-800">&#x26A0; Needs Manual Review</p>
+                <p className="text-xs font-semibold text-orange-800">{'\u26A0'} Needs Manual Review</p>
                 <p className="text-xs text-orange-700 mt-0.5">{evaluation.needs_manual_review_reason}</p>
               </div>
             )}
@@ -517,7 +498,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
               <ul className="space-y-1">
                 {(parseJsonArray(evaluation.strengths_json)).map((s: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-green-500 flex-shrink-0 mt-0.5">&#x2713;</span>{s}
+                    <span className="text-green-500 flex-shrink-0 mt-0.5">{'\u2713'}</span>{s}
                   </li>
                 ))}
               </ul>
@@ -529,7 +510,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
               <ul className="space-y-1">
                 {(parseJsonArray(evaluation.weaknesses_json)).map((w: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-red-400 flex-shrink-0 mt-0.5">&#xD7;</span>{w}
+                    <span className="text-red-400 flex-shrink-0 mt-0.5">{'\u00D7'}</span>{w}
                   </li>
                 ))}
               </ul>

@@ -57,7 +57,7 @@ export default async function CampaignPage({ params }: Props) {
       LEFT JOIN ${t('creator_evaluations')} e ON e.campaign_creator_id = cc.id
       LEFT JOIN ${t('app_users')} u ON u.id = cc.outreach_owner_user_id
       WHERE cc.campaign_id = $1
-      ORDER BY cc.created_at DESC
+      ORDER BY e.overall_score DESC NULLS LAST, cc.created_at DESC
     `, [id]),
     dbQuery<{ id: string; event_type: string; actor_name: string | null; created_at: string; event_data_json: Record<string, unknown>; campaign_creator_id: string | null; creator_id: string | null }>(`
       SELECT al.*, u.name as actor_name
