@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tail:*)",
+      "Bash(ls:*)",
+      "Bash(node:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(head:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}
