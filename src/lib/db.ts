@@ -23,6 +23,7 @@ export async function dbQuery<T = Record<string, unknown>>(
     method: 'POST',
     headers: AUTH_HEADERS,
     body: JSON.stringify({ query, params }),
+    cache: 'no-store',
   })
   if (!res.ok) {
     const text = await res.text()

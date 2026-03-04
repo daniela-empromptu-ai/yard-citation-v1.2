@@ -73,10 +73,11 @@ export async function resolveChannelId(
       if (channelId) {
         return { channelId, method: 'api_handle' }
       }
+      return { channelId: null, method: 'failed', error: `No YouTube channel found for handle @${handle}` }
     } catch (e) {
-      return { channelId: null, method: 'failed', error: (e as Error).message }
+      return { channelId: null, method: 'failed', error: `YouTube API error for @${handle}: ${(e as Error).message}` }
     }
   }
 
-  return { channelId: null, method: 'failed', error: 'Could not parse channel ID or handle from URL' }
+  return { channelId: null, method: 'failed', error: `Could not parse channel ID or handle from URL: ${platformUrl}` }
 }

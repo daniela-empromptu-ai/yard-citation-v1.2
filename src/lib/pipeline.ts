@@ -5,13 +5,10 @@
 
 import { dbQuery, t } from '@/lib/db'
 import { v4 as uuidv4 } from 'uuid'
-import { fetchSheetRows, parseSheet, groupByCreator } from '@/lib/google-sheets'
+import { fetchSheetRows, parseSheet, parseCreators, inferDormancy, parseFuzzyDate } from '@/lib/google-sheets'
 import { matchCreatorsToTopics, MatchedCreator } from '@/lib/discovery-scan'
 import { runPrequalifyPipeline } from '@/lib/prequalify'
 import { scoreCreator } from '@/lib/score-creator'
-import { v5 as uuidv5 } from 'uuid'
-
-const CREATOR_UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
 // ─── Job Helpers ───
 
@@ -98,29 +95,43 @@ export async function runDiscovery(campaignId: string, userId: string, jobId?: s
     throw new Error('No data rows found in sheet')
   }
 
-  // 3. Group by creator and match
-  const grouped = groupByCreator(dataRows)
-  const matched = matchCreatorsToTopics(grouped, searchStrings, 20)
-  console.log(`[discovery] Matched ${matched.length} creators from ${grouped.length} grouped`)
+  // 3. Parse creators and match
+  const parsed = parseCreators(dataRows)
+  const matched = matchCreatorsToTopics(parsed, searchStrings, 20)
+  console.log(`[discovery] Matched ${matched.length} creators from ${parsed.length} parsed`)
 
   await log(`Matched ${matched.length} creators from ${dataRows.length} rows`, { warnings })
 
   // 4. Upsert to DB
   console.log(`[discovery] Upserting ${matched.length} creators to DB...`)
   const now = new Date().toISOString()
+  let skippedNoPlatform = 0
   for (let mi = 0; mi < matched.length; mi++) {
     const creator = matched[mi]
-    const creatorUuid = uuidv5(creator.creator_id, CREATOR_UUID_NAMESPACE)
+
+    // Skip creators with no platform accounts (e.g. podcast-only)
+    const platformsWithUrl = creator.platforms.filter(p => p.url)
+    if (platformsWithUrl.length === 0) {
+      skippedNoPlatform++
+      continue
+    }
+
+    const creatorUuid = creator.creator_id // already a UUID from parseCreators
+
+    const topics = [...creator.primary_categories, ...creator.secondary_tags]
+    const languages = creator.content_language ? [creator.content_language] : []
+    const isDormant = inferDormancy(creator.posting_frequency, creator.last_published)
+    const primaryHandle = getPrimaryHandle(creator)
 
     const creatorParams = [
       creatorUuid,
       creator.creator_name,
-      creator.creator_channel || creator.platforms[0]?.platform_username || null,
-      creator.primary_topics,
-      creator.primary_language ? [creator.primary_language] : [],
-      creator.country ? [creator.country] : [],
-      creator.active_status ? creator.active_status.toLowerCase() !== 'active' : false,
-      creator.last_active_at || null,
+      primaryHandle,
+      topics,
+      languages,
+      [], // geo_focus — not in new sheet
+      isDormant,
+      parseFuzzyDate(creator.last_published),
       now,
     ]
     await dbQuery(
@@ -134,14 +145,30 @@ export async function runDiscovery(campaignId: string, userId: string, jobId?: s
       creatorParams
     )
 
-    // Platform account
-    const plat = creator.platforms[0]
-    if (plat?.platform_url) {
+    // Platform accounts — insert ALL platforms (not just the first)
+    for (const plat of creator.platforms) {
+      if (!plat.url) continue
       await dbQuery(
         `INSERT INTO ${t('creator_platform_accounts')} (id, creator_id, platform, handle, url, follower_count, metrics_json, created_at)
          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::jsonb, $7)
          ON CONFLICT DO NOTHING`,
-        [creatorUuid, plat.platform, plat.platform_username || null, plat.platform_url, plat.follower_count, JSON.stringify(plat.metrics), now]
+        [creatorUuid, plat.platform, plat.handle, plat.url, plat.follower_count, JSON.stringify(plat.metrics), now]
+      )
+    }
+
+    // Creator contacts — insert if email or contact_method present
+    if (creator.email || creator.contact_method || creator.linkedin_url) {
+      await dbQuery(
+        `INSERT INTO ${t('creator_contacts')} (id, creator_id, email_encrypted, linkedin_url, other_contacts_json, created_at, updated_at)
+         SELECT gen_random_uuid(), $1, $2, $3, $4::jsonb, $5, $5
+         WHERE NOT EXISTS (SELECT 1 FROM ${t('creator_contacts')} WHERE creator_id = $1)`,
+        [
+          creatorUuid,
+          creator.email || null,
+          creator.linkedin_url || null,
+          JSON.stringify(creator.contact_method ? { contact_method: creator.contact_method } : {}),
+          now,
+        ]
       )
     }
 
@@ -157,19 +184,40 @@ export async function runDiscovery(campaignId: string, userId: string, jobId?: s
     }
   }
 
+  if (skippedNoPlatform > 0) {
+    console.log(`[discovery] Skipped ${skippedNoPlatform} creators with no platform URLs (e.g. podcast-only)`)
+    await log(`Skipped ${skippedNoPlatform} creators with no platform URLs`)
+  }
+
   // 5. Log activity
+  const inserted = matched.length - skippedNoPlatform
   await dbQuery(
     `INSERT INTO ${t('activity_log')} (campaign_id, actor_user_id, event_type, event_data_json, created_at)
      VALUES ($1, $2, 'discovery_scan', $3::jsonb, now())`,
     [campaignId, userId, JSON.stringify({
       total_sheet_rows: dataRows.length,
-      grouped_creators: grouped.length,
+      parsed_creators: parsed.length,
       matched: matched.length,
+      skipped_no_platform: skippedNoPlatform,
+      inserted,
     })]
   )
 
-  await log(`Discovery complete: ${matched.length} creators inserted`)
-  return matched.length
+  await log(`Discovery complete: ${inserted} creators inserted`)
+  return inserted
+}
+
+/**
+ * Derive primary_handle from the creator's primary platform.
+ */
+function getPrimaryHandle(creator: MatchedCreator): string | null {
+  const primaryPlat = creator.platforms.find(p => p.platform === creator.primary_platform)
+  if (primaryPlat?.handle) return primaryPlat.handle
+  // Fallback to first platform with a handle
+  for (const p of creator.platforms) {
+    if (p.handle) return p.handle
+  }
+  return null
 }
 
 // ─── Scoring Batch ───
@@ -282,19 +330,26 @@ export async function runFullPipeline(campaignId: string, userId: string, jobId:
     await logJobEvent(jobId, 'info', 'Step 3/3: Scoring — evaluating creators with AI')
 
     const scored = await runScoringBatch(campaignId, userId, jobId)
-    await logJobEvent(jobId, 'info', `Scoring complete: ${scored} creators scored`)
+    console.log(`[pipeline] Scoring batch done: ${scored} creators scored`)
+    try { await logJobEvent(jobId, 'info', `Scoring complete: ${scored} creators scored`) } catch { /* ignore */ }
 
     // ── Done ──
-    await updateCampaignStage(campaignId, 'review')
+    try { await updateCampaignStage(campaignId, 'review') } catch (e) {
+      console.error(`[pipeline] Failed to update campaign stage to review:`, (e as Error).message)
+    }
     await updateJobStatus(jobId, 'completed')
-    await logJobEvent(jobId, 'info', 'Pipeline completed successfully')
+    console.log(`[pipeline] Pipeline completed for campaign ${campaignId}`)
+    try { await logJobEvent(jobId, 'info', 'Pipeline completed successfully') } catch { /* ignore */ }
 
   } catch (e) {
     const msg = (e as Error).message || 'Unknown pipeline error'
-    console.error(`[pipeline] Fatal error for campaign ${campaignId}:`, e)
-    try { await logJobEvent(jobId, 'error', `Pipeline failed: ${msg}`) } catch { /* ignore logging failure */ }
-    try { await updateJobStatus(jobId, 'failed', msg) } catch (statusErr) {
-      console.error(`[pipeline] CRITICAL: Could not mark job ${jobId} as failed:`, statusErr)
+    console.error(`[pipeline] Fatal error for campaign ${campaignId}:`, msg)
+    try { await logJobEvent(jobId, 'error', `Pipeline failed: ${msg}`) } catch { /* ignore */ }
+    try {
+      await updateJobStatus(jobId, 'failed', msg)
+      console.log(`[pipeline] Job ${jobId} marked as failed`)
+    } catch (statusErr) {
+      console.error(`[pipeline] CRITICAL: Could not mark job ${jobId} as failed:`, (statusErr as Error).message)
     }
   }
 }

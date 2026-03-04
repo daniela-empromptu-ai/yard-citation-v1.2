@@ -1,11 +1,12 @@
 /**
  * Topic matching + ranking for creator discovery.
- * Matches grouped creators against campaign topics using substring containment.
+ * Matches parsed creators against campaign topics using substring containment.
  */
 
-import { GroupedCreator } from './google-sheets';
+import { ParsedCreator } from './google-sheets';
 
-export interface MatchedCreator extends GroupedCreator {
+// Backward compatibility: MatchedCreator extends ParsedCreator (was GroupedCreator)
+export interface MatchedCreator extends ParsedCreator {
   matchScore: number;
   matchedTopics: string[];
 }
@@ -14,11 +15,13 @@ export interface MatchedCreator extends GroupedCreator {
  * Match creators to campaign topics using case-insensitive substring containment.
  * A campaign topic "Kubernetes" matches a creator topic "Kubernetes cost optimization".
  *
+ * Matches against both primary_categories and secondary_tags.
+ *
  * Returns top N creators sorted by matchScore desc, then total_followers desc.
  * Excludes creators with 0 matches.
  */
 export function matchCreatorsToTopics(
-  creators: GroupedCreator[],
+  creators: ParsedCreator[],
   campaignTopics: string[],
   topN: number = 100
 ): MatchedCreator[] {
@@ -29,7 +32,12 @@ export function matchCreatorsToTopics(
   const scored: MatchedCreator[] = [];
 
   for (const creator of creators) {
-    const creatorTopicsLower = creator.primary_topics.map(t => t.toLowerCase());
+    // Combine primary categories and secondary tags for matching
+    const creatorTopicsLower = [
+      ...creator.primary_categories,
+      ...creator.secondary_tags,
+    ].map(t => t.toLowerCase());
+
     const matchedCampaignTopics = new Set<string>();
 
     for (const ct of campaignTopicsLower) {

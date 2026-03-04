@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, t } from '@/lib/db';
-import { v5 as uuidv5 } from 'uuid';
-import { fetchSheetRows, parseSheet, groupByCreator } from '@/lib/google-sheets';
+import { fetchSheetRows, parseSheet, parseCreators, inferDormancy, parseFuzzyDate, ParsedCreator } from '@/lib/google-sheets';
 import { matchCreatorsToTopics, MatchedCreator } from '@/lib/discovery-scan';
-
-// Deterministic UUID namespace for sheet creator IDs
-const CREATOR_UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // DNS namespace
 
 const BATCH_SIZE = 10;
 
@@ -66,11 +62,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'No data rows found in sheet' }, { status: 400 });
     }
 
-    // 4. Group by creator
-    const grouped = groupByCreator(dataRows);
+    // 4. Parse creators (one row per creator)
+    const parsed = parseCreators(dataRows);
 
     // 5. Match topics
-    const matched = matchCreatorsToTopics(grouped, campaignTopics, top_n || 100);
+    const matched = matchCreatorsToTopics(parsed, campaignTopics, top_n || 100);
 
     // 6. Upsert to DB in batches
     let inserted = 0;
@@ -87,7 +83,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       [campaignId, user_id, JSON.stringify({
         spreadsheet_id: sheetId,
         total_sheet_rows: dataRows.length,
-        grouped_creators: grouped.length,
+        parsed_creators: parsed.length,
         matched: matched.length,
         inserted,
         warnings,
@@ -98,7 +94,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       success: true,
       discovered: matched.length,
       total_sheet_rows: dataRows.length,
-      grouped_creators: grouped.length,
+      parsed_creators: parsed.length,
       inserted,
       warnings,
     });
@@ -108,6 +104,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 }
 
+/**
+ * Derive primary_handle from the creator's primary platform.
+ */
+function getPrimaryHandle(creator: ParsedCreator): string | null {
+  const primaryPlat = creator.platforms.find(p => p.platform === creator.primary_platform);
+  if (primaryPlat?.handle) return primaryPlat.handle;
+  for (const p of creator.platforms) {
+    if (p.handle) return p.handle;
+  }
+  return null;
+}
+
 async function upsertBatch(creators: MatchedCreator[], campaignId: string, userId: string) {
   const now = new Date().toISOString();
 
@@ -115,18 +123,27 @@ async function upsertBatch(creators: MatchedCreator[], campaignId: string, userI
   for (let i = 0; i < creators.length; i += 10) {
     const batch = creators.slice(i, i + 10);
     await Promise.all(batch.map(async (creator) => {
-      const creatorUuid = uuidv5(creator.creator_id, CREATOR_UUID_NAMESPACE);
+      // Skip creators with no platform accounts (e.g. podcast-only)
+      const platformsWithUrl = creator.platforms.filter(p => p.url);
+      if (platformsWithUrl.length === 0) return;
+
+      const creatorUuid = creator.creator_id; // already a UUID from parseCreators
+
+      const topics = [...creator.primary_categories, ...creator.secondary_tags];
+      const languages = creator.content_language ? [creator.content_language] : [];
+      const isDormant = inferDormancy(creator.posting_frequency, creator.last_published);
+      const primaryHandle = getPrimaryHandle(creator);
 
       // 1. Insert creator (ignore if exists), then update
       const creatorParams = [
         creatorUuid,
         creator.creator_name,
-        creator.creator_channel || creator.platforms[0]?.platform_username || null,
-        creator.primary_topics,
-        creator.primary_language ? [creator.primary_language] : [],
-        creator.country ? [creator.country] : [],
-        creator.active_status ? creator.active_status.toLowerCase() !== 'active' : false,
-        creator.last_active_at || null,
+        primaryHandle,
+        topics,
+        languages,
+        [], // geo_focus — not in new sheet
+        isDormant,
+        parseFuzzyDate(creator.last_published),
         now,
       ];
       await dbQuery(
@@ -140,18 +157,34 @@ async function upsertBatch(creators: MatchedCreator[], campaignId: string, userI
         creatorParams
       );
 
-      // 2. Insert platform account
-      const plat = creator.platforms[0];
-      if (plat?.platform_url) {
+      // 2. Insert ALL platform accounts
+      for (const plat of creator.platforms) {
+        if (!plat.url) continue;
         await dbQuery(
           `INSERT INTO ${t('creator_platform_accounts')} (id, creator_id, platform, handle, url, follower_count, metrics_json, created_at)
            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::jsonb, $7)
            ON CONFLICT DO NOTHING`,
-          [creatorUuid, plat.platform, plat.platform_username || null, plat.platform_url, plat.follower_count, JSON.stringify(plat.metrics), now]
+          [creatorUuid, plat.platform, plat.handle, plat.url, plat.follower_count, JSON.stringify(plat.metrics), now]
         );
       }
 
-      // 3. Link to campaign
+      // 3. Insert creator contacts if email or contact info present
+      if (creator.email || creator.contact_method || creator.linkedin_url) {
+        await dbQuery(
+          `INSERT INTO ${t('creator_contacts')} (id, creator_id, email_encrypted, linkedin_url, other_contacts_json, created_at, updated_at)
+           SELECT gen_random_uuid(), $1, $2, $3, $4::jsonb, $5, $5
+           WHERE NOT EXISTS (SELECT 1 FROM ${t('creator_contacts')} WHERE creator_id = $1)`,
+          [
+            creatorUuid,
+            creator.email || null,
+            creator.linkedin_url || null,
+            JSON.stringify(creator.contact_method ? { contact_method: creator.contact_method } : {}),
+            now,
+          ]
+        );
+      }
+
+      // 4. Link to campaign
       await dbQuery(
         `INSERT INTO ${t('campaign_creators')} (id, campaign_id, creator_id, added_by_user_id, pipeline_stage, ingestion_status, scoring_status, outreach_state, created_at, updated_at)
          VALUES (gen_random_uuid(), $1, $2, $3, 'discovered', 'not_started', 'not_scored', 'not_started', $4, $5)

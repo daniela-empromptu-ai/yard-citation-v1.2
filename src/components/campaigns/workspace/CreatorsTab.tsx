@@ -12,6 +12,29 @@ import { RubricBars } from '@/components/ui/ScorePill';
 import { useRole } from '@/components/layout/Shell';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+// ─── Helpers ───
+
+/** Safely parse a jsonb field that may arrive as a string or already-parsed array.
+ *  Handles nested objects by extracting their text/title or stringifying. */
+function parseJsonArray(val: unknown): string[] {
+  let arr: unknown[];
+  if (Array.isArray(val)) {
+    arr = val;
+  } else if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); arr = Array.isArray(parsed) ? parsed : []; } catch { return []; }
+  } else {
+    return [];
+  }
+  return arr.map(item => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      return (obj.text || obj.title || obj.quote || JSON.stringify(obj)) as string;
+    }
+    return String(item);
+  });
+}
+
 // ─── Types ───
 
 interface CampaignCreator {
@@ -62,12 +85,14 @@ interface Props {
 // ─── Pipeline Progress ───
 
 function PipelineProgress({ campaignId, initialJob }: { campaignId: string; initialJob?: PipelineJob | null }) {
+  const router = useRouter();
   const [job, setJob] = useState<PipelineJob | null>(initialJob || null);
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [stage, setStage] = useState<string>('');
   const [stale, setStale] = useState(false);
+  const [wasRunning, setWasRunning] = useState(initialJob?.status === 'queued' || initialJob?.status === 'running');
 
-  const isRunning = !stale && (job?.status === 'queued' || job?.status === 'running');
+  const isRunning = job?.status === 'queued' || job?.status === 'running';
 
   const poll = useCallback(async () => {
     try {
@@ -80,18 +105,29 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
         if ((data.job.status === 'queued' || data.job.status === 'running') && data.job.started_at) {
           const elapsed = Date.now() - new Date(data.job.started_at).getTime();
           if (elapsed > 10 * 60 * 1000) setStale(true);
+        } else {
+          setStale(false);
         }
       }
       if (data.events) setEvents(data.events);
     } catch { /* ignore */ }
   }, [campaignId]);
 
+  // When pipeline transitions from running → completed/failed, refresh server data
+  useEffect(() => {
+    if (wasRunning && !isRunning) {
+      router.refresh();
+    }
+    setWasRunning(isRunning);
+  }, [isRunning, wasRunning, router]);
+
   useEffect(() => {
     poll();
     if (!isRunning) return;
-    const interval = setInterval(poll, 5000);
+    // Poll slower when stale (every 30s vs 5s) but don't stop
+    const interval = setInterval(poll, stale ? 30000 : 5000);
     return () => clearInterval(interval);
-  }, [isRunning, poll]);
+  }, [isRunning, stale, poll]);
 
   if (!job) return null;
 
@@ -218,8 +254,8 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
       const res = await fetch(`/api/evaluations/${cc.id}`);
       const data = await res.json();
       setEvaluation(data.evaluation);
-      setEvidence(data.evidence || []);
-      setAngles(data.angles || []);
+      setEvidence(data.evidenceSnippets || data.evidence || []);
+      setAngles(data.contentAngles || data.angles || []);
     } finally {
       setLoadingEval(false);
     }
@@ -412,7 +448,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                             disabled={scoringId === cc.id}
                             className="btn-primary text-xs py-1 px-2"
                           >
-                            {scoringId === cc.id ? <span className="animate-spin inline-block">&#x27F3;</span> : '&#x25B6; Score'}
+                            {scoringId === cc.id ? <span className="animate-spin inline-block">{'\u27F3'}</span> : <>{'\u25B6'} Score</>}
                           </button>
                         )}
                       </div>
@@ -429,7 +465,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Evaluation: ${selectedCc?.creator_name || ''}`} width="w-[600px]">
         {loadingEval ? (
           <div className="flex items-center justify-center h-32 text-gray-400">
-            <div className="animate-spin text-2xl">&#x27F3;</div>
+            <div className="animate-spin text-2xl">{'\u27F3'}</div>
           </div>
         ) : !evaluation ? (
           <div className="p-4 text-center text-gray-400">
@@ -442,7 +478,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                     disabled={scoringId === selectedCc?.id}
                     className="btn-primary text-xs"
                   >
-                    &#x25B6; Score Now
+                    {'\u25B6'} Score Now
                   </button>
                 )}
               </div>
@@ -479,7 +515,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
             <div>
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Strengths</h4>
               <ul className="space-y-1">
-                {(evaluation.strengths_json || []).map((s: string, i: number) => (
+                {(parseJsonArray(evaluation.strengths_json)).map((s: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
                     <span className="text-green-500 flex-shrink-0 mt-0.5">&#x2713;</span>{s}
                   </li>
@@ -491,7 +527,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
             <div>
               <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Weaknesses</h4>
               <ul className="space-y-1">
-                {(evaluation.weaknesses_json || []).map((w: string, i: number) => (
+                {(parseJsonArray(evaluation.weaknesses_json)).map((w: string, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
                     <span className="text-red-400 flex-shrink-0 mt-0.5">&#xD7;</span>{w}
                   </li>
@@ -535,8 +571,8 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                         {angle.persona && <span className="badge bg-purple-50 text-purple-700 border-purple-200 text-xs">{angle.persona}</span>}
                       </div>
                       <ul className="space-y-0.5">
-                        {(Array.isArray(angle.key_points_json) ? angle.key_points_json : []).map((kp: string, j: number) => (
-                          <li key={j} className="text-xs text-gray-600">&#xB7; {kp}</li>
+                        {parseJsonArray(angle.key_points_json).map((kp: string, j: number) => (
+                          <li key={j} className="text-xs text-gray-600">{'\u00B7'} {kp}</li>
                         ))}
                       </ul>
                     </div>

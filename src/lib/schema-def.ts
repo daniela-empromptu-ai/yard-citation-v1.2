@@ -487,6 +487,7 @@ export const SCHEMA_DEF = {
     { table: 'campaign_prompt_gaps', columns: ['campaign_id'], name: 'cpg_campaign_idx' },
     { table: 'campaign_search_terms', columns: ['campaign_id'], name: 'cst_campaign_idx' },
     { table: 'campaign_search_terms', columns: ['approved'], name: 'cst_approved_idx' },
+    { table: 'creators', columns: ['id'], name: 'creators_id_uq', unique: true },
     { table: 'creators', columns: ['display_name'], name: 'creators_name_idx' },
     { table: 'creator_platform_accounts', columns: ['platform', 'url'], name: 'cpa_platform_url_uq', unique: true },
     { table: 'creator_platform_accounts', columns: ['creator_id'], name: 'cpa_creator_idx' },

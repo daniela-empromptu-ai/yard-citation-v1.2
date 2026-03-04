@@ -1,5 +1,5 @@
-import { clearDemoData } from './clear-data'
+import { clearProjectData } from './clear-data'
 
-export async function clearDatabase(): Promise<{ cleared: string[]; errors: string[] }> {
-  return clearDemoData()
+export async function clearDatabase(): Promise<{ cleared: string[]; skipped: string[]; errors: string[] }> {
+  return clearProjectData()
 }
