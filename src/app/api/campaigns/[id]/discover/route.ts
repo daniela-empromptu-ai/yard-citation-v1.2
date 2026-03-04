@@ -28,21 +28,30 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
     }
 
-    // 1. Load campaign topics (approved ones, fall back to all if none approved)
-    const topicsRes = await dbQuery<{ topic: string; approved: boolean }>(
-      `SELECT topic, approved FROM ${t('campaign_topics')} WHERE campaign_id = $1`,
+    // 1. Load approved search terms first, fall back to campaign topics
+    const termsRes = await dbQuery<{ term: string }>(
+      `SELECT term FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = true`,
       [campaignId]
     );
-    if (!topicsRes.success) {
-      return NextResponse.json({ error: 'Failed to load campaign topics' }, { status: 500 });
-    }
-    // Prefer approved topics, but use all if none are explicitly approved
-    let campaignTopics = topicsRes.data.filter(r => r.approved).map(r => r.topic);
+    let campaignTopics = termsRes.data.map(r => r.term);
+
+    // Fall back to campaign topics if no approved search terms
     if (campaignTopics.length === 0) {
-      campaignTopics = topicsRes.data.map(r => r.topic);
+      const topicsRes = await dbQuery<{ topic: string; approved: boolean }>(
+        `SELECT topic, approved FROM ${t('campaign_topics')} WHERE campaign_id = $1`,
+        [campaignId]
+      );
+      if (!topicsRes.success) {
+        return NextResponse.json({ error: 'Failed to load campaign data' }, { status: 500 });
+      }
+      campaignTopics = topicsRes.data.filter(r => r.approved).map(r => r.topic);
+      if (campaignTopics.length === 0) {
+        campaignTopics = topicsRes.data.map(r => r.topic);
+      }
     }
+
     if (campaignTopics.length === 0) {
-      return NextResponse.json({ error: 'No approved topics for this campaign. Add topics before scanning.' }, { status: 400 });
+      return NextResponse.json({ error: 'No approved search terms or topics for this campaign.' }, { status: 400 });
     }
 
     // 2. Fetch sheet

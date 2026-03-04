@@ -82,6 +82,7 @@ export async function fetchCreatorTranscripts(
     }
 
     if (!creator.platform_url) {
+      console.log(`[transcript] ${creator.creator_name}: no YouTube URL, skipping`)
       results.push(base)
       continue
     }
@@ -90,6 +91,7 @@ export async function fetchCreatorTranscripts(
       // Step 1: Resolve channel ID
       const resolution = await resolveChannelId(creator.platform_url, apiKey)
       if (!resolution.channelId) {
+        console.log(`[transcript] ${creator.creator_name}: channel resolution failed — ${resolution.error || 'no channel ID'}  (url: ${creator.platform_url})`)
         results.push({ ...base, status: 'no_channel', error: resolution.error })
         continue
       }
@@ -98,6 +100,7 @@ export async function fetchCreatorTranscripts(
       // Step 2: Get latest video via RSS
       const video = await getLatestVideo(resolution.channelId)
       if (!video) {
+        console.log(`[transcript] ${creator.creator_name}: no video found for channel ${resolution.channelId}`)
         results.push({ ...base, status: 'no_video' })
         continue
       }
@@ -107,12 +110,15 @@ export async function fetchCreatorTranscripts(
       if (i > 0) await new Promise(r => setTimeout(r, 1200))
       const transcript = await buildTranscriptFromTimedText(video.videoId)
       if (!transcript) {
+        console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
         results.push({ ...base, status: 'no_transcript' })
         continue
       }
 
+      console.log(`[transcript] ${creator.creator_name}: success — ${transcript.fullText.split(/\s+/).length} words`)
       results.push({ ...base, status: 'success', transcript })
     } catch (e) {
+      console.log(`[transcript] ${creator.creator_name}: error — ${(e as Error).message}`)
       results.push({ ...base, status: 'error', error: (e as Error).message })
     }
 

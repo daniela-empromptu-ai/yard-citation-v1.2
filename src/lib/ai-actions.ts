@@ -72,25 +72,31 @@ export async function aiGenerateSearchTerms(
     await setupPrompt(
       'generate_search_terms',
       ['campaign_brief', 'topics', 'personas', 'product_category'],
-      `You are a YouTube creator research specialist. Generate EXACTLY 15 YouTube search terms for a creator outreach campaign.
+      `You are a creator research specialist who finds technical content creators for B2B campaigns. Generate EXACTLY 15 search terms that will be used to match against a database of creators' self-described content topics via substring matching.
 
-Campaign brief: {campaign_brief}
-Topics: {topics}
-Personas: {personas}
+Campaign creative brief: {campaign_brief}
+Campaign topics: {topics}
+Target personas: {personas}
 Product category: {product_category}
 
-Return a JSON array with EXACTLY 15 objects, no more, no less:
-[{"term":"...","category_tag":"...","why_it_helps":"1-2 sentence explanation."}]
+MATCHING CONTEXT:
+These terms will be matched against how creators label their own content areas (e.g. "Kubernetes", "DevOps", "cloud cost optimization"). A match happens when the term appears as a substring in the creator's topic list, or the creator's topic appears as a substring of the term. Generate terms that reflect how creators self-categorize their content, not how end-users search YouTube.
 
-category_tag must be one of: product_category, competitor, implementation, problem_solution, integration, programming_language, tutorial_format
-
-Rules:
+RULES:
 - EXACTLY 15 terms
-- Each term should be a real YouTube search query
-- Mix the 7 category types
-- why_it_helps must be 1-2 sentences
-- Target technical audiences matching the personas
-- No duplicate themes`
+- Include common synonyms and abbreviations as separate terms (e.g. both "Kubernetes" and "K8s", both "CI/CD" and "continuous integration")
+- Mix of breadth levels:
+  - 3-4 broad terms (wide net, e.g. "cloud infrastructure")
+  - 6-8 medium terms (e.g. "Kubernetes cost management")
+  - 3-4 specific/niche terms (e.g. "OpenCost Prometheus integration")
+- Include 2-3 competitor or adjacent-product terms relevant to the product category
+- Consider audience maturity: match the technical depth level of the target personas
+- category_tag must be one of: product_category, competitor, implementation, problem_solution, integration, programming_language, tutorial_format
+- why_it_helps must be 1-2 sentences explaining what kind of creator this term finds
+- No duplicate or near-duplicate terms
+
+Return a JSON array with EXACTLY 15 objects, no more, no less:
+[{"term":"...","category_tag":"...","why_it_helps":"..."}]`
     )
 
     const raw = await applyPrompt('generate_search_terms', {
@@ -225,8 +231,16 @@ Return this exact JSON structure:
       content_items_text: contentSummary,
     }, 'raw_text') as string
 
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const parsed = JSON.parse(cleaned)
+    let cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    let parsed: ReturnType<typeof JSON.parse>
+    try {
+      parsed = JSON.parse(cleaned)
+    } catch {
+      // Builder API sometimes returns double-escaped JSON — fix and retry
+      cleaned = cleaned.replace(/\\"/g, '"').replace(/\\n/g, '\n')
+      const match = cleaned.match(/\{[\s\S]*\}/)
+      parsed = JSON.parse(match ? match[0] : cleaned)
+    }
 
     // Evidence validation: verify every quote is an exact substring of its content item's raw_text
     const contentMap = new Map(params.contentItems.map(ci => [ci.id, ci.raw_text]))

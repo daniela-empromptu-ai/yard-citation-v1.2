@@ -43,13 +43,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const result = await dbQuery(
+    await dbQuery(
       `INSERT INTO creators (id, display_name, primary_handle, bio, topics, languages, geo_focus, created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,now(),now()) RETURNING *`,
+       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,now(),now())`,
       [body.display_name, body.primary_handle || null, body.bio || null,
        body.topics || [], body.languages || ['English'], body.geo_focus || []]
     )
-    return NextResponse.json(result.data[0])
+    // RETURNING * not supported by DB proxy — fetch the created row
+    const result = await dbQuery(
+      `SELECT * FROM creators WHERE display_name = $1 ORDER BY created_at DESC LIMIT 1`,
+      [body.display_name]
+    )
+    return NextResponse.json(result.data[0] || { display_name: body.display_name })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

@@ -99,7 +99,7 @@ export default function NewCampaignPage() {
     }
     setLoading(true)
     try {
-      const res = await fetch('/api/campaigns', {
+      const res = await fetch('/api/campaigns/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,28 +110,14 @@ export default function NewCampaignPage() {
           language: form.language,
           product_category: form.product_category,
           creative_brief: form.creative_brief,
+          personas: form.personas,
+          topics: form.topics,
         }),
       })
       const campaign = await res.json()
-      if (campaign.id) {
-        // Add personas and topics
-        for (const persona of form.personas) {
-          await fetch(`/api/campaigns/${campaign.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          })
-          await fetch('/api/database/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `INSERT INTO campaign_personas (id, campaign_id, persona_name, created_at) VALUES (gen_random_uuid(),$1,$2,now()) ON CONFLICT DO NOTHING`,
-              params: [campaign.id, persona],
-            }),
-          }).catch(() => {})
-        }
-        showToast('success', 'Campaign created successfully!')
-        router.push(`/campaigns/${campaign.id}/overview`)
+      if (campaign.campaign_id) {
+        showToast('success', 'Campaign created — generating search terms…')
+        router.push(`/campaigns/${campaign.campaign_id}/search-terms`)
       } else {
         showToast('error', `Failed to create campaign: ${campaign.error || 'Unknown error'}`)
       }

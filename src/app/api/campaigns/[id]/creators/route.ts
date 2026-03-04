@@ -4,11 +4,15 @@ import { dbQuery } from '@/lib/db'
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { creator_id, added_by_user_id } = await req.json()
-    const result = await dbQuery(
+    await dbQuery(
       `INSERT INTO campaign_creators (id, campaign_id, creator_id, added_by_user_id, pipeline_stage, ingestion_status, scoring_status, outreach_state, created_at, updated_at)
        VALUES (gen_random_uuid(),$1,$2,$3,'discovered','not_started','not_scored','not_started',now(),now())
-       ON CONFLICT (campaign_id, creator_id) DO NOTHING RETURNING *`,
+       ON CONFLICT (campaign_id, creator_id) DO NOTHING`,
       [params.id, creator_id, added_by_user_id]
+    )
+    const result = await dbQuery(
+      `SELECT * FROM campaign_creators WHERE campaign_id = $1 AND creator_id = $2`,
+      [params.id, creator_id]
     )
     // Log activity
     await dbQuery(

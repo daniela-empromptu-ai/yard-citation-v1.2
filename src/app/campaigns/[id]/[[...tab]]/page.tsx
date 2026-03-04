@@ -10,10 +10,10 @@ interface Props {
 
 export default async function CampaignPage({ params }: Props) {
   const { id } = params;
-  const tab = params.tab?.[0] || 'overview';
+  const tab = params.tab?.[0] || 'setup';
 
   // Load campaign + related data in parallel
-  const [campRes, personasRes, topicsRes, gapsRes, searchTermsRes, ccRes, activityRes] = await Promise.all([
+  const [campRes, personasRes, topicsRes, gapsRes, searchTermsRes, ccRes, activityRes, pipelineJobRes] = await Promise.all([
     dbQuery<{
       id: string; name: string; status: string; stage: string; language: string;
       geo_targets: string[]; product_category: string; creative_brief: string;
@@ -67,6 +67,15 @@ export default async function CampaignPage({ params }: Props) {
       ORDER BY al.created_at DESC
       LIMIT 50
     `, [id]),
+    dbQuery<{
+      id: string; status: string; error_message: string | null;
+      started_at: string | null; finished_at: string | null;
+    }>(`
+      SELECT id, status, error_message, started_at, finished_at
+      FROM ${t('jobs')}
+      WHERE campaign_id = $1 AND type = 'full_pipeline'
+      ORDER BY created_at DESC LIMIT 1
+    `, [id]),
   ]);
 
   if (!campRes.success || campRes.data.length === 0) {
@@ -74,6 +83,7 @@ export default async function CampaignPage({ params }: Props) {
   }
 
   const campaign = campRes.data[0];
+  const pipelineJob = pipelineJobRes.data[0] || null;
 
   return (
     <CampaignWorkspace
@@ -85,6 +95,7 @@ export default async function CampaignPage({ params }: Props) {
       campaignCreators={ccRes.data}
       activityLog={activityRes.data}
       initialTab={tab}
+      pipelineJob={pipelineJob}
     />
   );
 }

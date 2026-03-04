@@ -9,6 +9,10 @@ export async function POST(req: NextRequest) {
 
     if (campaign_id && terms.length > 0) {
       // Clear existing unapproved terms then insert
+      await dbQuery(
+        `DELETE FROM campaign_search_terms WHERE campaign_id = $1 AND approved = false`,
+        [campaign_id]
+      )
       for (let i = 0; i < terms.length; i++) {
         const t = terms[i]
         await dbQuery(

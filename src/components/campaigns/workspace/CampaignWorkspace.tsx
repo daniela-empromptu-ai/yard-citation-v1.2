@@ -3,30 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { stageLabel, pipelineStageColor } from '@/lib/utils';
-import OverviewTab from './OverviewTab';
-import BriefInputsTab from './BriefInputsTab';
+import { stageLabel } from '@/lib/utils';
+import SetupTab from './SetupTab';
 import SearchTermsTab from './SearchTermsTab';
-import DiscoveryTab from './DiscoveryTab';
-import IngestionTab from './IngestionTab';
-import ScoringTab from './ScoringTab';
-import ReviewTab from './ReviewTab';
-import OutreachTab from './OutreachTab';
+import CreatorsTab from './CreatorsTab';
+import ReviewOutreachTab from './ReviewOutreachTab';
 import ActivityTab from './ActivityTab';
-import RedditTab from './RedditTab';
-
-const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'brief-inputs', label: 'Brief & Inputs' },
-  { id: 'search-terms', label: 'Search Terms' },
-  { id: 'discovery', label: 'Discovery' },
-  { id: 'ingestion', label: 'Ingestion' },
-  { id: 'scoring', label: 'Scoring' },
-  { id: 'review', label: 'Review' },
-  { id: 'outreach', label: 'Outreach' },
-  { id: 'reddit', label: 'Reddit' },
-  { id: 'activity', label: 'Activity' },
-];
 
 interface CampaignCreatorRow {
   id: string; creator_id: string; creator_name: string; primary_handle: string | null;
@@ -45,6 +27,11 @@ interface ActivityRow {
   creator_id: string | null;
 }
 
+interface PipelineJob {
+  id: string; status: string; error_message: string | null;
+  started_at: string | null; finished_at: string | null;
+}
+
 interface Props {
   campaign: {
     id: string; name: string; status: string; stage: string;
@@ -59,13 +46,30 @@ interface Props {
   campaignCreators: CampaignCreatorRow[];
   activityLog: ActivityRow[];
   initialTab: string;
+  pipelineJob?: PipelineJob | null;
 }
 
 export default function CampaignWorkspace({
-  campaign, personas, topics, promptGaps, searchTerms, campaignCreators, activityLog, initialTab,
+  campaign, personas, topics, promptGaps, searchTerms, campaignCreators, activityLog, initialTab, pipelineJob,
 }: Props) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState(initialTab || 'setup');
+  const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
   const router = useRouter();
+
+  // Progressive disclosure: determine which tabs to show
+  const hasApprovedTerms = liveSearchTerms.some(t => t.approved);
+  const hasScoredCreators = campaignCreators.some(cc => cc.scoring_status === 'scored');
+  const pipelineRunning = pipelineJob?.status === 'queued' || pipelineJob?.status === 'running';
+
+  const TABS = [
+    { id: 'setup', label: 'Setup', show: true },
+    { id: 'search-terms', label: 'Search Terms', show: true, count: liveSearchTerms.length },
+    { id: 'creators', label: 'Creators', show: hasApprovedTerms || campaignCreators.length > 0 || pipelineRunning, count: campaignCreators.filter(cc => cc.pipeline_stage !== 'excluded').length },
+    { id: 'review-outreach', label: 'Review & Outreach', show: hasScoredCreators, count: campaignCreators.filter(cc => cc.scoring_status === 'scored').length },
+    { id: 'activity', label: 'Activity', show: true },
+  ];
+
+  const visibleTabs = TABS.filter(t => t.show);
 
   const stageColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-600',
@@ -79,7 +83,12 @@ export default function CampaignWorkspace({
     complete: 'bg-gray-100 text-gray-500',
   };
 
-  const tabProps = { campaign, personas, topics, promptGaps, searchTerms, campaignCreators, activityLog };
+  const handlePipelineStarted = () => {
+    setActiveTab('creators');
+    router.replace(`/campaigns/${campaign.id}/creators`, { scroll: false });
+  };
+
+  const tabProps = { campaign, personas, topics, promptGaps, searchTerms: liveSearchTerms, campaignCreators, activityLog };
 
   return (
     <div className="flex flex-col h-full">
@@ -100,6 +109,11 @@ export default function CampaignWorkspace({
               <span className={`badge text-xs ${stageColors[campaign.stage] || 'bg-gray-100 text-gray-600'}`}>
                 Stage: {stageLabel(campaign.stage)}
               </span>
+              {pipelineRunning && (
+                <span className="badge text-xs bg-blue-100 text-blue-700 border-blue-200 animate-pulse">
+                  Pipeline running…
+                </span>
+              )}
               {campaign.geo_targets && (
                 <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' · ')}</span>
               )}
@@ -113,10 +127,10 @@ export default function CampaignWorkspace({
 
         {/* Tabs */}
         <div className="flex items-center gap-0 overflow-x-auto">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); router.replace(`/campaigns/${campaign.id}?tab=${tab.id}`, { scroll: false }); }}
+              onClick={() => { setActiveTab(tab.id); router.replace(`/campaigns/${campaign.id}/${tab.id}`, { scroll: false }); }}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'border-accent text-accent'
@@ -124,14 +138,9 @@ export default function CampaignWorkspace({
               }`}
             >
               {tab.label}
-              {tab.id === 'search-terms' && (searchTerms as unknown[]).length > 0 && (
+              {tab.count !== undefined && tab.count > 0 && (
                 <span className="ml-1.5 badge bg-gray-100 text-gray-600 border-gray-200 text-xs">
-                  {(searchTerms as unknown[]).length}
-                </span>
-              )}
-              {tab.id === 'scoring' && (campaignCreators as { scoring_status: string }[]).filter(cc => cc.scoring_status === 'scored').length > 0 && (
-                <span className="ml-1.5 badge bg-purple-100 text-purple-700 border-purple-200 text-xs">
-                  {(campaignCreators as { scoring_status: string }[]).filter(cc => cc.scoring_status === 'scored').length}
+                  {tab.count}
                 </span>
               )}
             </button>
@@ -142,15 +151,10 @@ export default function CampaignWorkspace({
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-6">
-          {activeTab === 'overview' && <OverviewTab {...tabProps} />}
-          {activeTab === 'brief-inputs' && <BriefInputsTab {...tabProps} />}
-          {activeTab === 'search-terms' && <SearchTermsTab {...tabProps} />}
-          {activeTab === 'discovery' && <DiscoveryTab {...tabProps} />}
-          {activeTab === 'ingestion' && <IngestionTab {...tabProps} />}
-          {activeTab === 'scoring' && <ScoringTab {...tabProps} />}
-          {activeTab === 'review' && <ReviewTab {...tabProps} />}
-          {activeTab === 'outreach' && <OutreachTab {...tabProps} />}
-          {activeTab === 'reddit' && <RedditTab {...tabProps} />}
+          {activeTab === 'setup' && <SetupTab {...tabProps} />}
+          {activeTab === 'search-terms' && <SearchTermsTab {...tabProps} onPipelineStarted={handlePipelineStarted} onTermsUpdated={(t) => setLiveSearchTerms(t as typeof searchTerms)} />}
+          {activeTab === 'creators' && <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />}
+          {activeTab === 'review-outreach' && <ReviewOutreachTab {...tabProps} />}
           {activeTab === 'activity' && <ActivityTab {...tabProps} />}
         </div>
       </div>

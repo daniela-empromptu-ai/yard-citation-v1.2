@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, t, pgArray } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import { aiGenerateSearchTerms } from '@/lib/ai-actions';
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,19 +67,41 @@ export async function POST(req: NextRequest) {
       [campaignId, owner_user_id, JSON.stringify({ name }), now]
     );
 
-    // Fire discovery scan in background (non-blocking)
-    let scanStatus: 'started' | 'skipped' = 'skipped';
-    if (process.env.GOOGLE_SHEETS_SPREADSHEET_ID && topics.length > 0) {
-      const origin = req.nextUrl.origin;
-      fetch(`${origin}/api/campaigns/${campaignId}/discover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: owner_user_id }),
-      }).catch(err => console.error('Background discovery scan failed:', err));
-      scanStatus = 'started';
+    // Fire search term generation in background (non-blocking)
+    const topicNames = topics as string[];
+    const personaNames = personas as string[];
+    const brief = creative_brief || '';
+    const category = product_category || '';
+
+    if (brief) {
+      (async () => {
+        try {
+          const terms = await aiGenerateSearchTerms(brief, topicNames, personaNames, category);
+          // Clear any unapproved terms before inserting (guard against duplicate runs)
+          await dbQuery(
+            `DELETE FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = false`,
+            [campaignId]
+          );
+          for (let i = 0; i < terms.length; i++) {
+            await dbQuery(
+              `INSERT INTO ${t('campaign_search_terms')} (id, campaign_id, term, category_tag, why_it_helps, order_index, approved, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,false,$7,$8) ON CONFLICT DO NOTHING`,
+              [uuidv4(), campaignId, terms[i].term, terms[i].category_tag, terms[i].why_it_helps, i, now, now]
+            );
+          }
+          // Update campaign stage to 'terms'
+          await dbQuery(
+            `UPDATE ${t('campaigns')} SET stage='terms', updated_at=$1 WHERE id=$2`,
+            [new Date().toISOString(), campaignId]
+          );
+          console.log(`[create] Generated ${terms.length} search terms for campaign ${campaignId}`);
+        } catch (err) {
+          console.error('[create] Background search term generation failed:', err);
+        }
+      })();
     }
 
-    return NextResponse.json({ campaign_id: campaignId, scan_status: scanStatus });
+    return NextResponse.json({ campaign_id: campaignId });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
