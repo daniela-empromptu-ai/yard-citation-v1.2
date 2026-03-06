@@ -422,8 +422,8 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                         {stageLabel(cc.pipeline_stage)}
                       </span>
                     </td>
-                    <td><ScorePill score={cc.overall_score} showBar /></td>
-                    <td><CoverageTag coverage={cc.evidence_coverage || 'none'} /></td>
+                    <td>{cc.overall_score != null ? <ScorePill score={cc.overall_score} showBar /> : <span className="text-gray-400">—</span>}</td>
+                    <td>{cc.overall_score != null ? <CoverageTag coverage={cc.evidence_coverage || 'none'} /> : <span className="text-gray-400">—</span>}</td>
                     <td>
                       {cc.needs_manual_review ? (
                         <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">{'\u26A0'} NMR</span>

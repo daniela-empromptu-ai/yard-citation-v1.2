@@ -366,14 +366,22 @@ export async function persistResults(
           now,
         ]
       )
-    }
 
-    // Advance campaign_creators to ingested
-    await dbQuery(
-      `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', ingestion_status='complete', updated_at=$2
-       WHERE campaign_id=$1 AND creator_id=$3`,
-      [campaignId, now, tr.creatorId]
-    )
+      // Only advance to ingested if content was actually saved
+      await dbQuery(
+        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', ingestion_status='complete', updated_at=$2
+         WHERE campaign_id=$1 AND creator_id=$3`,
+        [campaignId, now, tr.creatorId]
+      )
+    } else {
+      // No transcript available — mark with error but keep as discovered so scoring skips them
+      console.log(`[prequalify] ${tr.creatorName}: selected but no transcript (status: ${tr.status}), keeping as discovered`)
+      await dbQuery(
+        `UPDATE ${t('campaign_creators')} SET ingestion_status='no_content', ingestion_error=$2, updated_at=$3
+         WHERE campaign_id=$1 AND creator_id=$4`,
+        [campaignId, `Selected by AI but no transcript available (${tr.status})`, now, tr.creatorId]
+      )
+    }
   }
 
   // Excluded creators: mark as excluded
