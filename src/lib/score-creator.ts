@@ -7,7 +7,6 @@
 
 import { dbQuery, t } from '@/lib/db'
 import { aiScoreCreator } from '@/lib/ai-actions'
-import { validateEvidenceQuotes } from '@/lib/evidence-validation'
 
 export interface ScoreCreatorResult {
   ok: boolean
@@ -21,16 +20,12 @@ export interface ScoreCreatorResult {
 export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCreatorResult> {
   const ccRes = await dbQuery<{
     cc_id: string; campaign_id: string; creator_id: string;
-    creator_name: string; bio: string; topics: string[]; languages: string[];
-    is_dormant: boolean; is_autodubbed_suspected: boolean; competitor_affiliated: boolean;
-    campaign_brief: string; product_category: string; personas: string; prompt_gaps: string;
+    creator_name: string; creator_platform: string; creator_handle: string | null;
+    campaign_brief: string; product_category: string; personas: string[];
   }>(`
     SELECT cc.id as cc_id, cc.campaign_id, cc.creator_id,
-      c.display_name as creator_name, c.bio, c.topics, c.languages,
-      c.is_dormant, c.is_autodubbed_suspected, c.competitor_affiliated,
-      camp.creative_brief as campaign_brief, camp.product_category,
-      (SELECT string_agg(persona_name, ', ') FROM ${t('campaign_personas')} WHERE campaign_id = camp.id) as personas,
-      (SELECT string_agg(prompt_text, ' | ') FROM ${t('campaign_prompt_gaps')} WHERE campaign_id = camp.id AND status = 'approved') as prompt_gaps
+      c.name as creator_name, c.platform as creator_platform, c.handle as creator_handle,
+      camp.creative_brief as campaign_brief, camp.product_category, camp.personas
     FROM ${t('campaign_creators')} cc
     JOIN ${t('creators')} c ON c.id = cc.creator_id
     JOIN ${t('campaigns')} camp ON camp.id = cc.campaign_id
@@ -55,15 +50,22 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
 
   const now = new Date().toISOString()
 
+  // Load campaign topics for scoring context
+  const topicsRes = await dbQuery<{ topic: string }>(
+    `SELECT topic FROM ${t('campaign_topics')} WHERE campaign_id = $1`,
+    [ctx.campaign_id]
+  )
+  const topics = topicsRes.data.map(r => r.topic)
+
   // Call AI scoring via builder API (consistent with rest of app)
   const scoringResult = await aiScoreCreator({
     campaignBrief: ctx.campaign_brief || '',
-    topics: ctx.topics || [],
-    personas: ctx.personas ? ctx.personas.split(', ') : [],
-    promptGaps: ctx.prompt_gaps ? ctx.prompt_gaps.split(' | ') : [],
+    topics,
+    personas: Array.isArray(ctx.personas) ? ctx.personas : [],
+    promptGaps: [],
     creatorName: ctx.creator_name,
-    creatorBio: ctx.bio || '',
-    platforms: ctx.languages || [],
+    creatorBio: '',
+    platforms: [ctx.creator_platform],
     contentItems: contentItems.map(ci => ({
       id: ci.id,
       title: ci.title,

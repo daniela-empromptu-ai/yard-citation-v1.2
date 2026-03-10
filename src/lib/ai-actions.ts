@@ -359,6 +359,85 @@ Return ONLY valid JSON:
   }
 }
 
+// ---- AI: Discover Look-alike Creators ----
+export async function aiDiscoverCreators(params: {
+  brief: string;
+  topics: string[];
+  personas: string[];
+  gumshoeNotes: string;
+  seedCreators: Array<{ name: string; platform: string; handle: string }>;
+  existingHandles: Set<string>;
+  count?: number;
+}): Promise<Array<{
+  name: string;
+  platform: string;
+  handle: string;
+  url: string;
+  why: string;
+  suggested_categories: string[];
+}>> {
+  const seedList = params.seedCreators.length > 0
+    ? params.seedCreators.map(c => `${c.name} (${c.platform}: ${c.handle})`).join('\n')
+    : 'None provided';
+
+  const n = params.count || 20;
+
+  try {
+    await setupPrompt(
+      'discover_lookalike_creators',
+      ['campaign_context', 'seed_creators', 'count'],
+      `You are a creator discovery specialist who finds technical content creators for B2B campaigns. Based on the campaign context and optional seed creators, suggest new creators who would be a good fit.
+
+Campaign context: {campaign_context}
+
+Seed creators (examples of good fits): {seed_creators}
+
+Suggest exactly {count} creators. For each creator, provide:
+- name: The channel/brand name as it appears on the platform
+- platform: One of: youtube, medium, devto, linkedin, github, newsletter, podcast, blog, substack, x
+- handle: Their handle/username on that platform (e.g. @BretFisher)
+- url: Full profile/channel URL
+- why: 1-2 sentences explaining why they fit this campaign
+- suggested_categories: 1-3 niche categories (e.g. "Kubernetes", "DevOps", "Cloud Cost Optimization")
+
+RULES:
+- Only suggest REAL creators that actually exist on the specified platform
+- Do NOT repeat any creator already in the seed list
+- Prefer YouTube and blog/newsletter creators for B2B technical content
+- Mix of audience sizes: some large (100k+), some mid (10k-100k), some micro (1k-10k)
+- Each suggestion must be a different person/channel
+- Be specific — provide real handles and URLs you are confident about
+
+Return ONLY a JSON array, no markdown:
+[{"name":"...","platform":"...","handle":"...","url":"...","why":"...","suggested_categories":["...",".."]}]`
+    );
+
+    const raw = await applyPrompt('discover_lookalike_creators', {
+      campaign_context: [
+        `Brief: ${params.brief}`,
+        `Topics: ${params.topics.join(', ')}`,
+        `Personas: ${params.personas.join(', ')}`,
+        params.gumshoeNotes ? `Gumshoe notes: ${params.gumshoeNotes}` : '',
+      ].filter(Boolean).join('\n'),
+      seed_creators: seedList,
+      count: String(n),
+    }, 'raw_text') as string;
+
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return [];
+
+    // Filter out creators already in DB (by platform+handle)
+    return parsed.filter((c: { platform: string; handle: string }) => {
+      const key = `${c.platform}:${(c.handle || '').toLowerCase().replace(/^@/, '')}`;
+      return !params.existingHandles.has(key);
+    });
+  } catch (e) {
+    console.error('aiDiscoverCreators error:', e);
+    return [];
+  }
+}
+
 // ---- Stub: YouTube Search ----
 export async function stubYoutubeSearch(term: string): Promise<Array<{
   channelName: string; channelUrl: string; subscriberCount: number; lastVideoDate: string; topics: string[]

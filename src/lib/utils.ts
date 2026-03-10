@@ -80,6 +80,7 @@ export function stageLabel(stage: string): string {
     replied:              'Replied',
     ghosted:              'Ghosted',
     draft:                'Draft',
+    setup:                'Setup',
     active:               'Active',
     archived:             'Archived',
     terms:                'Terms',

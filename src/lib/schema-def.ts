@@ -1,8 +1,11 @@
-// Raw schema object passed directly to dbSchema() by init and seed routes.
-// Kept in sync with schema-init.ts — both reference the same 34-table definition.
+// V2 schema definition — 16 tables (down from 34).
+// Creator = platform presence (not a person). One row per platform.
+// FK relationships documented in comments; enforced at app level
+// (builder API schema format doesn't support FK declarations).
 
 export const SCHEMA_DEF = {
   tables: [
+    // ── Identity & access ──────────────────────────────────────────
     {
       name: 'app_users',
       columns: [
@@ -25,41 +28,79 @@ export const SCHEMA_DEF = {
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
+
+    // ── Categories (controlled niche taxonomy) ─────────────────────
     {
-      name: 'campaigns',
+      name: 'categories',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'client_id', type: 'uuid', nullable: false },
         { name: 'name', type: 'text', nullable: false },
-        { name: 'owner_user_id', type: 'uuid', nullable: false },
-        { name: 'collaborator_user_id', type: 'uuid', nullable: true },
-        { name: 'status', type: 'text', nullable: false, default: "'draft'" },
-        { name: 'stage', type: 'text', nullable: false, default: "'draft'" },
-        { name: 'geo_targets', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'deadline', type: 'date', nullable: true },
-        { name: 'language', type: 'text', nullable: false, default: "'English'" },
-        { name: 'product_category', type: 'text', nullable: true },
-        { name: 'creative_brief', type: 'text', nullable: false },
-        { name: 'creative_brief_source_url', type: 'text', nullable: true },
-        { name: 'additional_prompt_context', type: 'text', nullable: true },
+        { name: 'parent_id', type: 'uuid', nullable: true }, // FK → categories.id
+        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
+      ],
+    },
+
+    // ── Creators (one row per platform presence) ───────────────────
+    {
+      name: 'creators',
+      columns: [
+        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
+        { name: 'name', type: 'text', nullable: false },
+        { name: 'platform', type: 'text', nullable: false },
+        { name: 'handle', type: 'text', nullable: true },
+        { name: 'url', type: 'text', nullable: true },
+        { name: 'platform_uid', type: 'text', nullable: true },
+        { name: 'subscriber_count', type: 'integer', nullable: true },
+        { name: 'content_language', type: 'text', nullable: true },
+        { name: 'relationship_status', type: 'text', nullable: true },
+        { name: 'too_expensive', type: 'boolean', nullable: false, default: 'false' },
+        { name: 'brand_owned', type: 'boolean', nullable: false, default: 'false' },
+        { name: 'excluded', type: 'boolean', nullable: false, default: 'false' },
+        { name: 'exclusion_reason', type: 'text', nullable: true },
+        { name: 'notes', type: 'text', nullable: true },
+        { name: 'discovered_via', type: 'text', nullable: true },
+        { name: 'email', type: 'text', nullable: true },
+        { name: 'contact_method', type: 'text', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
+
+    // ── Creator ↔ Category join ────────────────────────────────────
     {
-      name: 'campaign_personas',
+      name: 'creator_categories',
+      columns: [
+        { name: 'creator_id', type: 'uuid', nullable: false }, // FK → creators.id
+        { name: 'category_id', type: 'uuid', nullable: false }, // FK → categories.id
+      ],
+    },
+
+    // ── Campaigns ──────────────────────────────────────────────────
+    {
+      name: 'campaigns',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'persona_name', type: 'text', nullable: false },
+        { name: 'client_id', type: 'uuid', nullable: false }, // FK → clients.id
+        { name: 'name', type: 'text', nullable: false },
+        { name: 'owner_user_id', type: 'uuid', nullable: false }, // FK → app_users.id
+        { name: 'status', type: 'text', nullable: false, default: "'draft'" },
+        { name: 'stage', type: 'text', nullable: false, default: "'draft'" },
+        { name: 'geo_targets', type: 'text[]', nullable: false, default: "'{}'" },
+        { name: 'language', type: 'text', nullable: false, default: "'English'" },
+        { name: 'product_category', type: 'text', nullable: true },
+        { name: 'creative_brief', type: 'text', nullable: true },
+        { name: 'gumshoe_report_id', type: 'text', nullable: true },
+        { name: 'personas', type: 'text[]', nullable: false, default: "'{}'" },
+        { name: 'gumshoe_notes', type: 'text', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
+        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
     {
       name: 'campaign_topics',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
+        { name: 'campaign_id', type: 'uuid', nullable: false }, // FK → campaigns.id
         { name: 'topic', type: 'text', nullable: false },
         { name: 'source', type: 'text', nullable: false, default: "'manual'" },
         { name: 'confidence', type: 'numeric', nullable: true },
@@ -70,171 +111,46 @@ export const SCHEMA_DEF = {
       ],
     },
     {
-      name: 'campaign_prompt_gaps',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'prompt_text', type: 'text', nullable: false },
-        { name: 'priority', type: 'text', nullable: false, default: "'medium'" },
-        { name: 'persona', type: 'text', nullable: true },
-        { name: 'geo', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'gap_note', type: 'text', nullable: true },
-        { name: 'status', type: 'text', nullable: false, default: "'draft'" },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'prompt_citations',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'prompt_gap_id', type: 'uuid', nullable: true },
-        { name: 'citation_title', type: 'text', nullable: false },
-        { name: 'citation_url', type: 'text', nullable: false },
-        { name: 'source_type', type: 'text', nullable: false },
-        { name: 'cited_by_models', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'notes', type: 'text', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'gumshoe_imports',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'import_type', type: 'text', nullable: false },
-        { name: 'original_filename', type: 'text', nullable: true },
-        { name: 'raw_text', type: 'text', nullable: false },
-        { name: 'imported_by_user_id', type: 'uuid', nullable: false },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
       name: 'campaign_search_terms',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
+        { name: 'campaign_id', type: 'uuid', nullable: false }, // FK → campaigns.id
         { name: 'term', type: 'text', nullable: false },
         { name: 'category_tag', type: 'text', nullable: false },
         { name: 'why_it_helps', type: 'text', nullable: false },
         { name: 'order_index', type: 'integer', nullable: false, default: '0' },
         { name: 'approved', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'approved_by_user_id', type: 'uuid', nullable: true },
+        { name: 'approved_by_user_id', type: 'uuid', nullable: true }, // FK → app_users.id
         { name: 'approved_at', type: 'timestamptz', nullable: true },
         { name: 'notes', type: 'text', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
-    {
-      name: 'creators',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'display_name', type: 'text', nullable: false },
-        { name: 'primary_handle', type: 'text', nullable: true },
-        { name: 'bio', type: 'text', nullable: true },
-        { name: 'topics', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'languages', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'geo_focus', type: 'text[]', nullable: false, default: "'{}'" },
-        { name: 'competitor_affiliated', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'is_dormant', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'is_autodubbed_suspected', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'last_content_date', type: 'date', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'creator_platform_accounts',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'platform', type: 'text', nullable: false },
-        { name: 'handle', type: 'text', nullable: true },
-        { name: 'url', type: 'text', nullable: false },
-        { name: 'follower_count', type: 'integer', nullable: true },
-        { name: 'metrics_json', type: 'jsonb', nullable: false, default: "'{}'::jsonb" },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'creator_contacts',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'email_encrypted', type: 'text', nullable: true },
-        { name: 'linkedin_url', type: 'text', nullable: true },
-        { name: 'x_url', type: 'text', nullable: true },
-        { name: 'other_contacts_json', type: 'jsonb', nullable: false, default: "'{}'::jsonb" },
-        { name: 'pii_last_updated_at', type: 'timestamptz', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'creator_status_flags',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'flag', type: 'text', nullable: false },
-        { name: 'is_active', type: 'boolean', nullable: false, default: 'true' },
-        { name: 'reason', type: 'text', nullable: true },
-        { name: 'set_by_user_id', type: 'uuid', nullable: false },
-        { name: 'set_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'creator_pricing',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'price_type', type: 'text', nullable: false },
-        { name: 'price_amount_usd', type: 'numeric', nullable: false },
-        { name: 'is_too_high', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'notes', type: 'text', nullable: true },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'creator_notes',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'note_md', type: 'text', nullable: false },
-        { name: 'created_by_user_id', type: 'uuid', nullable: false },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
+
+    // ── Campaign ↔ Creator join (simplified) ───────────────────────
     {
       name: 'campaign_creators',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'added_by_user_id', type: 'uuid', nullable: false },
-        { name: 'source_search_term_id', type: 'uuid', nullable: true },
+        { name: 'campaign_id', type: 'uuid', nullable: false }, // FK → campaigns.id
+        { name: 'creator_id', type: 'uuid', nullable: false }, // FK → creators.id
+        { name: 'added_by_user_id', type: 'uuid', nullable: false }, // FK → app_users.id
+        { name: 'source', type: 'text', nullable: true },
         { name: 'pipeline_stage', type: 'text', nullable: false, default: "'discovered'" },
-        { name: 'campaign_do_not_contact', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'campaign_do_not_contact_reason', type: 'text', nullable: true },
-        { name: 'ingestion_status', type: 'text', nullable: false, default: "'not_started'" },
-        { name: 'ingestion_error', type: 'text', nullable: true },
         { name: 'scoring_status', type: 'text', nullable: false, default: "'not_scored'" },
-        { name: 'scoring_error', type: 'text', nullable: true },
-        { name: 'outreach_owner_user_id', type: 'uuid', nullable: true },
-        { name: 'outreach_state', type: 'text', nullable: false, default: "'not_started'" },
-        { name: 'last_outreach_at', type: 'timestamptz', nullable: true },
-        { name: 'next_followup_due_at', type: 'date', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
+
+    // ── Content & scoring ──────────────────────────────────────────
     {
       name: 'content_items',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'campaign_id', type: 'uuid', nullable: true },
+        { name: 'creator_id', type: 'uuid', nullable: false }, // FK → creators.id
+        { name: 'campaign_id', type: 'uuid', nullable: true }, // FK → campaigns.id
         { name: 'platform', type: 'text', nullable: false },
         { name: 'content_type', type: 'text', nullable: false },
         { name: 'title', type: 'text', nullable: false },
@@ -256,7 +172,7 @@ export const SCHEMA_DEF = {
       name: 'creator_evaluations',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_creator_id', type: 'uuid', nullable: false },
+        { name: 'campaign_creator_id', type: 'uuid', nullable: false }, // FK → campaign_creators.id
         { name: 'model_provider', type: 'text', nullable: false },
         { name: 'model_name', type: 'text', nullable: false },
         { name: 'evaluated_at', type: 'timestamptz', nullable: false, default: 'now()' },
@@ -280,8 +196,8 @@ export const SCHEMA_DEF = {
       name: 'evidence_snippets',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'evaluation_id', type: 'uuid', nullable: false },
-        { name: 'content_item_id', type: 'uuid', nullable: false },
+        { name: 'evaluation_id', type: 'uuid', nullable: false }, // FK → creator_evaluations.id
+        { name: 'content_item_id', type: 'uuid', nullable: true }, // FK → content_items.id (SET NULL)
         { name: 'timestamp_start_seconds', type: 'integer', nullable: true },
         { name: 'timestamp_end_seconds', type: 'integer', nullable: true },
         { name: 'quote', type: 'text', nullable: false },
@@ -291,89 +207,19 @@ export const SCHEMA_DEF = {
       ],
     },
     {
-      name: 'evaluation_recommended_content',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'evaluation_id', type: 'uuid', nullable: false },
-        { name: 'content_item_id', type: 'uuid', nullable: false },
-        { name: 'bucket', type: 'text', nullable: false },
-        { name: 'relevance_rank', type: 'integer', nullable: false, default: '0' },
-        { name: 'notes', type: 'text', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
       name: 'content_angles',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'evaluation_id', type: 'uuid', nullable: false },
+        { name: 'evaluation_id', type: 'uuid', nullable: false }, // FK → creator_evaluations.id
         { name: 'title', type: 'text', nullable: false },
-        { name: 'target_prompt_gap_id', type: 'uuid', nullable: true },
         { name: 'persona', type: 'text', nullable: true },
         { name: 'format', type: 'text', nullable: false },
         { name: 'key_points_json', type: 'jsonb', nullable: false, default: "'[]'::jsonb" },
-        { name: 'selected_for_outreach', type: 'boolean', nullable: false, default: 'false' },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],
     },
-    {
-      name: 'angle_evidence',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'angle_id', type: 'uuid', nullable: false },
-        { name: 'evidence_snippet_id', type: 'uuid', nullable: false },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'human_reviews',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_creator_id', type: 'uuid', nullable: false },
-        { name: 'reviewed_by_user_id', type: 'uuid', nullable: false },
-        { name: 'reviewed_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'decision', type: 'text', nullable: false },
-        { name: 'manual_override_score', type: 'integer', nullable: true },
-        { name: 'notes_md', type: 'text', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'outreach_packets',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_creator_id', type: 'uuid', nullable: false },
-        { name: 'created_by_user_id', type: 'uuid', nullable: false },
-        { name: 'subject', type: 'text', nullable: false },
-        { name: 'body_md', type: 'text', nullable: false },
-        { name: 'selected_angle_id', type: 'uuid', nullable: true },
-        { name: 'followup_plan_json', type: 'jsonb', nullable: false, default: "'[]'::jsonb" },
-        { name: 'last_updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'outreach_packet_evidence',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'outreach_packet_id', type: 'uuid', nullable: false },
-        { name: 'evidence_snippet_id', type: 'uuid', nullable: false },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'outreach_activity',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_creator_id', type: 'uuid', nullable: false },
-        { name: 'performed_by_user_id', type: 'uuid', nullable: false },
-        { name: 'channel', type: 'text', nullable: false },
-        { name: 'action_type', type: 'text', nullable: false },
-        { name: 'state_after', type: 'text', nullable: false },
-        { name: 'occurred_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'notes', type: 'text', nullable: true },
-      ],
-    },
+
+    // ── Operational ────────────────────────────────────────────────
     {
       name: 'activity_log',
       columns: [
@@ -388,72 +234,12 @@ export const SCHEMA_DEF = {
       ],
     },
     {
-      name: 'app_settings',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'mask_pii_by_default', type: 'boolean', nullable: false, default: 'true' },
-        { name: 'outreach_ready_score_threshold', type: 'integer', nullable: false, default: '75' },
-        { name: 'min_evidence_coverage', type: 'text', nullable: false, default: "'medium'" },
-        { name: 'default_ai_model', type: 'text', nullable: false, default: "'claude'" },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'integration_status',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'integration_key', type: 'text', nullable: false },
-        { name: 'is_configured', type: 'boolean', nullable: false, default: 'false' },
-        { name: 'last_tested_at', type: 'timestamptz', nullable: true },
-        { name: 'last_test_result', type: 'text', nullable: true },
-        { name: 'last_test_message', type: 'text', nullable: true },
-        { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'demo_seed_runs',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'seed_version', type: 'text', nullable: false },
-        { name: 'seeded_at', type: 'timestamptz', nullable: false, default: 'now()' },
-        { name: 'seeded_by_user_id', type: 'uuid', nullable: false },
-        { name: 'notes', type: 'text', nullable: true },
-      ],
-    },
-    {
-      name: 'campaign_attachments',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'campaign_id', type: 'uuid', nullable: false },
-        { name: 'file_name', type: 'text', nullable: false },
-        { name: 'file_type', type: 'text', nullable: true },
-        { name: 'file_size_bytes', type: 'bigint', nullable: true },
-        { name: 'storage_key', type: 'text', nullable: false },
-        { name: 'uploaded_by_user_id', type: 'uuid', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
-      name: 'pii_access_events',
-      columns: [
-        { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'accessed_by_user_id', type: 'uuid', nullable: true },
-        { name: 'creator_id', type: 'uuid', nullable: false },
-        { name: 'reason', type: 'text', nullable: true },
-        { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
-      ],
-    },
-    {
       name: 'jobs',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
         { name: 'type', type: 'text', nullable: false },
         { name: 'status', type: 'text', nullable: false, default: "'queued'" },
         { name: 'campaign_id', type: 'uuid', nullable: true },
-        { name: 'creator_id', type: 'uuid', nullable: true },
-        { name: 'campaign_creator_id', type: 'uuid', nullable: true },
-        { name: 'payload', type: 'jsonb', nullable: false, default: "'{}'::jsonb" },
         { name: 'error_message', type: 'text', nullable: true },
         { name: 'started_at', type: 'timestamptz', nullable: true },
         { name: 'finished_at', type: 'timestamptz', nullable: true },
@@ -466,7 +252,7 @@ export const SCHEMA_DEF = {
       name: 'job_events',
       columns: [
         { name: 'id', type: 'uuid', nullable: false, default: 'gen_random_uuid()' },
-        { name: 'job_id', type: 'uuid', nullable: false },
+        { name: 'job_id', type: 'uuid', nullable: false }, // FK → jobs.id
         { name: 'level', type: 'text', nullable: false },
         { name: 'message', type: 'text', nullable: false },
         { name: 'meta', type: 'jsonb', nullable: true },
@@ -475,36 +261,47 @@ export const SCHEMA_DEF = {
     },
   ],
   indexes: [
+    // app_users
     { table: 'app_users', columns: ['email'], name: 'app_users_email_uq', unique: true },
+    // clients
     { table: 'clients', columns: ['name'], name: 'clients_name_uq', unique: true },
+    // categories
+    { table: 'categories', columns: ['name', 'parent_id'], name: 'categories_name_parent_uq', unique: true },
+    // creators
+    { table: 'creators', columns: ['name'], name: 'creators_name_idx' },
+    { table: 'creators', columns: ['platform'], name: 'creators_platform_idx' },
+    { table: 'creators', columns: ['platform', 'handle'], name: 'creators_platform_handle_uq', unique: true },
+    { table: 'creators', columns: ['platform', 'platform_uid'], name: 'creators_platform_uid_uq', unique: true },
+    // creator_categories (composite PK via unique index)
+    { table: 'creator_categories', columns: ['creator_id', 'category_id'], name: 'creator_categories_pk', unique: true },
+    // campaigns
     { table: 'campaigns', columns: ['client_id'], name: 'campaigns_client_id_idx' },
     { table: 'campaigns', columns: ['owner_user_id'], name: 'campaigns_owner_idx' },
     { table: 'campaigns', columns: ['status'], name: 'campaigns_status_idx' },
     { table: 'campaigns', columns: ['stage'], name: 'campaigns_stage_idx' },
-    { table: 'campaign_personas', columns: ['campaign_id', 'persona_name'], name: 'campaign_personas_uq', unique: true },
+    // campaign_topics
     { table: 'campaign_topics', columns: ['campaign_id', 'topic'], name: 'campaign_topics_uq', unique: true },
     { table: 'campaign_topics', columns: ['campaign_id'], name: 'campaign_topics_campaign_idx' },
-    { table: 'campaign_prompt_gaps', columns: ['campaign_id'], name: 'cpg_campaign_idx' },
+    // campaign_search_terms
     { table: 'campaign_search_terms', columns: ['campaign_id'], name: 'cst_campaign_idx' },
     { table: 'campaign_search_terms', columns: ['approved'], name: 'cst_approved_idx' },
-    { table: 'creators', columns: ['id'], name: 'creators_id_uq', unique: true },
-    { table: 'creators', columns: ['display_name'], name: 'creators_name_idx' },
-    { table: 'creator_platform_accounts', columns: ['platform', 'url'], name: 'cpa_platform_url_uq', unique: true },
-    { table: 'creator_platform_accounts', columns: ['creator_id'], name: 'cpa_creator_idx' },
-    { table: 'creator_status_flags', columns: ['creator_id'], name: 'csf_creator_idx' },
+    // campaign_creators
     { table: 'campaign_creators', columns: ['campaign_id', 'creator_id'], name: 'cc_campaign_creator_uq', unique: true },
     { table: 'campaign_creators', columns: ['campaign_id'], name: 'cc_campaign_idx' },
     { table: 'campaign_creators', columns: ['creator_id'], name: 'cc_creator_idx' },
     { table: 'campaign_creators', columns: ['pipeline_stage'], name: 'cc_stage_idx' },
+    // content_items
     { table: 'content_items', columns: ['url'], name: 'ci_url_uq', unique: true },
     { table: 'content_items', columns: ['creator_id'], name: 'ci_creator_idx' },
     { table: 'content_items', columns: ['campaign_id'], name: 'ci_campaign_idx' },
+    // creator_evaluations
     { table: 'creator_evaluations', columns: ['campaign_creator_id'], name: 'ce_cc_uq', unique: true },
+    // evidence_snippets
     { table: 'evidence_snippets', columns: ['evaluation_id'], name: 'es_eval_idx' },
-    { table: 'evaluation_recommended_content', columns: ['evaluation_id', 'content_item_id'], name: 'erc_uq', unique: true },
-    { table: 'integration_status', columns: ['integration_key'], name: 'is_key_uq', unique: true },
+    // activity_log
     { table: 'activity_log', columns: ['campaign_id'], name: 'al_campaign_idx' },
     { table: 'activity_log', columns: ['created_at'], name: 'al_created_at_idx' },
+    // jobs
     { table: 'jobs', columns: ['status'], name: 'jobs_status_idx' },
   ],
 }

@@ -7,18 +7,15 @@ import { stageLabel } from '@/lib/utils';
 import SetupTab from './SetupTab';
 import SearchTermsTab from './SearchTermsTab';
 import CreatorsTab from './CreatorsTab';
-import ReviewOutreachTab from './ReviewOutreachTab';
 import ActivityTab from './ActivityTab';
 
 interface CampaignCreatorRow {
-  id: string; creator_id: string; creator_name: string; primary_handle: string | null;
-  pipeline_stage: string; is_dormant: boolean; is_autodubbed_suspected: boolean;
-  competitor_affiliated: boolean; last_content_date: string | null;
-  creator_topics: string[]; languages: string[];
-  ingestion_status: string; ingestion_error: string | null; updated_at: string;
-  scoring_status: string; overall_score: number | null; evidence_coverage: string | null;
+  id: string; creator_id: string; creator_name: string; creator_platform: string;
+  creator_handle: string | null; source: string | null;
+  pipeline_stage: string; scoring_status: string;
+  overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
-  outreach_state: string; next_followup_due_at: string | null; owner_name: string | null;
+  updated_at: string;
 }
 
 interface ActivityRow {
@@ -36,12 +33,11 @@ interface Props {
   campaign: {
     id: string; name: string; status: string; stage: string;
     geo_targets: string[]; product_category: string; creative_brief: string;
-    language: string; client_name: string; owner_name: string; collaborator_name: string | null;
-    additional_prompt_context: string | null; updated_at: string; owner_user_id: string;
+    language: string; client_name: string; owner_name: string;
+    personas: string[]; gumshoe_notes: string | null;
+    updated_at: string; owner_user_id: string;
   };
-  personas: { id: string; campaign_id: string; persona_name: string }[];
   topics: { id: string; campaign_id: string; topic: string; source: string; confidence: number | null; rationale: string | null; order_index: number; approved: boolean }[];
-  promptGaps: { id: string; campaign_id: string; prompt_text: string; priority: string; persona: string | null; geo: string[]; gap_note: string | null; status: string; updated_at: string }[];
   searchTerms: { id: string; campaign_id: string; term: string; category_tag: string; why_it_helps: string; order_index: number; approved: boolean; approved_by_user_id: string | null; approved_at: string | null; notes: string | null }[];
   campaignCreators: CampaignCreatorRow[];
   activityLog: ActivityRow[];
@@ -50,13 +46,12 @@ interface Props {
 }
 
 export default function CampaignWorkspace({
-  campaign, personas, topics, promptGaps, searchTerms, campaignCreators, activityLog, initialTab, pipelineJob,
+  campaign, topics, searchTerms, campaignCreators, activityLog, initialTab, pipelineJob,
 }: Props) {
   const [activeTab, setActiveTab] = useState(initialTab || 'setup');
   const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
   const router = useRouter();
 
-  // Progressive disclosure: determine which tabs to show
   const hasApprovedTerms = liveSearchTerms.some(t => t.approved);
   const hasScoredCreators = campaignCreators.some(cc => cc.scoring_status === 'scored');
   const pipelineRunning = pipelineJob?.status === 'queued' || pipelineJob?.status === 'running';
@@ -65,7 +60,6 @@ export default function CampaignWorkspace({
     { id: 'setup', label: 'Setup', show: true },
     { id: 'search-terms', label: 'Search Terms', show: true, count: liveSearchTerms.length },
     { id: 'creators', label: 'Creators', show: hasApprovedTerms || campaignCreators.length > 0 || pipelineRunning, count: campaignCreators.filter(cc => cc.pipeline_stage !== 'excluded').length },
-    { id: 'review-outreach', label: 'Review & Outreach', show: hasScoredCreators, count: campaignCreators.filter(cc => cc.scoring_status === 'scored').length },
     { id: 'activity', label: 'Activity', show: true },
   ];
 
@@ -73,13 +67,11 @@ export default function CampaignWorkspace({
 
   const stageColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-600',
+    setup: 'bg-gray-100 text-gray-600',
     terms: 'bg-blue-100 text-blue-700',
     discovery: 'bg-cyan-100 text-cyan-700',
-    ingestion: 'bg-indigo-100 text-indigo-700',
     scoring: 'bg-purple-100 text-purple-700',
     review: 'bg-orange-100 text-orange-700',
-    outreach: 'bg-green-100 text-green-700',
-    tracking: 'bg-teal-100 text-teal-700',
     complete: 'bg-gray-100 text-gray-500',
   };
 
@@ -88,7 +80,7 @@ export default function CampaignWorkspace({
     router.replace(`/campaigns/${campaign.id}/creators`, { scroll: false });
   };
 
-  const tabProps = { campaign, personas, topics, promptGaps, searchTerms: liveSearchTerms, campaignCreators, activityLog };
+  const tabProps = { campaign, topics, searchTerms: liveSearchTerms, campaignCreators, activityLog };
 
   return (
     <div className="flex flex-col h-full">
@@ -111,17 +103,16 @@ export default function CampaignWorkspace({
               </span>
               {pipelineRunning && (
                 <span className="badge text-xs bg-blue-100 text-blue-700 border-blue-200 animate-pulse">
-                  Pipeline running…
+                  Pipeline running...
                 </span>
               )}
               {campaign.geo_targets && (
-                <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' · ')}</span>
+                <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <span>Owner: {campaign.owner_name}</span>
-            {campaign.collaborator_name && <span>· {campaign.collaborator_name}</span>}
           </div>
         </div>
 
@@ -154,7 +145,6 @@ export default function CampaignWorkspace({
           {activeTab === 'setup' && <SetupTab {...tabProps} />}
           {activeTab === 'search-terms' && <SearchTermsTab {...tabProps} onPipelineStarted={handlePipelineStarted} onTermsUpdated={(t) => setLiveSearchTerms(t as typeof searchTerms)} />}
           {activeTab === 'creators' && <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />}
-          {activeTab === 'review-outreach' && <ReviewOutreachTab {...tabProps} />}
           {activeTab === 'activity' && <ActivityTab {...tabProps} />}
         </div>
       </div>

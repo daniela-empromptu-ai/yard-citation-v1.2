@@ -11,18 +11,20 @@ export async function POST(req: NextRequest) {
   // If no creator_id, create a stub creator from the URL
   if (!finalCreatorId && creator_url) {
     finalCreatorId = uuidv4();
-    const handle = creator_url.includes('@') ? creator_url.split('@').pop()?.split('/')[0] : creator_url;
+    const handle = creator_url.includes('@') ? creator_url.split('@').pop()?.split('/')[0] : null;
+    const platform = creator_url.includes('youtube') ? 'youtube'
+      : creator_url.includes('medium.com') ? 'medium'
+      : creator_url.includes('dev.to') ? 'devto'
+      : creator_url.includes('linkedin') ? 'linkedin'
+      : creator_url.includes('github') ? 'github'
+      : 'blog';
+
     await dbQuery(
-      `INSERT INTO ${t('creators')} (id, display_name, primary_handle, created_at, updated_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
-      [finalCreatorId, handle || 'Unknown Creator', `@${handle}`, now, now]
+      `INSERT INTO ${t('creators')} (id, name, platform, handle, url, discovered_via, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'manual', $6, $6)
+       ON CONFLICT DO NOTHING`,
+      [finalCreatorId, handle || 'Unknown Creator', platform, handle || null, creator_url, now]
     );
-    // Add platform account
-    if (creator_url) {
-      await dbQuery(
-        `INSERT INTO ${t('creator_platform_accounts')} (creator_id, platform, url, created_at) VALUES ($1,'youtube',$2,$3) ON CONFLICT DO NOTHING`,
-        [finalCreatorId, creator_url, now]
-      );
-    }
   }
 
   if (!finalCreatorId) {
@@ -30,15 +32,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Add to campaign
-  const r = await dbQuery(
-    `INSERT INTO ${t('campaign_creators')} (id, campaign_id, creator_id, added_by_user_id, pipeline_stage, ingestion_status, scoring_status, outreach_state, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,'discovered','not_started','not_scored','not_started',$5,$6) ON CONFLICT DO NOTHING RETURNING id`,
-    [uuidv4(), campaign_id, finalCreatorId, user_id, now, now]
+  await dbQuery(
+    `INSERT INTO ${t('campaign_creators')} (id, campaign_id, creator_id, added_by_user_id, source, pipeline_stage, scoring_status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'manual', 'discovered', 'not_scored', $5, $5)
+     ON CONFLICT DO NOTHING`,
+    [uuidv4(), campaign_id, finalCreatorId, user_id, now]
   );
-
-  if (!r.success) {
-    return NextResponse.json({ error: r.error || r.message }, { status: 500 });
-  }
 
   return NextResponse.json({ ok: true, creator_id: finalCreatorId });
 }

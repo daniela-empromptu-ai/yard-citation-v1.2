@@ -3,100 +3,80 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ScorePill } from '@/components/ui/ScorePill'
-import { CoverageBadge, OutreachBadge, PipelineBadge } from '@/components/ui/Badge'
-import { AlertTriangle, CheckCircle, Clock, Users, Megaphone, Send, BarChart3, Calendar, RefreshCw } from 'lucide-react'
+import { CoverageBadge, PlatformBadge } from '@/components/ui/Badge'
+import { AlertTriangle, CheckCircle, Users, Megaphone, BarChart3, RefreshCw, Database, Activity } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
-
-const USERS = [
-  { id: 'a1000000-0000-0000-0000-000000000001', name: 'Jack Scrivener', role: 'qualifier' },
-  { id: 'a1000000-0000-0000-0000-000000000002', name: 'Arya', role: 'outreach' },
-  { id: 'a1000000-0000-0000-0000-000000000003', name: 'Karl McCarthy', role: 'admin' },
-  { id: 'a1000000-0000-0000-0000-000000000004', name: 'Empromptu', role: 'admin' },
-]
-
+import { formatDateTime } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [currentUser, setCurrentUser] = useState(USERS[0])
-
-  const loadUser = () => {
-    try {
-      const saved = localStorage.getItem('yard_current_user')
-      if (saved) {
-        const u = JSON.parse(saved)
-        const found = USERS.find(usr => usr.id === u.id)
-        if (found) setCurrentUser(found)
-      }
-    } catch { /* ignore */ }
-  }
-
-  useEffect(() => {
-    loadUser()
-    window.addEventListener('yard_user_changed', loadUser)
-    return () => window.removeEventListener('yard_user_changed', loadUser)
-  }, [])
 
   const load = () => {
     setLoading(true)
+    setError('')
     fetch('/api/dashboard')
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => {
+        if (d.error) throw new Error(d.error)
+        setData(d)
+        setLoading(false)
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
 
   if (loading) return (
-    <div className="flex items-center gap-2 text-slate-500 mt-12">
+    <div className="flex items-center gap-2 text-slate-500 mt-12 justify-center">
       <RefreshCw size={16} className="animate-spin" />
-      <span>Loading dashboard…</span>
+      <span>Loading dashboard...</span>
     </div>
   )
-  if (error) return <div className="text-red-600 mt-6 p-4 bg-red-50 rounded-lg border border-red-200">Error: {error}</div>
+  if (error) return (
+    <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
+      <p className="text-red-600 text-sm">Error: {error}</p>
+      <button onClick={load} className="mt-2 text-xs text-red-700 underline hover:no-underline">Retry</button>
+    </div>
+  )
   if (!data) return null
 
   const stats = (data.stats || {}) as Record<string, number>
   const needsReview = (data.needsReview || []) as Record<string, unknown>[]
   const recentScoring = (data.recentScoring || []) as Record<string, unknown>[]
-  const outreachQueue = (data.outreachQueue || []) as Record<string, unknown>[]
-  const recentBooked = (data.recentBooked || []) as Record<string, unknown>[]
+  const recentActivity = (data.recentActivity || []) as Record<string, unknown>[]
 
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">
-            {currentUser.role === 'qualifier' && '🔍 Qualifier Dashboard'}
-            {currentUser.role === 'outreach' && '📤 Outreach Dashboard'}
-            {currentUser.role === 'admin' && '⚙️ Admin Dashboard'}
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Welcome back, {currentUser.name}</p>
+          <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Campaign scoring and creator discovery at a glance</p>
         </div>
         <button onClick={load} className="flex items-center gap-1.5 px-3 h-8 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50">
           <RefreshCw size={12} /> Refresh
         </button>
       </div>
 
-      {/* QUALIFIER VIEW */}
-      {(currentUser.role === 'qualifier' || currentUser.role === 'admin') && (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <StatCard label="Analyzed this week" value={stats.analyzed_week || 0} icon={BarChart3} color="bg-blue-500" />
-            <StatCard label="Needs manual review" value={stats.needs_review || 0} icon={AlertTriangle} color="bg-amber-500" />
-            <StatCard label="Approved for outreach" value={stats.outreach_ready || 0} icon={CheckCircle} color="bg-green-500" />
-            <StatCard label="Active campaigns" value={stats.active_campaigns || 0} icon={Megaphone} color="bg-purple-500" />
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <StatCard label="Active campaigns" value={stats.active_campaigns || 0} icon={Megaphone} color="bg-purple-500" />
+        <StatCard label="Creator database" value={stats.total_creators || 0} icon={Database} color="bg-blue-500" />
+        <StatCard label="Scored this week" value={stats.scored_this_week || 0} icon={BarChart3} color="bg-green-500" />
+        <StatCard label="Needs review" value={stats.needs_review || 0} icon={AlertTriangle} color="bg-amber-500" />
+      </div>
 
-          {/* Needs Manual Review Queue */}
-          <div className="bg-white border border-slate-200 rounded-xl mb-6">
+      <div className="grid grid-cols-3 gap-6">
+        {/* Left column: Tables */}
+        <div className="col-span-2 space-y-6">
+          {/* Needs Manual Review */}
+          <div className="bg-white border border-slate-200 rounded-xl">
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={15} className="text-amber-500" />
-                <h2 className="text-sm font-semibold text-slate-800">Needs Manual Review Queue</h2>
+                <h2 className="text-sm font-semibold text-slate-800">Needs Manual Review</h2>
                 {needsReview.length > 0 && (
                   <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">{needsReview.length}</span>
                 )}
@@ -113,25 +93,22 @@ export default function DashboardPage() {
                   <tr>
                     <th className="text-left">Creator</th>
                     <th className="text-left">Campaign</th>
-                    <th className="text-left">Coverage</th>
                     <th className="text-left">Score</th>
+                    <th className="text-left">Coverage</th>
                     <th className="text-left">Reason</th>
-                    <th className="text-left">Last Updated</th>
-                    <th className="text-left"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {needsReview.map((row) => (
                     <tr key={String(row.cc_id)}>
-                      <td className="font-medium text-slate-800">{String(row.display_name)}</td>
-                      <td className="text-slate-600">{String(row.campaign_name)}</td>
-                      <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
-                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
-                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || '—')}</td>
-                      <td className="text-slate-400 text-xs">{row.updated_at ? new Date(String(row.updated_at)).toLocaleDateString() : '—'}</td>
                       <td>
-                        <Link href="/campaigns" className="text-xs font-medium text-blue-600 hover:underline">Open Review →</Link>
+                        <span className="font-medium text-slate-800">{String(row.creator_name)}</span>
+                        {row.platform ? <PlatformBadge platform={String(row.platform)} /> : null}
                       </td>
+                      <td className="text-slate-600">{String(row.campaign_name)}</td>
+                      <td>{row.overall_score != null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
+                      <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
+                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || '—')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -143,10 +120,12 @@ export default function DashboardPage() {
           <div className="bg-white border border-slate-200 rounded-xl">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
               <BarChart3 size={15} className="text-blue-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Recent Scoring Runs</h2>
+              <h2 className="text-sm font-semibold text-slate-800">Recent Scoring</h2>
             </div>
             {recentScoring.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">No scoring runs yet. Seed demo data in Settings.</div>
+              <div className="px-5 py-8 text-center text-slate-400 text-sm">
+                No scoring runs yet. Create a campaign and run discovery first.
+              </div>
             ) : (
               <table className="table-dense w-full">
                 <thead>
@@ -155,18 +134,25 @@ export default function DashboardPage() {
                     <th className="text-left">Campaign</th>
                     <th className="text-left">Score</th>
                     <th className="text-left">Coverage</th>
-                    <th className="text-left">Scored At</th>
+                    <th className="text-left">Scored</th>
                     <th className="text-left">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentScoring.map((row) => (
                     <tr key={String(row.id)}>
-                      <td className="font-medium text-slate-800">{String(row.display_name)}</td>
-                      <td className="text-slate-600">{String(row.campaign_name)}</td>
+                      <td>
+                        <span className="font-medium text-slate-800">{String(row.creator_name)}</span>
+                        {row.platform ? <PlatformBadge platform={String(row.platform)} /> : null}
+                      </td>
+                      <td>
+                        <Link href={`/campaigns/${row.campaign_id}/creators`} className="text-slate-600 hover:text-blue-600 hover:underline">
+                          {String(row.campaign_name)}
+                        </Link>
+                      </td>
                       <td><ScorePill score={Number(row.overall_score)} /></td>
-                      <td><CoverageBadge coverage={String(row.evidence_coverage)} /></td>
-                      <td className="text-slate-400 text-xs">{row.evaluated_at ? new Date(String(row.evaluated_at)).toLocaleDateString() : '—'}</td>
+                      <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
+                      <td className="text-slate-400 text-xs">{row.evaluated_at ? formatDateTime(String(row.evaluated_at)) : '—'}</td>
                       <td>{row.needs_manual_review ? <span className="text-amber-600 text-xs font-medium">Needs Review</span> : <span className="text-green-600 text-xs font-medium">OK</span>}</td>
                     </tr>
                   ))}
@@ -174,109 +160,69 @@ export default function DashboardPage() {
               </table>
             )}
           </div>
-        </>
-      )}
+        </div>
 
-      {/* OUTREACH VIEW */}
-      {currentUser.role === 'outreach' && (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <StatCard label="Emails to send" value={stats.emails_to_send || 0} icon={Send} color="bg-blue-500" />
-            <StatCard label="Follow-ups due" value={stats.followups_due || 0} icon={Calendar} color="bg-amber-500" />
-            <StatCard label="Replies to log" value={stats.replies_to_log || 0} icon={CheckCircle} color="bg-purple-500" />
-            <StatCard label="Booked (all time)" value={stats.booked_count || 0} icon={Users} color="bg-green-500" />
-          </div>
-
-          {/* Disclaimer */}
-          <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-            <AlertTriangle size={14} />
-            <span className="font-medium">This tool does not send emails.</span>
-            <span className="text-amber-600">Assistive only — human approval required before outreach.</span>
-          </div>
-
-          {/* Outreach Queue */}
-          <div className="bg-white border border-slate-200 rounded-xl mb-6">
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-              <Send size={15} className="text-blue-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Outreach Queue</h2>
-            </div>
-            {outreachQueue.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">No creators ready for outreach.</div>
-            ) : (
-              <table className="table-dense w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left">Creator</th>
-                    <th className="text-left">Campaign</th>
-                    <th className="text-left">State</th>
-                    <th className="text-left">Next Follow-up</th>
-                    <th className="text-left">Owner</th>
-                    <th className="text-left">Score</th>
-                    <th className="text-left">Coverage</th>
-                    <th className="text-left"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outreachQueue.map((row) => (
-                    <tr key={String(row.id)}>
-                      <td className="font-medium text-slate-800">{String(row.display_name)}</td>
-                      <td className="text-slate-600">{String(row.campaign_name)}</td>
-                      <td><OutreachBadge state={String(row.outreach_state)} /></td>
-                      <td className="text-slate-500 text-xs">{row.next_followup_due_at ? String(row.next_followup_due_at) : '—'}</td>
-                      <td className="text-slate-500 text-xs">{String(row.outreach_owner_name || '—')}</td>
-                      <td>{row.overall_score !== null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
-                      <td>{row.evidence_coverage ? <CoverageBadge coverage={String(row.evidence_coverage)} /> : '—'}</td>
-                      <td>
-                        <Link href={`/outreach`} className="text-xs font-medium text-blue-600 hover:underline">Open Packet →</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Recently Replied/Booked */}
+        {/* Right column: Activity feed */}
+        <div className="col-span-1">
           <div className="bg-white border border-slate-200 rounded-xl">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-              <CheckCircle size={15} className="text-green-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Recently Replied / Booked</h2>
+              <Activity size={15} className="text-slate-500" />
+              <h2 className="text-sm font-semibold text-slate-800">Recent Activity</h2>
             </div>
-            {recentBooked.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">No recent replies or bookings.</div>
+            {recentActivity.length === 0 ? (
+              <div className="px-5 py-8 text-center text-slate-400 text-sm">No activity yet.</div>
             ) : (
-              <table className="table-dense w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left">Creator</th>
-                    <th className="text-left">Campaign</th>
-                    <th className="text-left">State</th>
-                    <th className="text-left">Last Activity</th>
-                    <th className="text-left">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentBooked.map((row) => (
-                    <tr key={String(row.id)}>
-                      <td className="font-medium text-slate-800">{String(row.display_name)}</td>
-                      <td className="text-slate-600">{String(row.campaign_name)}</td>
-                      <td><OutreachBadge state={String(row.outreach_state)} /></td>
-                      <td className="text-slate-400 text-xs">{row.last_activity ? new Date(String(row.last_activity)).toLocaleDateString() : '—'}</td>
-                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.last_notes || '—')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="divide-y divide-slate-50">
+                {recentActivity.map((evt, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <div className="flex items-start gap-2">
+                      <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          <span className="font-medium">{formatEventType(String(evt.event_type))}</span>
+                          {evt.creator_name ? <span className="text-slate-500"> — {String(evt.creator_name)}</span> : null}
+                        </p>
+                        {evt.campaign_name ? (
+                          <Link href={`/campaigns/${evt.campaign_id}`} className="text-[11px] text-blue-600 hover:underline">
+                            {String(evt.campaign_name)}
+                          </Link>
+                        ) : null}
+                        <p className="text-[11px] text-slate-400 mt-0.5">{evt.created_at ? formatDateTime(String(evt.created_at)) : ''}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </>
-      )}
+        </div>
+      </div>
 
-      {/* Evidence disclaimer */}
-      <div className="mt-6 text-center text-xs text-slate-400">
-        Evidence required for all scores and recommendations. · Assistive only — human approval required before outreach. · This tool does not send emails.
+      {/* Quick links */}
+      <div className="mt-6 flex items-center gap-4 justify-center">
+        <Link href="/campaigns" className="text-xs text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1">
+          <Megaphone size={12} /> All Campaigns
+        </Link>
+        <Link href="/creators" className="text-xs text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1">
+          <Users size={12} /> Creator Database
+        </Link>
       </div>
     </div>
   )
+}
+
+function formatEventType(type: string): string {
+  const map: Record<string, string> = {
+    'discovery_started': 'Discovery started',
+    'discovery_completed': 'Discovery completed',
+    'scoring_started': 'Scoring started',
+    'scoring_completed': 'Scoring completed',
+    'evaluation_completed': 'Creator evaluated',
+    'creator_added': 'Creator added',
+    'creator_excluded': 'Creator excluded',
+    'campaign_created': 'Campaign created',
+    'search_terms_generated': 'Search terms generated',
+    'prequalify_completed': 'Pre-qualify completed',
+  }
+  return map[type] || type.replace(/_/g, ' ')
 }

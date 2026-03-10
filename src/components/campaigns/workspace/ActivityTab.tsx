@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { formatDateTime } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -73,8 +74,15 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
   );
 }
 
+const INITIAL_SHOW = 20;
+
 export default function ActivityTab({ activityLog }: Props) {
-  if ((activityLog as ActivityEntry[]).length === 0) {
+  const [showAll, setShowAll] = useState(false);
+  const entries = activityLog as ActivityEntry[];
+  const visible = showAll ? entries : entries.slice(0, INITIAL_SHOW);
+  const hasMore = entries.length > INITIAL_SHOW;
+
+  if (entries.length === 0) {
     return (
       <div className="card">
         <EmptyState
@@ -90,10 +98,10 @@ export default function ActivityTab({ activityLog }: Props) {
     <div className="card divide-y divide-gray-100">
       <div className="px-4 py-3 flex items-center justify-between bg-gray-50">
         <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Campaign Activity</span>
-        <span className="text-xs text-gray-400">{(activityLog as ActivityEntry[]).length} events</span>
+        <span className="text-xs text-gray-400">{entries.length} events</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {(activityLog as ActivityEntry[]).map(entry => {
+        {visible.map(entry => {
           const icon = EVENT_ICONS[entry.event_type] || EVENT_ICONS.default;
           const colorClass = EVENT_COLORS[entry.event_type] || EVENT_COLORS.default;
           return (
@@ -117,6 +125,16 @@ export default function ActivityTab({ activityLog }: Props) {
           );
         })}
       </div>
+      {hasMore && (
+        <div className="px-4 py-2 border-t border-gray-100 text-center">
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            {showAll ? `Show less` : `Show all ${entries.length} events`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

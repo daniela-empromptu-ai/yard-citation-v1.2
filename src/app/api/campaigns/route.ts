@@ -6,7 +6,7 @@ export async function GET() {
     const result = await dbQuery(
       `SELECT c.*, cl.name as client_name, COALESCE(u.name, c.owner_user_id::text) as owner_name,
          (SELECT COUNT(*) FROM campaign_creators cc WHERE cc.campaign_id = c.id)::int as creator_count,
-         (SELECT COUNT(*) FROM campaign_creators cc WHERE cc.campaign_id = c.id AND cc.pipeline_stage = 'outreach_ready')::int as outreach_ready_count
+         (SELECT COUNT(*) FROM campaign_creators cc WHERE cc.campaign_id = c.id AND cc.scoring_status = 'scored')::int as scored_count
        FROM campaigns c
        LEFT JOIN clients cl ON cl.id = c.client_id
        LEFT JOIN app_users u ON u.id = c.owner_user_id

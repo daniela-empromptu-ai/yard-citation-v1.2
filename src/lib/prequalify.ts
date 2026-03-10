@@ -369,15 +369,15 @@ export async function persistResults(
 
       // Only advance to ingested if content was actually saved
       await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', ingestion_status='complete', updated_at=$2
+        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
          WHERE campaign_id=$1 AND creator_id=$3`,
         [campaignId, now, tr.creatorId]
       )
     } else {
-      // No transcript available — mark with error but keep as discovered so scoring skips them
+      // No transcript available — keep as discovered so scoring skips them
       console.log(`[prequalify] ${tr.creatorName}: selected but no transcript (status: ${tr.status}), keeping as discovered`)
       await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET ingestion_status='no_content', ingestion_error=$2, updated_at=$3
+        `UPDATE ${t('campaign_creators')} SET notes=$2, updated_at=$3
          WHERE campaign_id=$1 AND creator_id=$4`,
         [campaignId, `Selected by AI but no transcript available (${tr.status})`, now, tr.creatorId]
       )
@@ -389,7 +389,7 @@ export async function persistResults(
   for (const ex of excluded) {
     const stage1Reason = `Pre-qualification: not selected (status: ${ex.status})`
     await dbQuery(
-      `UPDATE ${t('campaign_creators')} SET pipeline_stage='excluded', ingestion_error=$2, updated_at=$3
+      `UPDATE ${t('campaign_creators')} SET pipeline_stage='excluded', notes=$2, updated_at=$3
        WHERE campaign_id=$1 AND creator_id=$4`,
       [campaignId, stage1Reason, now, ex.creatorId]
     )
@@ -419,27 +419,26 @@ export async function runPrequalifyPipeline(
   userId: string,
   campaignContext: CampaignContext
 ): Promise<PrequalifyResult> {
-  // Load discovered creators with their YouTube platform accounts
+  // Load discovered creators (V2: creator IS the platform presence)
   const creatorsRes = await dbQuery<{
     cc_id: string
     creator_id: string
-    display_name: string
-    topics: string[]
-    platform_url: string | null
-    follower_count: number | null
+    name: string
+    platform: string
+    url: string | null
+    subscriber_count: number | null
   }>(
     `SELECT
        cc.id AS cc_id,
        cc.creator_id,
-       c.display_name,
-       c.topics,
-       cpa.url AS platform_url,
-       cpa.follower_count
+       c.name,
+       c.platform,
+       c.url,
+       c.subscriber_count
      FROM ${t('campaign_creators')} cc
      JOIN ${t('creators')} c ON c.id = cc.creator_id
-     LEFT JOIN ${t('creator_platform_accounts')} cpa ON cpa.creator_id = c.id AND cpa.platform = 'youtube'
      WHERE cc.campaign_id = $1 AND cc.pipeline_stage = 'discovered'
-     ORDER BY cpa.follower_count DESC NULLS LAST
+     ORDER BY c.subscriber_count DESC NULLS LAST
      LIMIT $2`,
     [campaignId, parseInt(process.env.PREQUALIFY_LIMIT || '100', 10)]
   )
@@ -448,13 +447,29 @@ export async function runPrequalifyPipeline(
     throw new Error('No discovered creators found for this campaign')
   }
 
+  // Load category names for each creator as "topics" for AI context
+  const creatorIds = creatorsRes.data.map(r => r.creator_id)
+  const catRes = await dbQuery<{ creator_id: string; category_name: string }>(
+    `SELECT cc2.creator_id, cat.name as category_name
+     FROM ${t('creator_categories')} cc2
+     JOIN ${t('categories')} cat ON cat.id = cc2.category_id
+     WHERE cc2.creator_id = ANY($1::uuid[])`,
+    [creatorIds]
+  )
+  const creatorTopics = new Map<string, string[]>()
+  for (const row of catRes.data) {
+    const arr = creatorTopics.get(row.creator_id) || []
+    arr.push(row.category_name)
+    creatorTopics.set(row.creator_id, arr)
+  }
+
   const creators: CreatorRow[] = creatorsRes.data.map(r => ({
     creator_id: r.creator_id,
-    creator_name: r.display_name,
+    creator_name: r.name,
     cc_id: r.cc_id,
-    topics: Array.isArray(r.topics) ? r.topics : [],
-    follower_count: r.follower_count,
-    platform_url: r.platform_url,
+    topics: creatorTopics.get(r.creator_id) || [],
+    follower_count: r.subscriber_count,
+    platform_url: r.platform === 'youtube' ? r.url : null,
   }))
 
   console.log(`[prequalify] Starting pipeline for ${creators.length} creators`)

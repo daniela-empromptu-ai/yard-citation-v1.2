@@ -4,13 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import ScorePill from '@/components/ui/ScorePill';
-import { CoverageTag, FlagBadge } from '@/components/ui/Badge';
+import { CoverageTag } from '@/components/ui/Badge';
 import { pipelineStageColor, stageLabel, formatDate, formatDateTime } from '@/lib/utils';
 import Drawer from '@/components/ui/Drawer';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import { RubricBars } from '@/components/ui/ScorePill';
 import { useRole } from '@/components/layout/Shell';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Helpers ───
 
@@ -38,14 +39,12 @@ function parseJsonArray(val: unknown): string[] {
 // ─── Types ───
 
 interface CampaignCreator {
-  id: string; creator_id: string; creator_name: string; primary_handle: string | null;
-  pipeline_stage: string; is_dormant: boolean; is_autodubbed_suspected: boolean;
-  competitor_affiliated: boolean; last_content_date: string | null;
-  creator_topics: string[]; languages: string[];
-  ingestion_status: string; ingestion_error: string | null; updated_at: string;
-  scoring_status: string; overall_score: number | null; evidence_coverage: string | null;
+  id: string; creator_id: string; creator_name: string; creator_platform: string;
+  creator_handle: string | null; source: string | null;
+  pipeline_stage: string; scoring_status: string;
+  overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
-  outreach_state: string;
+  updated_at: string;
 }
 
 interface Evaluation {
@@ -222,10 +221,11 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
   const [scoringId, setScoringId] = useState<string | null>(null);
   const [addUrl, setAddUrl] = useState('');
   const [addLoading, setAddLoading] = useState(false);
-  const [filterDormant, setFilterDormant] = useState(true);
-  const [filterAutodub, setFilterAutodub] = useState(true);
+  const [discovering, setDiscovering] = useState(false);
   const [showExcluded, setShowExcluded] = useState(false);
   const [stageFilter, setStageFilter] = useState('all');
+  const [creatorsPage, setCreatorsPage] = useState(1);
+  const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
   const { addToast } = useToast();
   const { userId } = useRole();
@@ -239,12 +239,15 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
   }, [isRunning, router]);
 
   const filteredCreators = (campaignCreators as CampaignCreator[]).filter(cc => {
-    if (filterDormant && cc.is_dormant) return false;
-    if (filterAutodub && cc.is_autodubbed_suspected) return false;
     if (!showExcluded && cc.pipeline_stage === 'excluded') return false;
     if (stageFilter !== 'all' && cc.pipeline_stage !== stageFilter) return false;
     return true;
   });
+  const creatorsTotalPages = Math.max(1, Math.ceil(filteredCreators.length / CREATORS_PAGE_SIZE));
+  const pagedCreators = filteredCreators.slice((creatorsPage - 1) * CREATORS_PAGE_SIZE, creatorsPage * CREATORS_PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setCreatorsPage(1); }, [showExcluded, stageFilter]);
 
   const loadEvaluation = async (cc: CampaignCreator) => {
     setSelectedCc(cc);
@@ -322,6 +325,28 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
     }
   };
 
+  const handleFindCreators = async () => {
+    setDiscovering(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast('success', `Found ${data.total_linked} creators (${data.db_matched} from DB, ${data.llm_suggested} from AI)`);
+        router.refresh();
+      } else {
+        addToast('error', data.error || 'Discovery failed');
+      }
+    } catch (e) {
+      addToast('error', (e as Error).message);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const stages = Array.from(new Set(campaignCreators.map(cc => cc.pipeline_stage)));
 
   return (
@@ -331,14 +356,6 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
 
       {/* Filter bar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <input type="checkbox" checked={filterDormant} onChange={e => setFilterDormant(e.target.checked)} className="rounded" />
-          <span className="text-gray-700">Exclude dormant</span>
-        </label>
-        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <input type="checkbox" checked={filterAutodub} onChange={e => setFilterAutodub(e.target.checked)} className="rounded" />
-          <span className="text-gray-700">Exclude autodubbed</span>
-        </label>
         <label className="flex items-center gap-1.5 text-xs cursor-pointer">
           <input type="checkbox" checked={showExcluded} onChange={e => setShowExcluded(e.target.checked)} className="rounded" />
           <span className="text-gray-700">Show excluded</span>
@@ -368,40 +385,43 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
 
       {/* Manual actions */}
       <div className="flex gap-2">
+        <button onClick={handleFindCreators} disabled={discovering} className="btn-primary text-xs">
+          {discovering ? 'Discovering...' : 'Find Creators'}
+        </button>
         <button onClick={handleReRunPipeline} className="btn-secondary text-xs">
           Re-run Pipeline
         </button>
       </div>
 
       {/* Creators table */}
-      {filteredCreators.length === 0 ? (
+      {pagedCreators.length === 0 ? (
         <div className="card">
           <EmptyState
             icon=""
             title={isRunning ? 'Pipeline is running…' : 'No creators yet'}
-            description={isRunning ? 'Creators will appear as the pipeline discovers and scores them.' : 'Approve search terms to start the discovery pipeline.'}
+            description={isRunning ? 'Creators will appear as the pipeline discovers and scores them.' : 'Click "Find Creators" to discover creators from the database and AI, or add one manually by URL.'}
           />
         </div>
       ) : (
         <div className="card overflow-hidden">
           <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-600">{filteredCreators.length} creators</span>
+            <span className="text-xs font-medium text-gray-600">{filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
               <thead>
                 <tr>
                   <th>Creator</th>
+                  <th>Platform</th>
                   <th>Pipeline Stage</th>
                   <th>Score</th>
                   <th>Evidence</th>
                   <th>NMR</th>
-                  <th>Flags</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredCreators.map(cc => (
+                {pagedCreators.map(cc => (
                   <tr key={cc.id}>
                     <td>
                       <button
@@ -410,12 +430,12 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                       >
                         {cc.creator_name}
                       </button>
-                      {cc.primary_handle && (
-                        <div className="text-xs text-gray-400 flex items-center gap-1">
-                          <svg viewBox="0 0 24 24" className="w-3 h-3 text-red-500 flex-shrink-0" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81z"/><path d="m9.55 15.5 6.2-3.5-6.2-3.5v7z" fill="white"/></svg>
-                          {cc.primary_handle}
-                        </div>
+                      {cc.creator_handle && (
+                        <div className="text-xs text-gray-400">{cc.creator_handle}</div>
                       )}
+                    </td>
+                    <td>
+                      <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-xs">{cc.creator_platform}</span>
                     </td>
                     <td>
                       <span className={`badge text-xs ${pipelineStageColor(cc.pipeline_stage)}`}>
@@ -435,13 +455,6 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                     </td>
                     <td>
                       <div className="flex gap-1">
-                        {cc.is_dormant && <FlagBadge flag="ghosted" />}
-                        {cc.is_autodubbed_suspected && <span className="badge bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">autodub?</span>}
-                        {cc.competitor_affiliated && <span className="badge bg-red-50 text-red-700 border-red-200 text-xs">competitor</span>}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="flex gap-1">
                         {cc.overall_score !== null && (
                           <button onClick={() => loadEvaluation(cc)} className="btn-secondary text-xs py-1 px-2">
                             View
@@ -454,6 +467,20 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {creatorsTotalPages > 1 && (
+            <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 bg-gray-50">
+              <span className="text-xs text-gray-500">Page {creatorsPage} of {creatorsTotalPages}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 text-gray-500 hover:bg-gray-200 rounded disabled:opacity-30">
+                  <ChevronLeft size={14} />
+                </button>
+                <button onClick={() => setCreatorsPage(p => Math.min(creatorsTotalPages, p + 1))} disabled={creatorsPage >= creatorsTotalPages} className="p-1 text-gray-500 hover:bg-gray-200 rounded disabled:opacity-30">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

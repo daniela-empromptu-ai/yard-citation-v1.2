@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { StageBadge } from '@/components/ui/Badge'
-import { Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -12,13 +12,20 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
   const router = useRouter()
 
   const load = () => {
     setLoading(true)
+    setError('')
     fetch('/api/campaigns')
       .then(r => r.json())
-      .then(d => { setCampaigns(Array.isArray(d) ? d : []); setLoading(false) })
+      .then(d => {
+        if (d.error) throw new Error(d.error)
+        setCampaigns(Array.isArray(d) ? d : [])
+        setLoading(false)
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }
   useEffect(() => { load() }, [])
@@ -27,6 +34,11 @@ export default function CampaignsPage() {
     !search || String(c.name).toLowerCase().includes(search.toLowerCase()) ||
     String(c.client_name).toLowerCase().includes(search.toLowerCase())
   )
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  // Reset page when search changes
+  useEffect(() => { setPage(1) }, [search])
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -59,12 +71,15 @@ export default function CampaignsPage() {
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 text-red-600 rounded-lg border border-red-200 text-sm">Error: {error}</div>
+        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+          <p className="text-red-600 text-sm">Error: {error}</p>
+          <button onClick={load} className="mt-2 text-xs text-red-700 underline hover:no-underline">Retry</button>
+        </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && (<>
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {filtered.length === 0 ? (
+          {paged.length === 0 ? (
             <EmptyState
               icon="\ud83d\udce2"
               title="No campaigns found"
@@ -81,20 +96,20 @@ export default function CampaignsPage() {
                   <th className="text-left">GEO Targets</th>
                   <th className="text-left">Owner</th>
                   <th className="text-left">Creators</th>
-                  <th className="text-left">Outreach-Ready</th>
+                  <th className="text-left">Scored</th>
                   <th className="text-left">Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(c => (
+                {paged.map(c => (
                   <tr
                     key={String(c.id)}
                     className="cursor-pointer hover:bg-blue-50"
-                    onClick={() => router.push(`/campaigns/${c.id}/overview`)}
+                    onClick={() => router.push(`/campaigns/${c.id}/setup`)}
                   >
                     <td>
                       <Link
-                        href={`/campaigns/${c.id}/overview`}
+                        href={`/campaigns/${c.id}/setup`}
                         className="font-semibold text-slate-800 hover:text-blue-600"
                         onClick={e => e.stopPropagation()}
                       >
@@ -109,8 +124,8 @@ export default function CampaignsPage() {
                     <td className="text-slate-600 text-sm">{String(c.owner_name)}</td>
                     <td className="text-slate-700 font-medium">{String(c.creator_count || 0)}</td>
                     <td>
-                      <span className={`text-sm font-medium ${Number(c.outreach_ready_count) > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                        {String(c.outreach_ready_count || 0)}
+                      <span className={`text-sm font-medium ${Number(c.scored_count) > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                        {String(c.scored_count || 0)}
                       </span>
                     </td>
                     <td className="text-slate-400 text-xs">
@@ -122,7 +137,22 @@ export default function CampaignsPage() {
             </table>
           )}
         </div>
-      )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
+            <span>Page {page} of {totalPages} ({filtered.length} campaigns)</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-30">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="p-1 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-30">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </>)}
     </div>
   )
 }

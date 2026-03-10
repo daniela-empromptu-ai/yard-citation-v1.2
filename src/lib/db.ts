@@ -29,7 +29,11 @@ export async function dbQuery<T = Record<string, unknown>>(
     const text = await res.text()
     throw new Error(`DB query failed (${res.status}): ${text}`)
   }
-  return res.json()
+  const result = await res.json() as QueryResult<T>
+  if (result.success === false) {
+    throw new Error(`DB query error: ${result.error || result.message || 'unknown'}`)
+  }
+  return result
 }
 
 export async function dbSchema(schema: object): Promise<{ ok: boolean; message: string }> {

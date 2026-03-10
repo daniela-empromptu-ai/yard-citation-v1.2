@@ -4,18 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import clsx from 'clsx'
 import {
-  LayoutDashboard, Megaphone, Users, Send, MessageSquare,
-  BarChart3, Settings, ChevronRight, Zap
+  LayoutDashboard, Megaphone, Users, ChevronRight, Zap
 } from 'lucide-react'
 
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/creators', label: 'Creators', icon: Users },
-  { href: '/outreach', label: 'Outreach', icon: Send },
-  { href: '/reddit', label: 'Reddit Monitor', icon: MessageSquare },
-  { href: '/metrics', label: 'Metrics', icon: BarChart3 },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export function Sidebar() {

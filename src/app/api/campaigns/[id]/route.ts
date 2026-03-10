@@ -3,22 +3,21 @@ import { dbQuery } from '@/lib/db'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const [campaign, personas, topics, searchTerms, creators, activity] = await Promise.all([
+    const [campaign, topics, searchTerms, creators, activity] = await Promise.all([
       dbQuery(
-        `SELECT c.*, cl.name as client_name, u.name as owner_name, u2.name as collaborator_name
+        `SELECT c.*, cl.name as client_name, u.name as owner_name
          FROM campaigns c
          JOIN clients cl ON cl.id = c.client_id
          JOIN app_users u ON u.id = c.owner_user_id
-         LEFT JOIN app_users u2 ON u2.id = c.collaborator_user_id
          WHERE c.id = $1`,
         [params.id]
       ),
-      dbQuery(`SELECT * FROM campaign_personas WHERE campaign_id = $1`, [params.id]),
       dbQuery(`SELECT * FROM campaign_topics WHERE campaign_id = $1 ORDER BY order_index`, [params.id]),
       dbQuery(`SELECT *, u.name as approved_by_name FROM campaign_search_terms cst LEFT JOIN app_users u ON u.id = cst.approved_by_user_id WHERE cst.campaign_id = $1 ORDER BY cst.order_index`, [params.id]),
       dbQuery(
-        `SELECT cc.*, cr.display_name, cr.primary_handle, cr.is_dormant, cr.is_autodubbed_suspected, cr.competitor_affiliated,
-           ce.overall_score, ce.evidence_coverage, ce.needs_manual_review,
+        `SELECT cc.id, cc.campaign_id, cc.creator_id, cc.source, cc.pipeline_stage, cc.scoring_status, cc.created_at, cc.updated_at,
+           cr.name as creator_name, cr.platform as creator_platform, cr.handle as creator_handle,
+           ce.overall_score, ce.evidence_coverage, ce.needs_manual_review, ce.evaluated_at,
            (SELECT COUNT(*)::int FROM content_items ci WHERE ci.creator_id = cr.id AND ci.campaign_id = $1) as content_item_count
          FROM campaign_creators cc
          JOIN creators cr ON cr.id = cc.creator_id
@@ -38,7 +37,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     return NextResponse.json({
       campaign: campaign.data[0],
-      personas: personas.data,
       topics: topics.data,
       searchTerms: searchTerms.data,
       creators: creators.data,

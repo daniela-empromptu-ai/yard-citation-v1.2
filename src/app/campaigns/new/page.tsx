@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronLeft, Plus, X, Sparkles, Loader2 } from 'lucide-react'
 import { showToast } from '@/components/ui/Toaster'
 
-const STEPS = ['Basics', 'Creative Brief', 'Personas & Topics', 'Prompt Gaps & Citations']
+const STEPS = ['Basics', 'Creative Brief', 'Personas & Topics']
 
 export default function NewCampaignPage() {
   const router = useRouter()
@@ -21,6 +21,7 @@ export default function NewCampaignPage() {
     language: 'English',
     product_category: '',
     creative_brief: '',
+    gumshoe_notes: '',
     personas: [] as string[],
     topics: [] as string[],
     newGeo: '',
@@ -65,11 +66,9 @@ export default function NewCampaignPage() {
       body: JSON.stringify({ name: form.newClientName }),
     })
     if (!res.ok) return
-    // Re-fetch client list to ensure correct data shape
     const listRes = await fetch(`/api/clients?_t=${Date.now()}`)
     const allClients = await listRes.json()
     setClients(allClients)
-    // Auto-select the newly created client
     const created = allClients.find((c: Record<string, string>) => c.name === form.newClientName.trim())
     if (created) update('client_id', created.id)
     update('newClientName', '')
@@ -110,13 +109,14 @@ export default function NewCampaignPage() {
           language: form.language,
           product_category: form.product_category,
           creative_brief: form.creative_brief,
+          gumshoe_notes: form.gumshoe_notes || null,
           personas: form.personas,
           topics: form.topics,
         }),
       })
       const campaign = await res.json()
       if (campaign.campaign_id) {
-        showToast('success', 'Campaign created — generating search terms…')
+        showToast('success', 'Campaign created — generating search terms...')
         router.push(`/campaigns/${campaign.campaign_id}/search-terms`)
       } else {
         showToast('error', `Failed to create campaign: ${campaign.error || 'Unknown error'}`)
@@ -131,7 +131,7 @@ export default function NewCampaignPage() {
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-800">New Campaign</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Set up a creator outreach campaign</p>
+        <p className="text-sm text-slate-500 mt-0.5">Set up a creator discovery campaign</p>
       </div>
 
       {/* Progress */}
@@ -139,7 +139,7 @@ export default function NewCampaignPage() {
         {STEPS.map((s, i) => (
           <div key={s} className="flex items-center">
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : i < step ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
-              <span>{i < step ? '✓' : i + 1}</span>
+              <span>{i < step ? '\u2713' : i + 1}</span>
               <span>{s}</span>
             </div>
             {i < STEPS.length - 1 && <ChevronRight size={14} className="text-slate-300 mx-1" />}
@@ -158,11 +158,11 @@ export default function NewCampaignPage() {
                 onChange={e => update('client_id', e.target.value)}
                 className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select client…</option>
+                <option value="">Select client...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input
-                placeholder="Or create new…"
+                placeholder="Or create new..."
                 value={form.newClientName}
                 onChange={e => update('newClientName', e.target.value)}
                 className="w-40 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -228,9 +228,9 @@ export default function NewCampaignPage() {
         </div>
       )}
 
-      {/* STEP 1: Brief */}
+      {/* STEP 1: Brief + Gumshoe */}
       {step === 1 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Creative Brief * <span className="text-slate-400 font-normal">(Markdown supported)</span></label>
             <p className="text-xs text-slate-400 mb-2">This brief provides context for topic extraction and creator fit.</p>
@@ -238,8 +238,19 @@ export default function NewCampaignPage() {
               value={form.creative_brief}
               onChange={e => update('creative_brief', e.target.value)}
               placeholder="# Campaign Brief&#10;&#10;## Key message&#10;..."
-              rows={16}
+              rows={14}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Gumshoe Notes <span className="text-slate-400 font-normal">(optional)</span></label>
+            <p className="text-xs text-slate-400 mb-2">Paste any Gumshoe citation data or context that should inform discovery and scoring.</p>
+            <textarea
+              value={form.gumshoe_notes}
+              onChange={e => update('gumshoe_notes', e.target.value)}
+              placeholder="Paste Gumshoe report excerpts, citation data, or relevant notes..."
+              rows={6}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
         </div>
@@ -302,7 +313,6 @@ export default function NewCampaignPage() {
                 </span>
               ))}
             </div>
-            {/* AI Suggestions */}
             {suggestedTopics.length > 0 && (
               <div className="border border-purple-200 rounded-lg p-3 bg-purple-50">
                 <p className="text-xs font-semibold text-purple-700 mb-2">AI Suggestions (click to add):</p>
@@ -325,17 +335,6 @@ export default function NewCampaignPage() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: Prompt Gaps */}
-      {step === 3 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <p className="text-sm text-slate-500 mb-4">Prompt gaps and citations can be added after campaign creation in the Brief & Inputs tab.</p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-            <strong>Ready to create your campaign?</strong> Click "Create Campaign" to proceed.
-            You can add prompt gaps, citations, and search terms in the campaign workspace.
           </div>
         </div>
       )}

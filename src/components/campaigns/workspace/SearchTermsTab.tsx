@@ -13,16 +13,15 @@ interface SearchTerm {
 }
 
 interface Props {
-  campaign: { id: string; creative_brief: string; product_category: string; stage: string };
+  campaign: { id: string; creative_brief: string; product_category: string; stage: string; personas: string[] };
   topics: { topic: string; approved: boolean }[];
-  personas: { persona_name: string }[];
   searchTerms: SearchTerm[];
   onPipelineStarted?: () => void;
   onTermsUpdated?: (terms: SearchTerm[]) => void;
   [key: string]: unknown;
 }
 
-export default function SearchTermsTab({ campaign, topics, personas, searchTerms: initialTerms, onPipelineStarted, onTermsUpdated }: Props) {
+export default function SearchTermsTab({ campaign, topics, searchTerms: initialTerms, onPipelineStarted, onTermsUpdated }: Props) {
   const [terms, setTerms] = useState<SearchTerm[]>(initialTerms as SearchTerm[]);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -79,7 +78,7 @@ export default function SearchTermsTab({ campaign, topics, personas, searchTerms
           campaign_id: campaign.id,
           brief: campaign.creative_brief,
           topics: (topics as { topic: string; approved: boolean }[]).filter(t => t.approved).map(t => t.topic),
-          personas: (personas as { persona_name: string }[]).map(p => p.persona_name),
+          personas: campaign.personas || [],
           product_category: campaign.product_category,
           user_id: userId,
         }),
