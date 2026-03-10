@@ -30,7 +30,6 @@ interface Creator {
   contact_method: string | null
   discovered_via: string | null
   category_names: string
-  best_score: number | null
   created_at: string
   updated_at: string
 }
@@ -286,7 +285,6 @@ export default function CreatorsPage() {
                   <th>Subscribers</th>
                   <th>Relationship</th>
                   <th>Flags</th>
-                  <th>Score</th>
                   <th>Notes</th>
                   <th></th>
                 </tr>
@@ -319,13 +317,6 @@ export default function CreatorsPage() {
                         {c.brand_owned && <span className="text-[10px] px-1.5 py-0 rounded bg-purple-100 text-purple-700">brand</span>}
                         {c.excluded && <span className="text-[10px] px-1.5 py-0 rounded bg-red-100 text-red-700">excluded</span>}
                       </div>
-                    </td>
-                    <td className="text-xs font-medium">
-                      {c.best_score != null ? (
-                        <span className={c.best_score >= 80 ? 'text-green-700' : c.best_score >= 65 ? 'text-amber-700' : 'text-red-700'}>
-                          {c.best_score}
-                        </span>
-                      ) : '\u2014'}
                     </td>
                     <td className="text-[10px] text-slate-400 max-w-[120px] truncate">{c.notes || ''}</td>
                     <td>

@@ -43,9 +43,15 @@ export async function initSchema(): Promise<void> {
     'Kubernetes & Containers',
   ]
   for (const cat of categories) {
-    await dbQuery(
-      `INSERT INTO categories (name, created_at) VALUES ($1, now()) ON CONFLICT (name, parent_id) DO NOTHING`,
+    const exists = await dbQuery<{ id: string }>(
+      `SELECT id FROM categories WHERE name = $1 AND parent_id IS NULL LIMIT 1`,
       [cat]
     )
+    if (exists.data.length === 0) {
+      await dbQuery(
+        `INSERT INTO categories (name, created_at) VALUES ($1, now())`,
+        [cat]
+      )
+    }
   }
 }

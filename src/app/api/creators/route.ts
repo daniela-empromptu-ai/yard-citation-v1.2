@@ -54,13 +54,7 @@ export async function GET(req: NextRequest) {
           FROM creator_categories cc2
           JOIN categories cat ON cat.id = cc2.category_id
           WHERE cc2.creator_id = c.id
-        ), '') as category_names,
-        (
-          SELECT MAX(ce.overall_score)
-          FROM creator_evaluations ce
-          JOIN campaign_creators ccr ON ccr.id = ce.campaign_creator_id
-          WHERE ccr.creator_id = c.id
-        ) as best_score
+        ), '') as category_names
       FROM creators c
       ${where}
       ORDER BY c.updated_at DESC
@@ -90,9 +84,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Platform is required' }, { status: 400 })
     }
 
+    // display_name is a V1 column with NOT NULL constraint that can't be dropped via builder API
     await dbQuery(
-      `INSERT INTO creators (name, platform, handle, url, platform_uid, subscriber_count, content_language, relationship_status, notes, discovered_via, email, contact_method, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now())`,
+      `INSERT INTO creators (name, display_name, platform, handle, url, platform_uid, subscriber_count, content_language, relationship_status, notes, discovered_via, email, contact_method, created_at, updated_at)
+       VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now())`,
       [
         body.name.trim(),
         body.platform.trim(),

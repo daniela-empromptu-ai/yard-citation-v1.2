@@ -158,8 +158,8 @@ export async function discoverByLLM(
       // Insert new creator
       const creatorId = uuidv4()
       await dbQuery(
-        `INSERT INTO ${t('creators')} (id, name, platform, handle, url, discovered_via, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'campaign_discovery', $6, $6)
+        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, created_at, updated_at)
+         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', $6, $6)
          ON CONFLICT DO NOTHING`,
         [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
       )

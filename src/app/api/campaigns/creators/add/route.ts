@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
       : 'blog';
 
     await dbQuery(
-      `INSERT INTO ${t('creators')} (id, name, platform, handle, url, discovered_via, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'manual', $6, $6)
+      `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, created_at, updated_at)
+       VALUES ($1, $2, $2, $3, $4, $5, 'manual', $6, $6)
        ON CONFLICT DO NOTHING`,
       [finalCreatorId, handle || 'Unknown Creator', platform, handle || null, creator_url, now]
     );
