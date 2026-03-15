@@ -417,7 +417,7 @@ Return ONLY a JSON array, no markdown:
         `Brief: ${params.brief}`,
         `Topics: ${params.topics.join(', ')}`,
         `Personas: ${params.personas.join(', ')}`,
-        params.gumshoeNotes ? `Gumshoe notes: ${params.gumshoeNotes}` : '',
+        params.gumshoeNotes ? `Gumshoe report: ${params.gumshoeNotes}` : '',
       ].filter(Boolean).join('\n'),
       seed_creators: seedList,
       count: String(n),

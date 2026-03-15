@@ -1,10 +1,12 @@
 /**
- * Pre-qualification pipeline: narrow 100 discovered creators to 10 via YouTube transcripts + AI scoring.
+ * Pre-qualification pipeline: narrow 100 discovered creators to 10 via content + AI scoring.
+ *
+ * Supports YouTube (transcripts), Medium (RSS articles), and Dev.to (API articles).
  *
  * Flow:
- * 1. Resolve YouTube channel IDs
- * 2. Get latest video per channel (RSS — free)
- * 3. Fetch transcript per video (TimedText — free)
+ * 1. Split creators by platform
+ * 2. YouTube: resolve channels → latest video → transcript
+ * 3. Medium/Dev.to: fetch recent articles via RSS/API
  * 4. AI Stage 1: Batch-score 100 (Haiku, 10 batches of 10)
  * 5. AI Stage 2: Rank top 20 → pick 10 (Sonnet)
  * 6. Persist results to DB
@@ -18,6 +20,7 @@ import {
   buildTranscriptFromTimedText,
   CreatorTranscriptResult,
 } from '@/lib/youtube'
+import { fetchCreatorArticles, CreatorArticleResult } from '@/lib/ingest-articles'
 
 // ─── Types ───
 
@@ -30,6 +33,7 @@ interface CreatorRow {
   creator_id: string
   creator_name: string
   cc_id: string // campaign_creators.id
+  platform: string
   topics: string[]
   follower_count: number | null
   platform_url: string | null
@@ -58,6 +62,7 @@ interface PrequalifyResult {
   total_discovered: number
   youtube_found: number
   transcripts_fetched: number
+  articles_fetched: number
   selected_count: number
   selected_creators: Stage2Selection[]
 }
@@ -159,7 +164,7 @@ export async function aiNarrowCreators(
   await setupPrompt(
     'prequalify_stage1',
     ['campaign_brief', 'campaign_topics', 'creators_block'],
-    `You are screening YouTube creators for a sponsored content campaign.
+    `You are screening content creators for a sponsored content campaign. Creators may be from YouTube, Medium, Dev.to, or other platforms.
 
 CAMPAIGN: {campaign_brief}
 TOPICS: {campaign_topics}
@@ -168,8 +173,8 @@ CREATORS (score each 0-100 on campaign fit):
 {creators_block}
 
 Scoring rules:
-- Creators WITH transcripts: score based on content relevance, topic alignment, and quality signals
-- Creators WITHOUT transcripts: score based on topic match and follower count only, cap score at 20
+- Creators WITH content (transcripts or articles): score based on content relevance, topic alignment, and quality signals
+- Creators WITHOUT content: score based on topic match and follower count only, cap score at 20
 
 Return ONLY a JSON array, no other text:
 [{"creator_id":"...","score":85,"reason":"one sentence"}]`
@@ -242,10 +247,10 @@ ${transcriptText}
 CAMPAIGN: {campaign_brief}
 TOPICS: {campaign_topics}
 
-CANDIDATES ({candidate_count}, with transcripts):
+CANDIDATES ({candidate_count}, with content samples):
 {candidates_block}
 
-Select exactly 10 (or fewer if less than 10 candidates have useful transcripts). Return ONLY JSON, no other text:
+Select exactly 10 (or fewer if less than 10 candidates have useful content). Return ONLY JSON, no other text:
 {
   "selected": [{"creator_id":"...","rank":1,"score":95,"rationale":"...","key_quote":"..."}],
   "rejected": [{"creator_id":"...","reason":"..."}]
@@ -331,18 +336,64 @@ export async function persistResults(
   selected: Stage2Selection[],
   allTranscripts: CreatorTranscriptResult[],
   campaignId: string,
-  userId: string
+  userId: string,
+  articleResults?: CreatorArticleResult[]
 ): Promise<void> {
   const now = new Date().toISOString()
   const selectedIds = new Set(selected.map(s => s.creator_id))
 
-  // Selected creators: insert transcript + advance pipeline
+  // Build lookup for article results
+  const articleMap = new Map<string, CreatorArticleResult>()
+  for (const ar of articleResults || []) {
+    articleMap.set(ar.creatorId, ar)
+  }
+
+  // Selected creators: insert content + advance pipeline
   for (const sel of selected) {
     const tr = allTranscripts.find(t => t.creatorId === sel.creator_id)
     if (!tr) continue
 
-    // Insert transcript as content_item if we have one
-    if (tr.transcript && tr.video) {
+    const ar = articleMap.get(sel.creator_id)
+
+    if (ar && ar.status === 'success' && ar.articles.length > 0) {
+      // ── Article-based creator (Medium/Dev.to) ──
+      for (const article of ar.articles) {
+        const ingestionMethod = ar.platform === 'medium' ? 'medium_rss' : 'devto_api'
+        const contentType = ar.platform === 'medium' ? 'medium_article' : 'devto_article'
+        await dbQuery(
+          `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9, $10::jsonb, $11, 'complete', $12, $12)
+           ON CONFLICT DO NOTHING`,
+          [
+            ar.creatorId,
+            campaignId,
+            ar.platform,
+            contentType,
+            article.title,
+            article.url,
+            article.publishedAt,
+            article.text,
+            article.wordCount,
+            JSON.stringify({
+              tags: article.tags,
+              prequalify_rank: sel.rank,
+              prequalify_score: sel.score,
+              prequalify_rationale: sel.rationale,
+              key_quote: sel.key_quote,
+            }),
+            ingestionMethod,
+            now,
+          ]
+        )
+      }
+
+      await dbQuery(
+        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
+         WHERE campaign_id=$1 AND creator_id=$3`,
+        [campaignId, now, ar.creatorId]
+      )
+    } else if (tr.transcript && tr.video) {
+      // ── YouTube creator ──
       await dbQuery(
         `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
          VALUES ($1, $2, 'youtube', 'youtube_video', $3, $4, $5, now(), $6, $7, $8, $9::jsonb, 'prequalification', 'complete', $10, $10)
@@ -367,19 +418,18 @@ export async function persistResults(
         ]
       )
 
-      // Only advance to ingested if content was actually saved
       await dbQuery(
         `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
          WHERE campaign_id=$1 AND creator_id=$3`,
         [campaignId, now, tr.creatorId]
       )
     } else {
-      // No transcript available — keep as discovered so scoring skips them
-      console.log(`[prequalify] ${tr.creatorName}: selected but no transcript (status: ${tr.status}), keeping as discovered`)
+      // No content available — keep as discovered so scoring skips them
+      console.log(`[prequalify] ${tr.creatorName}: selected but no content (status: ${tr.status}), keeping as discovered`)
       await dbQuery(
         `UPDATE ${t('campaign_creators')} SET notes=$2, updated_at=$3
          WHERE campaign_id=$1 AND creator_id=$4`,
-        [campaignId, `Selected by AI but no transcript available (${tr.status})`, now, tr.creatorId]
+        [campaignId, `Selected by AI but no content available (${tr.status})`, now, tr.creatorId]
       )
     }
   }
@@ -396,6 +446,7 @@ export async function persistResults(
   }
 
   // Log activity
+  const articlesFetched = (articleResults || []).filter(a => a.status === 'success').length
   await dbQuery(
     `INSERT INTO ${t('activity_log')} (campaign_id, actor_user_id, event_type, event_data_json, created_at)
      VALUES ($1, $2, 'prequalification_completed', $3::jsonb, now())`,
@@ -407,6 +458,7 @@ export async function persistResults(
         selected: selected.length,
         excluded: excluded.length,
         transcripts_fetched: allTranscripts.filter(t => t.status === 'success').length,
+        articles_fetched: articlesFetched,
       }),
     ]
   )
@@ -463,42 +515,113 @@ export async function runPrequalifyPipeline(
     creatorTopics.set(row.creator_id, arr)
   }
 
+  const ARTICLE_PLATFORMS = new Set(['medium', 'devto'])
+
   const creators: CreatorRow[] = creatorsRes.data.map(r => ({
     creator_id: r.creator_id,
     creator_name: r.name,
     cc_id: r.cc_id,
+    platform: r.platform,
     topics: creatorTopics.get(r.creator_id) || [],
     follower_count: r.subscriber_count,
-    platform_url: r.platform === 'youtube' ? r.url : null,
+    platform_url: (r.platform === 'youtube' || ARTICLE_PLATFORMS.has(r.platform)) ? r.url : null,
   }))
 
-  console.log(`[prequalify] Starting pipeline for ${creators.length} creators`)
+  // Split by platform type
+  const youtubeCreators = creators.filter(c => c.platform === 'youtube')
+  const articleCreators = creators.filter(c => ARTICLE_PLATFORMS.has(c.platform))
+  const otherCreators = creators.filter(c => c.platform !== 'youtube' && !ARTICLE_PLATFORMS.has(c.platform))
 
-  // Step 1-3: Fetch transcripts
-  if (!isYouTubeConfigured()) {
-    throw new Error('YouTube API key not configured. Set YOUTUBE_API_KEY in .env.local')
+  console.log(`[prequalify] Starting pipeline for ${creators.length} creators (${youtubeCreators.length} YouTube, ${articleCreators.length} article-based, ${otherCreators.length} other)`)
+
+  // ── Step 1: Fetch YouTube transcripts ──
+  let youtubeResults: CreatorTranscriptResult[] = []
+  if (youtubeCreators.length > 0 && isYouTubeConfigured()) {
+    youtubeResults = await fetchCreatorTranscripts(youtubeCreators)
+  } else if (youtubeCreators.length > 0) {
+    console.log('[prequalify] YouTube API key not configured, skipping YouTube creators')
+    youtubeResults = youtubeCreators.map(c => ({
+      creatorId: c.creator_id,
+      creatorName: c.creator_name,
+      status: 'no_youtube' as const,
+      followerCount: c.follower_count ?? undefined,
+      topics: c.topics,
+    }))
   }
 
-  const transcriptResults = await fetchCreatorTranscripts(creators)
+  // ── Step 2: Fetch Medium/Dev.to articles ──
+  let articleResults: CreatorArticleResult[] = []
+  if (articleCreators.length > 0) {
+    articleResults = await fetchCreatorArticles(
+      articleCreators.map(c => ({
+        creator_id: c.creator_id,
+        creator_name: c.creator_name,
+        platform: c.platform,
+        platform_url: c.platform_url,
+        follower_count: c.follower_count,
+        topics: c.topics,
+      }))
+    )
+  }
 
-  const youtubeFound = transcriptResults.filter(r => r.status !== 'no_youtube').length
-  const transcriptsFetched = transcriptResults.filter(r => r.status === 'success').length
+  // ── Step 3: Convert article results → CreatorTranscriptResult for unified AI scoring ──
+  const articleAsTranscript: CreatorTranscriptResult[] = articleResults.map(ar => ({
+    creatorId: ar.creatorId,
+    creatorName: ar.creatorName,
+    status: ar.status === 'success' ? 'success' as const : 'no_transcript' as const,
+    followerCount: ar.followerCount,
+    topics: ar.topics,
+    // Reuse transcript field to hold article text for AI scoring
+    transcript: ar.status === 'success' ? {
+      videoId: '', // not applicable
+      language: 'en',
+      segments: [],
+      fullText: ar.combinedText,
+    } : undefined,
+    // Use first article as "video" equivalent for display
+    video: ar.articles.length > 0 ? {
+      videoId: '',
+      title: ar.articles[0].title,
+      publishedAt: ar.articles[0].publishedAt,
+      url: ar.articles[0].url,
+    } : undefined,
+  }))
 
-  console.log(`[prequalify] YouTube found: ${youtubeFound}, Transcripts: ${transcriptsFetched}`)
+  // Other platform creators: no content available
+  const otherResults: CreatorTranscriptResult[] = otherCreators.map(c => ({
+    creatorId: c.creator_id,
+    creatorName: c.creator_name,
+    status: 'no_youtube' as const,
+    followerCount: c.follower_count ?? undefined,
+    topics: c.topics,
+  }))
 
-  // Step 4-5: AI scoring via builder API
+  // Merge all results
+  const allResults: CreatorTranscriptResult[] = [...youtubeResults, ...articleAsTranscript, ...otherResults]
+
+  const youtubeFound = youtubeResults.filter(r => r.status !== 'no_youtube').length
+  const transcriptsFetched = youtubeResults.filter(r => r.status === 'success').length
+  const articlesFetched = articleResults.filter(r => r.status === 'success').length
+
+  console.log(`[prequalify] YouTube found: ${youtubeFound}, Transcripts: ${transcriptsFetched}, Articles: ${articlesFetched}`)
+
+  if (allResults.length === 0) {
+    throw new Error('No creators to score')
+  }
+
+  // ── Step 4-5: AI scoring via builder API ──
   let selected: Stage2Selection[]
 
   try {
-    const aiResult = await aiNarrowCreators(transcriptResults, campaignContext)
+    const aiResult = await aiNarrowCreators(allResults, campaignContext)
     selected = aiResult.selected
   } catch (e) {
     console.error('[prequalify] AI scoring failed, using fallback:', e)
-    selected = fallbackSelectTop10(transcriptResults, campaignContext.topics)
+    selected = fallbackSelectTop10(allResults, campaignContext.topics)
   }
 
-  // Step 6-7: Persist
-  await persistResults(selected, transcriptResults, campaignId, userId)
+  // ── Step 6-7: Persist ──
+  await persistResults(selected, allResults, campaignId, userId, articleResults)
 
   console.log(`[prequalify] Pipeline complete. Selected ${selected.length} creators.`)
 
@@ -506,6 +629,7 @@ export async function runPrequalifyPipeline(
     total_discovered: creators.length,
     youtube_found: youtubeFound,
     transcripts_fetched: transcriptsFetched,
+    articles_fetched: articlesFetched,
     selected_count: selected.length,
     selected_creators: selected,
   }

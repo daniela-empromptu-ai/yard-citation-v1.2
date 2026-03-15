@@ -45,6 +45,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
   // Step 4
   const [gaps, setGaps] = useState<{ prompt_text: string; priority: string; persona: string; status: string }[]>([]);
   const [gapInput, setGapInput] = useState('');
+  const [gumshoeUrl, setGumshoeUrl] = useState('');
 
   const [createdId, setCreatedId] = useState<string | null>(null);
 
@@ -83,6 +84,7 @@ export default function NewCampaignWizard({ clients, users }: Props) {
           name: campaignName, geo_targets: geoTargets, language, product_category: productCategory,
           creative_brief: brief, owner_user_id: userId,
           personas, topics: [...topics, ...aiTopics.filter(t => t.approved).map(t => t.topic)],
+          gumshoe_notes: gumshoeUrl || null,
           prompt_gaps: gaps,
         }),
       });
@@ -336,6 +338,18 @@ export default function NewCampaignWizard({ clients, users }: Props) {
                 setGapInput('');
               }
             }}>Add Gap</button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Gumshoe Report URL <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              type="url"
+              className="input-field"
+              value={gumshoeUrl}
+              onChange={e => setGumshoeUrl(e.target.value)}
+              placeholder="https://gumshoe.example.com/report/..."
+            />
+            <p className="text-xs text-gray-400 mt-1">Paste a link to a Gumshoe report for additional discovery context.</p>
           </div>
 
           {gaps.length > 0 ? (

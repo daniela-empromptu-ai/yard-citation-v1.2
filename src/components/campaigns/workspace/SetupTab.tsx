@@ -156,10 +156,21 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
           {campaign.gumshoe_notes && (
             <div className="card overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Gumshoe Notes</h3>
+                <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Gumshoe Report</h3>
               </div>
-              <div className="p-4 max-h-48 overflow-y-auto">
-                <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">{campaign.gumshoe_notes}</pre>
+              <div className="p-4">
+                {campaign.gumshoe_notes.startsWith('http') ? (
+                  <a
+                    href={campaign.gumshoe_notes}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-accent hover:underline break-all"
+                  >
+                    {campaign.gumshoe_notes}
+                  </a>
+                ) : (
+                  <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">{campaign.gumshoe_notes}</pre>
+                )}
               </div>
             </div>
           )}
