@@ -55,7 +55,14 @@ export async function discoverByCategories(
 
   const res = await dbQuery<MatchedCreator>(
     `SELECT DISTINCT c.id, c.name, c.platform, c.handle,
-            'db_match' as source
+            'db_match' as source,
+            CASE c.relationship_status
+              WHEN 'hot' THEN 1
+              WHEN 'warm' THEN 2
+              WHEN 'cold' THEN 3
+              ELSE 4
+            END as rel_rank,
+            c.subscriber_count
      FROM ${t('creators')} c
      JOIN ${t('creator_categories')} cc2 ON cc2.creator_id = c.id
      JOIN ${t('categories')} cat ON cat.id = cc2.category_id
@@ -65,14 +72,7 @@ export async function discoverByCategories(
        AND c.id NOT IN (
          SELECT creator_id FROM ${t('campaign_creators')} WHERE campaign_id = $1
        )
-     ORDER BY
-       CASE c.relationship_status
-         WHEN 'hot' THEN 1
-         WHEN 'warm' THEN 2
-         WHEN 'cold' THEN 3
-         ELSE 4
-       END,
-       c.subscriber_count DESC NULLS LAST
+     ORDER BY rel_rank, c.subscriber_count DESC NULLS LAST
      LIMIT ${limit}`,
     params
   )
@@ -112,13 +112,17 @@ export async function discoverByLLM(
     return { suggestions: [], newInserted: 0, deduped: 0 }
   }
 
+  // Filter to supported platforms only
+  const SUPPORTED_PLATFORMS = new Set(['youtube', 'medium', 'devto'])
+  const filtered = llmResults.filter(s => SUPPORTED_PLATFORMS.has(s.platform))
+
   // Check which suggestions already exist in DB (by platform+handle or platform+url)
   const suggestions: MatchedCreator[] = []
   let newInserted = 0
   let deduped = 0
   const now = new Date().toISOString()
 
-  for (const suggestion of llmResults) {
+  for (const suggestion of filtered) {
     const handle = (suggestion.handle || '').replace(/^@/, '')
 
     // Try to find existing creator

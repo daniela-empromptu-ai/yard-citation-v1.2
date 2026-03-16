@@ -236,10 +236,28 @@ Return this exact JSON structure:
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      // Builder API sometimes returns double-escaped JSON — fix and retry
-      cleaned = cleaned.replace(/\\"/g, '"').replace(/\\n/g, '\n')
+      // Sanitize: fix control chars inside JSON string values that break JSON.parse.
+      // Walk the string and escape control chars only when inside a quoted value.
       const match = cleaned.match(/\{[\s\S]*\}/)
-      parsed = JSON.parse(match ? match[0] : cleaned)
+      let jsonStr = match ? match[0] : cleaned
+      let result = ''
+      let inString = false
+      let escaped = false
+      for (let i = 0; i < jsonStr.length; i++) {
+        const ch = jsonStr[i]
+        if (escaped) { result += ch; escaped = false; continue }
+        if (ch === '\\' && inString) { result += ch; escaped = true; continue }
+        if (ch === '"') { inString = !inString; result += ch; continue }
+        if (inString && ch.charCodeAt(0) < 0x20) {
+          if (ch === '\n') result += '\\n'
+          else if (ch === '\r') result += '\\r'
+          else if (ch === '\t') result += '\\t'
+          // skip other control chars
+          continue
+        }
+        result += ch
+      }
+      parsed = JSON.parse(result)
     }
 
     // Evidence validation: verify every quote is an exact substring of its content item's raw_text
@@ -394,16 +412,16 @@ Seed creators (examples of good fits): {seed_creators}
 
 Suggest exactly {count} creators. For each creator, provide:
 - name: The channel/brand name as it appears on the platform
-- platform: One of: youtube, medium, devto, linkedin, github, newsletter, podcast, blog, substack, x
-- handle: Their handle/username on that platform (e.g. @BretFisher)
+- platform: MUST be one of: youtube, medium, devto (these are the ONLY platforms we support)
+- handle: Their handle/username on that platform (e.g. @BretFisher for YouTube, @copyconstruct for Medium, ben for Dev.to)
 - url: Full profile/channel URL
 - why: 1-2 sentences explaining why they fit this campaign
 - suggested_categories: 1-3 niche categories (e.g. "Kubernetes", "DevOps", "Cloud Cost Optimization")
 
 RULES:
+- ONLY suggest creators on youtube, medium, or devto — no other platforms
 - Only suggest REAL creators that actually exist on the specified platform
 - Do NOT repeat any creator already in the seed list
-- Prefer YouTube and blog/newsletter creators for B2B technical content
 - Mix of audience sizes: some large (100k+), some mid (10k-100k), some micro (1k-10k)
 - Each suggestion must be a different person/channel
 - Be specific — provide real handles and URLs you are confident about

@@ -139,6 +139,7 @@ export const SCHEMA_DEF = {
         { name: 'source', type: 'text', nullable: true },
         { name: 'pipeline_stage', type: 'text', nullable: false, default: "'discovered'" },
         { name: 'scoring_status', type: 'text', nullable: false, default: "'not_scored'" },
+        { name: 'notes', type: 'text', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],

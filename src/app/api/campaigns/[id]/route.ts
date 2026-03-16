@@ -47,6 +47,28 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const id = params.id
+    // Delete in FK order: evaluation leaves → evaluations → campaign joins → campaign
+    const ccRows = await dbQuery<{ id: string }>('SELECT id FROM campaign_creators WHERE campaign_id = $1', [id])
+    for (const cc of ccRows.data) {
+      await dbQuery('DELETE FROM evidence_snippets WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id = $1)', [cc.id])
+      await dbQuery('DELETE FROM content_angles WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id = $1)', [cc.id])
+      await dbQuery('DELETE FROM creator_evaluations WHERE campaign_creator_id = $1', [cc.id])
+    }
+    await dbQuery('DELETE FROM campaign_creators WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM content_items WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM campaign_search_terms WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM campaign_topics WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM activity_log WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM campaigns WHERE id = $1', [id])
+    return NextResponse.json({ ok: true, deleted: id })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json()
