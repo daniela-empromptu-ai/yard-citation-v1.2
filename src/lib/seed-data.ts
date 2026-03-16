@@ -44,7 +44,7 @@ export async function seedDemoData(): Promise<{ inserted: number; errors: string
   )
 
   // ---- INTEGRATION STATUS ----
-  for (const key of ['gumshoe', 'youtube', 'anthropic', 'reddit']) {
+  for (const key of ['gumshoe', 'youtube']) {
     await run(
       `INSERT INTO integration_status (id, integration_key, is_configured, updated_at)
        VALUES (gen_random_uuid(), $1, false, $2) ON CONFLICT (integration_key) DO NOTHING`,

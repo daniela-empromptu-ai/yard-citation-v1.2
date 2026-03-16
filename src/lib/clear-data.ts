@@ -90,7 +90,7 @@ export async function clearDemoData(): Promise<{ cleared: string[]; errors: stri
     },
     {
       label: 'integration_status',
-      query: `DELETE FROM integration_status WHERE integration_key IN ('gumshoe','youtube','anthropic','reddit')`,
+      query: `DELETE FROM integration_status WHERE integration_key IN ('gumshoe','youtube')`,
       params: [],
     },
     {

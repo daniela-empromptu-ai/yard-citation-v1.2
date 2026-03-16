@@ -23,10 +23,8 @@ interface Props {
 }
 
 const INTEGRATION_DESCRIPTIONS: Record<string, { label: string; description: string; icon: string }> = {
-  anthropic: { label: 'Anthropic (Claude)', description: 'AI scoring, topic suggestions, outreach drafts', icon: '🤖' },
-  youtube: { label: 'YouTube API', description: 'Creator discovery and channel search (V0: stubbed)', icon: '▶️' },
-  reddit: { label: 'Reddit API', description: 'Reddit thread monitoring (V0: stubbed)', icon: '📡' },
-  gumshoe: { label: 'Gumshoe Import', description: 'CSV import for prompts and citations', icon: '📂' },
+  youtube: { label: 'YouTube API', description: 'Channel resolution and video discovery', icon: '▶️' },
+  gumshoe: { label: 'Gumshoe API', description: 'Citation extraction from Gumshoe reports', icon: '📂' },
 };
 
 export default function SettingsClient({ settings, integrations, lastSeedRun }: Props) {
