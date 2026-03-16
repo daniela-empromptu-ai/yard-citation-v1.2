@@ -299,7 +299,18 @@ export default function CreatorsPage() {
                       {c.email && <div className="text-[10px] text-slate-400 truncate max-w-[140px]">{c.email}</div>}
                     </td>
                     <td><PlatformBadge platform={c.platform} /></td>
-                    <td className="text-xs text-slate-600 max-w-[120px] truncate">{c.handle || '\u2014'}</td>
+                    <td className="text-xs text-slate-600 max-w-[140px] truncate">
+                      {c.handle ? (
+                        <a
+                          href={c.url || (c.platform === 'youtube' ? `https://www.youtube.com/@${c.handle}` : c.platform === 'medium' ? `https://medium.com/@${c.handle}` : c.platform === 'devto' ? `https://dev.to/${c.handle}` : '#')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {c.platform === 'youtube' || c.platform === 'medium' ? `@${c.handle.replace(/^@/, '')}` : c.handle}
+                        </a>
+                      ) : '\u2014'}
+                    </td>
                     <td className="text-[10px] text-slate-500 max-w-[150px] truncate">{c.category_names || '\u2014'}</td>
                     <td className="text-xs text-slate-600">{formatNumber(c.subscriber_count)}</td>
                     <td>
