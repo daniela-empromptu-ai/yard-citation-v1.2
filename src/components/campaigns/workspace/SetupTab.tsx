@@ -159,18 +159,15 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
                 <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Gumshoe Report</h3>
               </div>
               <div className="p-4">
-                {campaign.gumshoe_notes.startsWith('http') ? (
-                  <a
-                    href={campaign.gumshoe_notes}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-accent hover:underline break-all"
-                  >
-                    {campaign.gumshoe_notes}
-                  </a>
-                ) : (
-                  <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">{campaign.gumshoe_notes}</pre>
-                )}
+                <a
+                  href={campaign.gumshoe_notes}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-accent hover:underline break-all"
+                >
+                  {campaign.gumshoe_notes}
+                </a>
+                <p className="text-xs text-gray-400 mt-1">Cited creators are extracted automatically during discovery.</p>
               </div>
             </div>
           )}

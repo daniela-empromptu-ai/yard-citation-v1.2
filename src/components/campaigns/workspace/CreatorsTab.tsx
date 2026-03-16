@@ -391,10 +391,10 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
 
       {/* Manual actions */}
       <div className="flex gap-2">
-        <button onClick={handleFindCreators} disabled={discovering} className="btn-primary text-xs">
+        <button onClick={handleFindCreators} disabled={discovering || isRunning} className="btn-primary text-xs">
           {discovering ? 'Discovering...' : 'Find Creators'}
         </button>
-        <button onClick={handleReRunPipeline} className="btn-secondary text-xs">
+        <button onClick={handleReRunPipeline} disabled={isRunning} className="btn-secondary text-xs">
           Re-run Pipeline
         </button>
       </div>

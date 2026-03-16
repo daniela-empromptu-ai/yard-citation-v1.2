@@ -207,7 +207,7 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
               <tbody>
                 {terms.map((term, i) => (
                   <tr key={term.id}>
-                    <td className="text-gray-400 font-mono text-xs">{term.order_index || i + 1}</td>
+                    <td className="text-gray-400 font-mono text-xs">{i + 1}</td>
                     <td className="font-medium text-gray-900 font-mono text-xs">{term.term}</td>
                     <td>
                       <span className={`badge text-xs ${categoryTagColor(term.category_tag)}`}>

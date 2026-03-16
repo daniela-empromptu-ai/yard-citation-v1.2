@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { stageLabel } from '@/lib/utils';
@@ -51,6 +51,11 @@ export default function CampaignWorkspace({
   const [activeTab, setActiveTab] = useState(initialTab || 'setup');
   const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
   const router = useRouter();
+
+  // Sync liveSearchTerms when server-side props change (e.g. navigating between tabs)
+  useEffect(() => {
+    setLiveSearchTerms(searchTerms);
+  }, [searchTerms]);
 
   const hasApprovedTerms = liveSearchTerms.some(t => t.approved);
   const hasScoredCreators = campaignCreators.some(cc => cc.scoring_status === 'scored');

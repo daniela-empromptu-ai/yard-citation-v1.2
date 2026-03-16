@@ -243,14 +243,14 @@ export default function NewCampaignPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Gumshoe Notes <span className="text-slate-400 font-normal">(optional)</span></label>
-            <p className="text-xs text-slate-400 mb-2">Paste any Gumshoe citation data or context that should inform discovery and scoring.</p>
-            <textarea
+            <label className="block text-sm font-medium text-slate-700 mb-1">Gumshoe Report URL <span className="text-slate-400 font-normal">(optional)</span></label>
+            <p className="text-xs text-slate-400 mb-2">Link a Gumshoe report to automatically extract cited creators during discovery.</p>
+            <input
+              type="url"
               value={form.gumshoe_notes}
               onChange={e => update('gumshoe_notes', e.target.value)}
-              placeholder="Paste Gumshoe report excerpts, citation data, or relevant notes..."
-              rows={6}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="https://app.gumshoe.ai/r/brand/report/12345"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>

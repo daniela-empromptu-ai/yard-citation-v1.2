@@ -65,11 +65,12 @@ function EventDetail({ event_type, data }: { event_type: string; data: Record<st
       </span>
     );
   }
-  const keys = Object.keys(data);
-  if (keys.length === 0) return null;
+  // Fallback: show key stats from event data
+  const entries = Object.entries(data).filter(([, v]) => typeof v === 'string' || typeof v === 'number');
+  if (entries.length === 0) return null;
   return (
     <span className="text-xs text-gray-400">
-      {keys.slice(0, 2).map(k => `${k}: ${data[k]}`).join(' · ')}
+      {entries.slice(0, 3).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')}
     </span>
   );
 }
