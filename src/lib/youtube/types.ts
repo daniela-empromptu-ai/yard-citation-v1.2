@@ -42,6 +42,7 @@ export interface CreatorTranscriptResult {
   status: CreatorTranscriptStatus
   channelId?: string
   video?: VideoInfo
+  videos?: VideoInfo[]
   transcript?: TranscriptData
   followerCount?: number
   topics?: string[]

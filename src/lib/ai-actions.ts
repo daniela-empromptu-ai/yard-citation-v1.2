@@ -167,7 +167,7 @@ Title: ${ci.title}
 URL: ${ci.url}
 Platform: ${ci.platform}
 Views: ${ci.view_count || 'N/A'}
-Text (first 2000 chars): ${ci.raw_text.substring(0, 2000)}
+Text (first 3000 chars): ${ci.raw_text.substring(0, 3000)}
 `).join('\n')
 
   try {
@@ -192,6 +192,8 @@ RUBRIC WEIGHTS:
 - brand_fit: 10%
 
 CRITICAL RULE: Every evidence quote MUST be an exact substring from the content text provided above. Do not paraphrase. Extract verbatim.
+
+TIMESTAMP RULE: For YouTube content where text is prefixed with [M:SS] timestamps, set timestamp_start_seconds to the total seconds value of the [M:SS] timestamp nearest to the beginning of the quoted text. For example, [3:42] → 222 seconds.
 
 Return this exact JSON structure:
 {
@@ -417,6 +419,14 @@ Suggest exactly {count} creators. For each creator, provide:
 - url: Full profile/channel URL
 - why: 1-2 sentences explaining why they fit this campaign
 - suggested_categories: 1-3 niche categories (e.g. "Kubernetes", "DevOps", "Cloud Cost Optimization")
+
+EXCLUSION RULES — do NOT suggest any of these:
+- Company/vendor-owned channels (e.g. AWS, HashiCorp, Microsoft, Google Cloud, IBM, Red Hat, Docker Inc, CNCF, GitLab, Datadog, New Relic, Splunk)
+- Creators who haven't published in 2+ years
+- Channels with primarily AI-generated or synthetic content
+- Auto-dubbed/auto-translated content
+- Lifestyle, vlog, or non-technical content creators
+Only suggest independent technical content creators.
 
 RULES:
 - ONLY suggest creators on youtube, medium, or devto — no other platforms

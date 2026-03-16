@@ -8,6 +8,22 @@
 import { dbQuery, t } from '@/lib/db'
 import { aiScoreCreator } from '@/lib/ai-actions'
 
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+/**
+ * If metadata_json contains transcript_segments, format raw_text with [M:SS] timestamps.
+ */
+function formatTimestampedText(rawText: string, metadata: Record<string, unknown>): string {
+  const segments = metadata?.transcript_segments as Array<{ t: number; d: number; txt: string }> | undefined
+  if (!segments || segments.length === 0) return rawText
+
+  return segments.map(s => `[${formatTimestamp(s.t)}] ${s.txt}`).join('\n')
+}
+
 export interface ScoreCreatorResult {
   ok: boolean
   evaluation_id?: string
@@ -71,7 +87,7 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
       title: ci.title,
       url: ci.url,
       platform: ci.platform,
-      raw_text: ci.raw_text,
+      raw_text: formatTimestampedText(ci.raw_text, ci.metadata_json || {}),
     })),
   })
 

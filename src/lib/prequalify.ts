@@ -13,10 +13,12 @@
  */
 
 import { dbQuery, t, callAIApi } from '@/lib/db'
+import { isDormant } from '@/lib/creator-guardrails'
 import { isYouTubeConfigured } from '@/lib/anthropic'
 import {
   resolveChannelId,
-  getLatestVideo,
+  getChannelVideos,
+  rankVideosByRelevance,
   buildTranscriptFromTimedText,
   CreatorTranscriptResult,
 } from '@/lib/youtube'
@@ -70,10 +72,13 @@ interface PrequalifyResult {
 // ─── 1. Fetch Creator Transcripts ───
 
 export async function fetchCreatorTranscripts(
-  creators: CreatorRow[]
+  creators: CreatorRow[],
+  campaignTopics: string[] = []
 ): Promise<CreatorTranscriptResult[]> {
   const apiKey = process.env.YOUTUBE_API_KEY || ''
+  const videosPerCreator = parseInt(process.env.VIDEOS_PER_CREATOR || '3', 10)
   const results: CreatorTranscriptResult[] = []
+  let transcriptRequests = 0
 
   // Process sequentially to respect Supadata rate limits (free tier: 1 req/s)
   for (let i = 0; i < creators.length; i++) {
@@ -102,26 +107,60 @@ export async function fetchCreatorTranscripts(
       }
       base.channelId = resolution.channelId
 
-      // Step 2: Get latest video via RSS
-      const video = await getLatestVideo(resolution.channelId)
-      if (!video) {
-        console.log(`[transcript] ${creator.creator_name}: no video found for channel ${resolution.channelId}`)
+      // Step 2: Fetch ~15 videos via RSS, rank by topic relevance
+      const allVideos = await getChannelVideos(resolution.channelId, 15)
+      if (allVideos.length === 0) {
+        console.log(`[transcript] ${creator.creator_name}: no videos found for channel ${resolution.channelId}`)
         results.push({ ...base, status: 'no_video' })
         continue
       }
-      base.video = video
 
-      // Step 3: Fetch transcript (delay between requests for rate limit)
-      if (i > 0) await new Promise(r => setTimeout(r, 1200))
-      const transcript = await buildTranscriptFromTimedText(video.videoId)
-      if (!transcript) {
-        console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
+      const ranked = campaignTopics.length > 0
+        ? rankVideosByRelevance(allVideos, campaignTopics)
+        : allVideos
+      const topVideos = ranked.slice(0, videosPerCreator)
+      console.log(`[transcript] ${creator.creator_name}: ranked ${allVideos.length} videos, fetching top ${topVideos.length}`)
+
+      base.video = topVideos[0]
+      base.videos = topVideos
+
+      // Step 3: Fetch transcripts for top N videos (1.2s delay between requests)
+      const allSegments: { text: string; start: number; duration: number }[] = []
+      const allFullTexts: string[] = []
+      let transcriptLanguage = 'en'
+      let anyTranscript = false
+
+      for (const video of topVideos) {
+        if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 1200))
+        transcriptRequests++
+
+        const transcript = await buildTranscriptFromTimedText(video.videoId)
+        if (transcript) {
+          anyTranscript = true
+          allSegments.push(...transcript.segments)
+          allFullTexts.push(transcript.fullText)
+          transcriptLanguage = transcript.language
+        } else {
+          console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
+        }
+      }
+
+      if (!anyTranscript) {
         results.push({ ...base, status: 'no_transcript' })
         continue
       }
 
-      console.log(`[transcript] ${creator.creator_name}: success — ${transcript.fullText.split(/\s+/).length} words`)
-      results.push({ ...base, status: 'success', transcript })
+      // Merge transcripts into one
+      const mergedTranscript = {
+        videoId: topVideos[0].videoId,
+        language: transcriptLanguage,
+        segments: allSegments,
+        fullText: allFullTexts.join('\n\n---\n\n'),
+      }
+
+      const totalWords = mergedTranscript.fullText.split(/\s+/).length
+      console.log(`[transcript] ${creator.creator_name}: success — ${topVideos.length} videos, ${totalWords} words`)
+      results.push({ ...base, status: 'success', transcript: mergedTranscript })
     } catch (e) {
       console.log(`[transcript] ${creator.creator_name}: error — ${(e as Error).message}`)
       results.push({ ...base, status: 'error', error: (e as Error).message })
@@ -172,6 +211,13 @@ TOPICS: {campaign_topics}
 CREATORS (score each 0-100 on campaign fit):
 {creators_block}
 
+EXCLUSION RULES — penalize or score 0 for any of these:
+- Company/vendor-owned channels (e.g. AWS, HashiCorp, Microsoft, Google Cloud)
+- Creators who haven't published in 2+ years (dormant)
+- Channels with primarily AI-generated or synthetic content
+- Auto-dubbed/auto-translated content
+- Lifestyle, vlog, or non-technical content creators
+
 Scoring rules:
 - Creators WITH content (transcripts or articles): score based on content relevance, topic alignment, and quality signals
 - Creators WITHOUT content: score based on topic match and follower count only, cap score at 20
@@ -188,9 +234,9 @@ Return ONLY a JSON array, no other text:
 
       if (cr.status === 'success' && cr.transcript) {
         const excerpt = cr.transcript.fullText.slice(0, 2000)
-        const videoTitle = cr.video?.title || 'Unknown'
-        const videoDate = cr.video?.publishedAt?.slice(0, 10) || 'unknown date'
-        return `--- ${cr.creatorName} (id: ${cr.creatorId}) | ${followersStr} | Topics: ${topicsStr} ---\nVideo: "${videoTitle}" (${videoDate})\nTranscript excerpt: ${excerpt}\n---`
+        const videos = cr.videos || (cr.video ? [cr.video] : [])
+        const videoLines = videos.map(v => `  - "${v.title}" (${v.publishedAt?.slice(0, 10) || 'unknown date'})`).join('\n')
+        return `--- ${cr.creatorName} (id: ${cr.creatorId}) | ${followersStr} | Topics: ${topicsStr} ---\nVideos analyzed:\n${videoLines}\nTranscript excerpt: ${excerpt}\n---`
       } else {
         return `--- ${cr.creatorName} (id: ${cr.creatorId}) | ${followersStr} | Topics: ${topicsStr} ---\nNo transcript available (${cr.status})\n---`
       }
@@ -409,10 +455,13 @@ export async function persistResults(
           tr.transcript.fullText.split(/\s+/).length,
           JSON.stringify({
             video_id: tr.video.videoId,
+            all_video_ids: (tr.videos || [tr.video]).map(v => v.videoId),
+            all_video_titles: (tr.videos || [tr.video]).map(v => v.title),
             prequalify_rank: sel.rank,
             prequalify_score: sel.score,
             prequalify_rationale: sel.rationale,
             key_quote: sel.key_quote,
+            transcript_segments: tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text })),
           }),
           now,
         ]
@@ -537,7 +586,7 @@ export async function runPrequalifyPipeline(
   // ── Step 1: Fetch YouTube transcripts ──
   let youtubeResults: CreatorTranscriptResult[] = []
   if (youtubeCreators.length > 0 && isYouTubeConfigured()) {
-    youtubeResults = await fetchCreatorTranscripts(youtubeCreators)
+    youtubeResults = await fetchCreatorTranscripts(youtubeCreators, campaignContext.topics)
   } else if (youtubeCreators.length > 0) {
     console.log('[prequalify] YouTube API key not configured, skipping YouTube creators')
     youtubeResults = youtubeCreators.map(c => ({
@@ -597,7 +646,29 @@ export async function runPrequalifyPipeline(
   }))
 
   // Merge all results
-  const allResults: CreatorTranscriptResult[] = [...youtubeResults, ...articleAsTranscript, ...otherResults]
+  const allResultsRaw: CreatorTranscriptResult[] = [...youtubeResults, ...articleAsTranscript, ...otherResults]
+
+  // ── Dormancy check: exclude creators with no content in 2+ years ──
+  const allResults: CreatorTranscriptResult[] = []
+  for (const cr of allResultsRaw) {
+    const publishedAt = cr.video?.publishedAt || null
+    if (isDormant(publishedAt) && cr.status !== 'success') {
+      // No recent content and no successful fetch — mark as excluded
+      const now = new Date().toISOString()
+      await dbQuery(
+        `UPDATE ${t('creators')} SET excluded = true, exclusion_reason = $2, updated_at = $3 WHERE id = $1`,
+        [cr.creatorId, 'Dormant — no content in 2+ years', now]
+      )
+      await dbQuery(
+        `UPDATE ${t('campaign_creators')} SET pipeline_stage = 'excluded', notes = $2, updated_at = $3
+         WHERE campaign_id = $1 AND creator_id = $4`,
+        [campaignId, 'Excluded: dormant creator (no content in 2+ years)', now, cr.creatorId]
+      )
+      console.log(`[prequalify] ${cr.creatorName}: excluded (dormant)`)
+      continue
+    }
+    allResults.push(cr)
+  }
 
   const youtubeFound = youtubeResults.filter(r => r.status !== 'no_youtube').length
   const transcriptsFetched = youtubeResults.filter(r => r.status === 'success').length

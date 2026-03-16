@@ -65,6 +65,10 @@ interface ContentAngle {
   title: string; format: string; persona: string; key_points_json: string[];
 }
 
+interface ContentItem {
+  id: string; title: string; url: string; platform: string; published_at: string;
+}
+
 interface PipelineJob {
   id: string; status: string; error_message: string | null;
   started_at: string | null; finished_at: string | null;
@@ -217,6 +221,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evidence, setEvidence] = useState<EvidenceSnippet[]>([]);
   const [angles, setAngles] = useState<ContentAngle[]>([]);
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [loadingEval, setLoadingEval] = useState(false);
   const [scoringId, setScoringId] = useState<string | null>(null);
   const [addUrl, setAddUrl] = useState('');
@@ -259,6 +264,7 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
       setEvaluation(data.evaluation);
       setEvidence(data.evidenceSnippets || data.evidence || []);
       setAngles(data.contentAngles || data.angles || []);
+      setContentItems(data.contentItems || []);
     } finally {
       setLoadingEval(false);
     }
@@ -542,6 +548,34 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
                 ))}
               </ul>
             </div>
+
+            {/* Content Evaluated */}
+            {contentItems.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                  Content Evaluated ({contentItems.length})
+                </h4>
+                <div className="space-y-1.5">
+                  {contentItems.map(ci => (
+                    <div key={ci.id} className="flex items-center gap-2 text-xs">
+                      <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-[10px] shrink-0">{ci.platform}</span>
+                      <a
+                        href={ci.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline truncate"
+                        title={ci.title}
+                      >
+                        {ci.title}
+                      </a>
+                      {ci.published_at && (
+                        <span className="text-gray-400 shrink-0">{formatDate(ci.published_at)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Evidence */}
             <div>

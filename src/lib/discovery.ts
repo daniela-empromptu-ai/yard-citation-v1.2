@@ -7,6 +7,8 @@
 
 import { dbQuery, t } from '@/lib/db'
 import { aiDiscoverCreators } from '@/lib/ai-actions'
+import { isBrandOwned } from '@/lib/creator-guardrails'
+import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
 import { v4 as uuidv4 } from 'uuid'
 
 // ─── Types ───
@@ -16,6 +18,7 @@ export interface DiscoveryResult {
   llm_suggested: number
   llm_new_inserted: number
   llm_deduped: number
+  gumshoe_extracted: number
   total_linked: number
 }
 
@@ -112,9 +115,11 @@ export async function discoverByLLM(
     return { suggestions: [], newInserted: 0, deduped: 0 }
   }
 
-  // Filter to supported platforms only
+  // Filter to supported platforms only, then exclude brand-owned
   const SUPPORTED_PLATFORMS = new Set(['youtube', 'medium', 'devto'])
-  const filtered = llmResults.filter(s => SUPPORTED_PLATFORMS.has(s.platform))
+  const filtered = llmResults
+    .filter(s => SUPPORTED_PLATFORMS.has(s.platform))
+    .filter(s => !isBrandOwned(s.name, s.handle, s.url))
 
   // Check which suggestions already exist in DB (by platform+handle or platform+url)
   const suggestions: MatchedCreator[] = []
@@ -159,14 +164,21 @@ export async function discoverByLLM(
         source: 'ai_discovery',
       })
     } else {
-      // Insert new creator
+      // Insert new creator (auto-flag brand_owned)
       const creatorId = uuidv4()
+      const brandOwned = isBrandOwned(suggestion.name, suggestion.handle, suggestion.url)
       await dbQuery(
-        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, created_at, updated_at)
-         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', $6, $6)
+        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
+         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', $6, $7, $7)
          ON CONFLICT DO NOTHING`,
-        [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
+        [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, brandOwned, now]
       )
+
+      // Skip linking brand-owned creators
+      if (brandOwned) {
+        deduped++
+        continue
+      }
 
       // Auto-tag with suggested categories
       if (suggestion.suggested_categories?.length > 0) {
@@ -280,6 +292,72 @@ export async function runDiscovery(
     gumshoe_notes: camp.gumshoe_notes || '',
   }
 
+  // Phase 0: Gumshoe citation extraction (if URL + API key available)
+  let gumshoeCreators: MatchedCreator[] = []
+  const isGumshoeUrl = campaign.gumshoe_notes && parseGumshoeUrl(campaign.gumshoe_notes)
+  if (isGumshoeUrl && process.env.GUMSHOE_API_KEY) {
+    try {
+      const reportId = parseGumshoeUrl(campaign.gumshoe_notes)
+      if (reportId) {
+        // Store report ID on campaign for future reference
+        await dbQuery(
+          `UPDATE ${t('campaigns')} SET gumshoe_report_id = $2, updated_at = now() WHERE id = $1`,
+          [campaignId, reportId]
+        )
+      }
+
+      const creatorUrls = await extractCreatorsFromReport(campaign.gumshoe_notes)
+      console.log(`[discovery] Gumshoe: found ${creatorUrls.length} creator URLs`)
+
+      const now = new Date().toISOString()
+      for (const cu of creatorUrls) {
+        // Check if creator already exists
+        let existingId: string | null = null
+        const existing = await dbQuery<{ id: string }>(
+          `SELECT id FROM ${t('creators')} WHERE platform = $1 AND LOWER(handle) = LOWER($2) LIMIT 1`,
+          [cu.platform, cu.handle]
+        )
+        if (existing.data.length > 0) {
+          existingId = existing.data[0].id
+        }
+
+        if (!existingId) {
+          // Try by URL
+          const byUrl = await dbQuery<{ id: string }>(
+            `SELECT id FROM ${t('creators')} WHERE url = $1 LIMIT 1`,
+            [cu.url]
+          )
+          if (byUrl.data.length > 0) {
+            existingId = byUrl.data[0].id
+          }
+        }
+
+        if (!existingId) {
+          // Insert new creator
+          existingId = uuidv4()
+          const name = cu.handle // Will be enriched later
+          await dbQuery(
+            `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, created_at, updated_at)
+             VALUES ($1, $2, $2, $3, $4, $5, 'gumshoe', $6, $6)
+             ON CONFLICT DO NOTHING`,
+            [existingId, name, cu.platform, cu.handle, cu.url, now]
+          )
+        }
+
+        gumshoeCreators.push({
+          id: existingId,
+          name: cu.handle,
+          platform: cu.platform,
+          handle: cu.handle,
+          source: 'gumshoe',
+        })
+      }
+    } catch (e) {
+      console.log(`[discovery] Gumshoe extraction failed, continuing: ${(e as Error).message}`)
+      gumshoeCreators = []
+    }
+  }
+
   // Phase A: DB category matching
   const dbMatched = await discoverByCategories(campaignId, topics, options.dbLimit || 50)
 
@@ -302,7 +380,7 @@ export async function runDiscovery(
   const llmResult = await discoverByLLM(campaign, seeds, options.llmCount || 20)
 
   // Link all discovered creators to campaign
-  const allCreators = [...dbMatched, ...llmResult.suggestions]
+  const allCreators = [...gumshoeCreators, ...dbMatched, ...llmResult.suggestions]
   const totalLinked = await linkCreatorsToCampaign(campaignId, userId, allCreators)
 
   // Log activity
@@ -311,6 +389,7 @@ export async function runDiscovery(
     llm_suggested: llmResult.suggestions.length,
     llm_new_inserted: llmResult.newInserted,
     llm_deduped: llmResult.deduped,
+    gumshoe_extracted: gumshoeCreators.length,
     total_linked: totalLinked,
   }
 
