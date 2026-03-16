@@ -261,10 +261,10 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
     try {
       const res = await fetch(`/api/evaluations/${cc.id}`);
       const data = await res.json();
-      setEvaluation(data.evaluation);
-      setEvidence(data.evidenceSnippets || data.evidence || []);
-      setAngles(data.contentAngles || data.angles || []);
-      setContentItems(data.contentItems || []);
+      setEvaluation(data?.evaluation || null);
+      setEvidence(data?.evidenceSnippets || data?.evidence || []);
+      setAngles(data?.contentAngles || data?.angles || []);
+      setContentItems(data?.contentItems || []);
     } finally {
       setLoadingEval(false);
     }
