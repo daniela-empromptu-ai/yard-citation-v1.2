@@ -152,7 +152,7 @@ async function verifyDevto(
   }
 
   const allText = result.articles
-    .map(a => `${a.title} ${a.tags.join(' ')}`)
+    .map(a => `${a.title} ${Array.isArray(a.tags) ? a.tags.join(' ') : (a.tags || '')}`)
     .join(' ')
 
   const hits = countKeywordHits(allText, keywords)
