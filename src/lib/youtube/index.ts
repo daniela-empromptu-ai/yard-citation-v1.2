@@ -1,6 +1,7 @@
 export { resolveChannelId } from './channel-resolver'
 export { getLatestVideo, getChannelVideos, rankVideosByRelevance } from './rss-video'
 export { buildTranscriptFromTimedText } from './transcript'
+export { searchYouTubeChannels, searchYouTubeChannelsByTerms } from './search'
 export type {
   TranscriptData,
   TranscriptSegment,
@@ -9,3 +10,4 @@ export type {
   CreatorTranscriptStatus,
   CreatorTranscriptResult,
 } from './types'
+export type { YouTubeSearchResult } from './search'

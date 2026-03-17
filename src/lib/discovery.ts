@@ -1,8 +1,10 @@
 /**
- * V2 Discovery: DB category matching + LLM look-alike suggestions.
+ * V2 Discovery: DB matching + YouTube API search + LLM look-alike suggestions.
  *
+ * Phase 0: Gumshoe citation extraction (if URL + API key available)
  * Phase A: Match existing creators by category overlap with campaign topics.
- * Phase B: LLM suggests new creators → dedup → insert → link.
+ * Phase B: YouTube Search API — find real channels by campaign search terms.
+ * Phase C: LLM suggests new creators → verify → dedup → insert → link.
  */
 
 import { dbQuery, t } from '@/lib/db'
@@ -10,12 +12,16 @@ import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
 import { verifyCreator } from '@/lib/verify-creator'
+import { searchYouTubeChannelsByTerms, YouTubeSearchResult } from '@/lib/youtube'
+import { isYouTubeConfigured } from '@/lib/anthropic'
 import { v4 as uuidv4 } from 'uuid'
 
 // ─── Types ───
 
 export interface DiscoveryResult {
   db_matched: number
+  yt_search_found: number
+  yt_search_new: number
   llm_suggested: number
   llm_new_inserted: number
   llm_deduped: number
@@ -252,6 +258,117 @@ async function linkCreatorsToCampaign(
   return linked
 }
 
+// ─── Phase B: YouTube Search API ───
+
+/**
+ * Search YouTube for channels matching campaign topics/search terms.
+ * Uses the YouTube Data API search.list endpoint to find real channels.
+ * Deduplicates against existing DB creators, inserts new ones.
+ */
+async function discoverByYouTubeSearch(
+  campaignId: string,
+  topics: string[]
+): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
+  const apiKey = process.env.YOUTUBE_API_KEY || ''
+
+  // Load campaign search terms (more specific than topics)
+  const termsRes = await dbQuery<{ term: string }>(
+    `SELECT term FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = true ORDER BY order_index LIMIT 15`,
+    [campaignId]
+  )
+  let searchTerms = termsRes.data.map(r => r.term)
+
+  // Fall back to topics if no approved search terms
+  if (searchTerms.length === 0) {
+    searchTerms = topics
+  }
+
+  try {
+    const results = await searchYouTubeChannelsByTerms(searchTerms, apiKey, {
+      resultsPerTerm: 3,
+      maxTotal: 30,
+      minSubscribers: 500,
+    })
+
+    console.log(`[discovery] YouTube Search: ${results.length} unique channels from ${searchTerms.length} terms`)
+
+    const creators: MatchedCreator[] = []
+    let newInserted = 0
+    const now = new Date().toISOString()
+
+    for (const ch of results) {
+      const handle = ch.handle?.replace(/^@/, '') || null
+
+      // Skip brand-owned channels
+      if (isBrandOwned(ch.channelTitle, handle, ch.url)) {
+        console.log(`[discovery] YouTube Search: skipping brand-owned "${ch.channelTitle}"`)
+        continue
+      }
+
+      // Check if already in DB by handle or channel URL
+      let existingId: string | null = null
+
+      if (handle) {
+        const existing = await dbQuery<{ id: string }>(
+          `SELECT id FROM ${t('creators')} WHERE platform = 'youtube' AND LOWER(handle) = LOWER($1) LIMIT 1`,
+          [handle]
+        )
+        if (existing.data.length > 0) existingId = existing.data[0].id
+      }
+
+      if (!existingId) {
+        const existing = await dbQuery<{ id: string }>(
+          `SELECT id FROM ${t('creators')} WHERE url = $1 LIMIT 1`,
+          [ch.url]
+        )
+        if (existing.data.length > 0) existingId = existing.data[0].id
+      }
+
+      if (existingId) {
+        // Update subscriber count if we have fresh data
+        if (ch.subscriberCount) {
+          await dbQuery(
+            `UPDATE ${t('creators')} SET subscriber_count = $2, updated_at = $3 WHERE id = $1`,
+            [existingId, ch.subscriberCount, now]
+          )
+        }
+        creators.push({
+          id: existingId,
+          name: ch.channelTitle,
+          platform: 'youtube',
+          handle: handle ? `@${handle}` : null,
+          source: 'youtube_search',
+        })
+      } else {
+        // Insert new creator
+        const creatorId = uuidv4()
+        await dbQuery(
+          `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, subscriber_count, discovered_via, created_at, updated_at)
+           VALUES ($1, $2, $2, 'youtube', $3, $4, $5, 'youtube_search', $6, $6)
+           ON CONFLICT DO NOTHING`,
+          [creatorId, ch.channelTitle, handle, ch.url, ch.subscriberCount, now]
+        )
+
+        creators.push({
+          id: creatorId,
+          name: ch.channelTitle,
+          platform: 'youtube',
+          handle: handle ? `@${handle}` : null,
+          source: 'youtube_search',
+        })
+        newInserted++
+
+        console.log(`[discovery] YouTube Search: new creator "${ch.channelTitle}" (@${handle}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)`)
+      }
+    }
+
+    return { creators, newInserted }
+  } catch (e) {
+    console.error('[discovery] YouTube Search failed:', (e as Error).message)
+    return { creators: [], newInserted: 0 }
+  }
+}
+
 // ─── Main Discovery Orchestrator ───
 
 /**
@@ -371,6 +488,18 @@ export async function runDiscovery(
   // Phase A: DB category matching
   const dbMatched = await discoverByCategories(campaignId, topics, options.dbLimit || 50)
 
+  // Phase B: YouTube Search API — find real channels by search terms
+  let ytSearchCreators: MatchedCreator[] = []
+  let ytSearchNew = 0
+  if (isYouTubeConfigured()) {
+    const ytResult = await discoverByYouTubeSearch(campaignId, topics)
+    ytSearchCreators = ytResult.creators
+    ytSearchNew = ytResult.newInserted
+    console.log(`[discovery] YouTube Search: ${ytResult.creators.length} channels found (${ytResult.newInserted} new)`)
+  } else {
+    console.log('[discovery] YouTube API key not configured, skipping YouTube search')
+  }
+
   // Load seed creators for LLM (use existing campaign creators or top DB matches)
   const seedRes = await dbQuery<{ name: string; platform: string; handle: string }>(
     `SELECT c.name, c.platform, c.handle
@@ -386,16 +515,18 @@ export async function runDiscovery(
         name: c.name, platform: c.platform, handle: c.handle!,
       }))
 
-  // Phase B: LLM look-alike discovery
+  // Phase C: LLM look-alike discovery (supplementary to API search)
   const llmResult = await discoverByLLM(campaign, seeds, options.llmCount || 20)
 
   // Link all discovered creators to campaign
-  const allCreators = [...gumshoeCreators, ...dbMatched, ...llmResult.suggestions]
+  const allCreators = [...gumshoeCreators, ...dbMatched, ...ytSearchCreators, ...llmResult.suggestions]
   const totalLinked = await linkCreatorsToCampaign(campaignId, userId, allCreators)
 
   // Log activity
   const result: DiscoveryResult = {
     db_matched: dbMatched.length,
+    yt_search_found: ytSearchCreators.length,
+    yt_search_new: ytSearchNew,
     llm_suggested: llmResult.suggestions.length,
     llm_new_inserted: llmResult.newInserted,
     llm_deduped: llmResult.deduped,
@@ -404,6 +535,9 @@ export async function runDiscovery(
     total_linked: totalLinked,
   }
 
+  if (ytSearchCreators.length > 0) {
+    console.log(`[discovery] YouTube Search API: ${ytSearchCreators.length} channels linked`)
+  }
   if (llmResult.rejected > 0) {
     console.log(`[discovery] Verification rejected ${llmResult.rejected} LLM-suggested creators (fictional or wrong person)`)
   }
