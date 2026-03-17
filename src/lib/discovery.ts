@@ -9,6 +9,7 @@ import { dbQuery, t } from '@/lib/db'
 import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
+import { verifyCreator } from '@/lib/verify-creator'
 import { v4 as uuidv4 } from 'uuid'
 
 // ─── Types ───
@@ -18,6 +19,7 @@ export interface DiscoveryResult {
   llm_suggested: number
   llm_new_inserted: number
   llm_deduped: number
+  llm_rejected: number
   gumshoe_extracted: number
   total_linked: number
 }
@@ -92,7 +94,7 @@ export async function discoverByLLM(
   campaign: CampaignContext,
   seedCreators: Array<{ name: string; platform: string; handle: string }>,
   count = 20
-): Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number }> {
+): Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number; rejected: number }> {
   // Build set of existing platform+handle pairs for dedup
   const existingRes = await dbQuery<{ platform: string; handle: string }>(
     `SELECT platform, handle FROM ${t('creators')} WHERE handle IS NOT NULL`
@@ -112,7 +114,7 @@ export async function discoverByLLM(
   })
 
   if (llmResults.length === 0) {
-    return { suggestions: [], newInserted: 0, deduped: 0 }
+    return { suggestions: [], newInserted: 0, deduped: 0, rejected: 0 }
   }
 
   // Filter to supported platforms only, then exclude brand-owned
@@ -125,6 +127,7 @@ export async function discoverByLLM(
   const suggestions: MatchedCreator[] = []
   let newInserted = 0
   let deduped = 0
+  let rejected = 0
   const now = new Date().toISOString()
 
   for (const suggestion of filtered) {
@@ -164,26 +167,33 @@ export async function discoverByLLM(
         source: 'ai_discovery',
       })
     } else {
-      // Insert new creator (auto-flag brand_owned)
-      const creatorId = uuidv4()
+      // Skip brand-owned
       const brandOwned = isBrandOwned(suggestion.name, suggestion.handle, suggestion.url)
-      await dbQuery(
-        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
-         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', $6, $7, $7)
-         ON CONFLICT DO NOTHING`,
-        [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, brandOwned, now]
-      )
-
-      // Skip linking brand-owned creators
       if (brandOwned) {
         deduped++
         continue
       }
 
+      // Verify creator exists on platform with relevant content before inserting
+      const verification = await verifyCreator(suggestion, campaign.topics)
+      if (!verification.verified) {
+        console.log(`[discovery] Rejected ${suggestion.platform}/${handle}: ${verification.reason}`)
+        rejected++
+        continue
+      }
+
+      // Verified — insert new creator
+      const creatorId = uuidv4()
+      await dbQuery(
+        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
+         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', false, $6, $6)
+         ON CONFLICT DO NOTHING`,
+        [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
+      )
+
       // Auto-tag with suggested categories
       if (suggestion.suggested_categories?.length > 0) {
         for (const catName of suggestion.suggested_categories) {
-          // Find or create category
           const catRes = await dbQuery<{ id: string }>(
             `SELECT id FROM ${t('categories')} WHERE LOWER(name) = LOWER($1) LIMIT 1`,
             [catName]
@@ -216,7 +226,7 @@ export async function discoverByLLM(
     }
   }
 
-  return { suggestions, newInserted, deduped }
+  return { suggestions, newInserted, deduped, rejected }
 }
 
 // ─── Link Creators to Campaign ───
@@ -389,8 +399,13 @@ export async function runDiscovery(
     llm_suggested: llmResult.suggestions.length,
     llm_new_inserted: llmResult.newInserted,
     llm_deduped: llmResult.deduped,
+    llm_rejected: llmResult.rejected,
     gumshoe_extracted: gumshoeCreators.length,
     total_linked: totalLinked,
+  }
+
+  if (llmResult.rejected > 0) {
+    console.log(`[discovery] Verification rejected ${llmResult.rejected} LLM-suggested creators (fictional or wrong person)`)
   }
 
   await dbQuery(

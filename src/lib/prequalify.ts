@@ -226,6 +226,12 @@ Return ONLY a JSON array, no other text:
 [{"creator_id":"...","score":85,"reason":"one sentence"}]`
   )
 
+  // Build name→ID lookup so we can recover from garbled UUIDs in AI responses
+  const nameToId = new Map<string, string>()
+  for (const cr of transcriptResults) {
+    nameToId.set(cr.creatorName.toLowerCase(), cr.creatorId)
+  }
+
   for (let i = 0; i < transcriptResults.length; i += 10) {
     const batch = transcriptResults.slice(i, i + 10)
     const creatorsBlock = batch.map(cr => {
@@ -252,6 +258,19 @@ Return ONLY a JSON array, no other text:
       const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       const scores = parseJsonFromResponse<Stage1Score[]>(cleaned)
       if (scores) {
+        // Fix garbled IDs: if a returned creator_id doesn't match any known creator,
+        // try to recover by matching the response position to batch order
+        for (const score of scores) {
+          if (!nameToId.has(score.creator_id) && !transcriptResults.some(t => t.creatorId === score.creator_id)) {
+            // ID is garbled — try positional match within batch
+            const idx = scores.indexOf(score)
+            if (idx < batch.length) {
+              const correctedId = batch[idx].creatorId
+              console.log(`[prequalify] Fixed garbled ID: "${score.creator_id}" → ${correctedId} (${batch[idx].creatorName})`)
+              score.creator_id = correctedId
+            }
+          }
+        }
         allStage1Scores.push(...scores)
       }
     } catch (e) {
@@ -313,6 +332,20 @@ Select exactly 10 (or fewer if less than 10 candidates have useful content). Ret
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const result = parseJsonFromResponse<Stage2Result>(cleaned)
     if (result?.selected && result.selected.length > 0) {
+      // Fix garbled IDs from Stage 2
+      for (const sel of result.selected) {
+        if (!transcriptResults.some(t => t.creatorId === sel.creator_id)) {
+          // Try name-based recovery from the candidates
+          const byName = top20Results.find(r =>
+            sel.creator_id.toLowerCase().includes(r.creatorName.toLowerCase()) ||
+            r.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())
+          )
+          if (byName) {
+            console.log(`[prequalify] Stage 2 fixed garbled ID: "${sel.creator_id}" → ${byName.creatorId} (${byName.creatorName})`)
+            sel.creator_id = byName.creatorId
+          }
+        }
+      }
       console.log(`[prequalify] Stage 2 selected ${result.selected.length} creators`)
       return { selected: result.selected, allStage1Scores }
     }
@@ -386,7 +419,6 @@ export async function persistResults(
   articleResults?: CreatorArticleResult[]
 ): Promise<void> {
   const now = new Date().toISOString()
-  const selectedIds = new Set(selected.map(s => s.creator_id))
 
   // Build lookup for article results
   const articleMap = new Map<string, CreatorArticleResult>()
@@ -394,12 +426,38 @@ export async function persistResults(
     articleMap.set(ar.creatorId, ar)
   }
 
+  // Build name→transcript lookup for fallback when AI garbles UUIDs
+  const nameToTranscript = new Map<string, CreatorTranscriptResult>()
+  for (const tr of allTranscripts) {
+    nameToTranscript.set(tr.creatorName.toLowerCase(), tr)
+  }
+  const nameToArticle = new Map<string, CreatorArticleResult>()
+  for (const ar of articleResults || []) {
+    nameToArticle.set(ar.creatorName.toLowerCase(), ar)
+  }
+
   // Selected creators: insert content + advance pipeline
   for (const sel of selected) {
-    const tr = allTranscripts.find(t => t.creatorId === sel.creator_id)
-    if (!tr) continue
+    let tr = allTranscripts.find(t => t.creatorId === sel.creator_id)
+    if (!tr) {
+      // UUID garbled by AI — try positional match by checking all transcripts
+      // The AI often returns IDs that are close but not exact
+      for (const candidate of allTranscripts) {
+        if (sel.creator_id.includes(candidate.creatorName.toLowerCase()) ||
+            candidate.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())) {
+          console.log(`[prequalify] persistResults: matched "${sel.creator_id}" → ${candidate.creatorId} (${candidate.creatorName}) by name`)
+          sel.creator_id = candidate.creatorId
+          tr = candidate
+          break
+        }
+      }
+      if (!tr) {
+        console.log(`[prequalify] persistResults: no match for selected creator_id "${sel.creator_id}" — skipping`)
+        continue
+      }
+    }
 
-    const ar = articleMap.get(sel.creator_id)
+    const ar = articleMap.get(sel.creator_id) || nameToArticle.get(tr.creatorName.toLowerCase())
 
     if (ar && ar.status === 'success' && ar.articles.length > 0) {
       // ── Article-based creator (Medium/Dev.to) ──
@@ -482,6 +540,9 @@ export async function persistResults(
       )
     }
   }
+
+  // Rebuild selectedIds after potential ID corrections
+  const selectedIds = new Set(selected.map(s => s.creator_id))
 
   // Excluded creators: mark as excluded
   const excluded = allTranscripts.filter(tr => !selectedIds.has(tr.creatorId))

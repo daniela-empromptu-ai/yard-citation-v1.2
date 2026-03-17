@@ -108,32 +108,44 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
      scoringResult.rationale_md || '', now, now]
   )
 
-  const evalId = evalRes.data[0]?.id
-  if (evalId) {
-    for (const es of (scoringResult.evidence_snippets || [])) {
-      await dbQuery(
-        `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [evalId, es.content_item_id, es.quote, es.dimension, es.why_it_matters, es.timestamp_start_seconds || null, now]
-      )
-    }
-    for (const angle of (scoringResult.content_angles || [])) {
-      await dbQuery(
-        `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
-        [evalId, angle.title, angle.format, angle.persona || null, JSON.stringify(angle.key_points || []), now]
-      )
-    }
-    const newStage = needsManualReview ? 'needs_manual_review' : 'scored'
-    await dbQuery(
-      `UPDATE ${t('campaign_creators')} SET scoring_status='scored', pipeline_stage=$1, updated_at=$2 WHERE id=$3`,
-      [newStage, now, campaignCreatorId]
+  // Builder API proxy may not return RETURNING data — fallback to query
+  let evalId = evalRes.data[0]?.id
+  if (!evalId) {
+    const fallback = await dbQuery<{ id: string }>(
+      `SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [campaignCreatorId]
     )
+    evalId = fallback.data[0]?.id
+  }
+
+  if (!evalId) {
+    console.error(`[score-creator] ${ctx.creator_name}: evaluation inserted but ID not retrievable`)
+    return { ok: false, overall_score: computedScore, evidence_coverage: coverage, needs_manual_review: needsManualReview, error: 'Evaluation saved but ID not retrievable' }
+  }
+
+  for (const es of (scoringResult.evidence_snippets || [])) {
     await dbQuery(
-      `INSERT INTO ${t('activity_log')} (campaign_id, creator_id, campaign_creator_id, event_type, event_data_json, created_at)
-       SELECT cc.campaign_id, cc.creator_id, $1, 'evaluation_completed', $2::jsonb, $3
-       FROM ${t('campaign_creators')} cc WHERE cc.id = $1`,
-      [campaignCreatorId, JSON.stringify({ score: computedScore, coverage, needs_manual_review: needsManualReview }), now]
+      `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [evalId, es.content_item_id, es.quote, es.dimension, es.why_it_matters, es.timestamp_start_seconds || null, now]
     )
   }
+  for (const angle of (scoringResult.content_angles || [])) {
+    await dbQuery(
+      `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
+      [evalId, angle.title, angle.format, angle.persona || null, JSON.stringify(angle.key_points || []), now]
+    )
+  }
+  const newStage = needsManualReview ? 'needs_manual_review' : 'scored'
+  await dbQuery(
+    `UPDATE ${t('campaign_creators')} SET scoring_status='scored', pipeline_stage=$1, updated_at=$2 WHERE id=$3`,
+    [newStage, now, campaignCreatorId]
+  )
+  await dbQuery(
+    `INSERT INTO ${t('activity_log')} (campaign_id, creator_id, campaign_creator_id, event_type, event_data_json, created_at)
+     SELECT cc.campaign_id, cc.creator_id, $1, 'evaluation_completed', $2::jsonb, $3
+     FROM ${t('campaign_creators')} cc WHERE cc.id = $1`,
+    [campaignCreatorId, JSON.stringify({ score: computedScore, coverage, needs_manual_review: needsManualReview }), now]
+  )
 
   return { ok: true, evaluation_id: evalId, overall_score: computedScore, evidence_coverage: coverage, needs_manual_review: needsManualReview }
 }

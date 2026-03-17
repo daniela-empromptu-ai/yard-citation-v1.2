@@ -74,8 +74,10 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
   console.log(`[pipeline] Scoring ${ccRes.data.length} creators`)
 
   let scored = 0
+  const failed: string[] = []
   for (const cc of ccRes.data) {
     try {
+      await log(`Scoring ${cc.creator_name}...`)
       const result = await scoreCreator(cc.id)
 
       if (result.ok) {
@@ -87,16 +89,21 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
           coverage: result.evidence_coverage,
         })
       } else {
+        failed.push(cc.creator_name)
         console.log(`[pipeline] Scoring failed for ${cc.creator_name}: ${result.error}`)
         await log(`Scoring failed for ${cc.creator_name}: ${result.error}`)
       }
     } catch (e) {
+      failed.push(cc.creator_name)
       console.error(`[pipeline] Scoring error for ${cc.creator_name}:`, (e as Error).message)
       try { await log(`Scoring error for ${cc.creator_name}: ${(e as Error).message}`) } catch { /* ignore */ }
     }
   }
 
-  await log(`Scoring complete: ${scored}/${ccRes.data.length} scored`)
+  const summary = failed.length > 0
+    ? `Scoring complete: ${scored}/${ccRes.data.length} scored. Failed: ${failed.join(', ')}`
+    : `Scoring complete: ${scored}/${ccRes.data.length} scored`
+  await log(summary)
   return scored
 }
 

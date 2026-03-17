@@ -238,26 +238,44 @@ Return this exact JSON structure:
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      // Sanitize: fix control chars inside JSON string values that break JSON.parse.
-      // Walk the string and escape control chars only when inside a quoted value.
+      // Sanitize: fix control chars and invalid escape sequences inside JSON string values.
       const match = cleaned.match(/\{[\s\S]*\}/)
       let jsonStr = match ? match[0] : cleaned
+      const VALID_ESCAPES = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'])
       let result = ''
       let inString = false
-      let escaped = false
-      for (let i = 0; i < jsonStr.length; i++) {
+      let i = 0
+      while (i < jsonStr.length) {
         const ch = jsonStr[i]
-        if (escaped) { result += ch; escaped = false; continue }
-        if (ch === '\\' && inString) { result += ch; escaped = true; continue }
-        if (ch === '"') { inString = !inString; result += ch; continue }
-        if (inString && ch.charCodeAt(0) < 0x20) {
+        if (!inString) {
+          if (ch === '"') inString = true
+          result += ch
+          i++
+          continue
+        }
+        // Inside a JSON string
+        if (ch === '"') { inString = false; result += ch; i++; continue }
+        if (ch === '\\') {
+          const next = jsonStr[i + 1]
+          if (next && VALID_ESCAPES.has(next)) {
+            result += ch + next // valid escape: keep as-is
+            i += 2
+          } else {
+            result += '\\\\' // invalid escape: double the backslash so it becomes literal
+            i++
+          }
+          continue
+        }
+        if (ch.charCodeAt(0) < 0x20) {
           if (ch === '\n') result += '\\n'
           else if (ch === '\r') result += '\\r'
           else if (ch === '\t') result += '\\t'
           // skip other control chars
+          i++
           continue
         }
         result += ch
+        i++
       }
       parsed = JSON.parse(result)
     }
