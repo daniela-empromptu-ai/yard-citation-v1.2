@@ -1,6 +1,7 @@
 'use server'
 
 import { callAIApi } from './db'
+import JSON5 from 'json5'
 
 const API_BASE = 'https://builder-api.staging.empromptu.ai'
 
@@ -234,51 +235,7 @@ Return this exact JSON structure:
     }, 'raw_text') as string
 
     let cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    let parsed: ReturnType<typeof JSON.parse>
-    try {
-      parsed = JSON.parse(cleaned)
-    } catch {
-      // Sanitize: fix control chars and invalid escape sequences inside JSON string values.
-      const match = cleaned.match(/\{[\s\S]*\}/)
-      let jsonStr = match ? match[0] : cleaned
-      const VALID_ESCAPES = new Set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'])
-      let result = ''
-      let inString = false
-      let i = 0
-      while (i < jsonStr.length) {
-        const ch = jsonStr[i]
-        if (!inString) {
-          if (ch === '"') inString = true
-          result += ch
-          i++
-          continue
-        }
-        // Inside a JSON string
-        if (ch === '"') { inString = false; result += ch; i++; continue }
-        if (ch === '\\') {
-          const next = jsonStr[i + 1]
-          if (next && VALID_ESCAPES.has(next)) {
-            result += ch + next // valid escape: keep as-is
-            i += 2
-          } else {
-            result += '\\\\' // invalid escape: double the backslash so it becomes literal
-            i++
-          }
-          continue
-        }
-        if (ch.charCodeAt(0) < 0x20) {
-          if (ch === '\n') result += '\\n'
-          else if (ch === '\r') result += '\\r'
-          else if (ch === '\t') result += '\\t'
-          // skip other control chars
-          i++
-          continue
-        }
-        result += ch
-        i++
-      }
-      parsed = JSON.parse(result)
-    }
+    const parsed = parseAIJson(cleaned)
 
     // Evidence validation: verify every quote is an exact substring of its content item's raw_text
     const contentMap = new Map(params.contentItems.map(ci => [ci.id, ci.raw_text]))
@@ -482,6 +439,38 @@ Return ONLY a JSON array, no markdown:
     console.error('aiDiscoverCreators error:', e);
     return [];
   }
+}
+
+// ─── Robust JSON parsing for AI responses ───
+
+/**
+ * Parse JSON from AI responses with layered fallbacks.
+ * Layer 1: JSON.parse (strict)
+ * Layer 2: JSON5.parse (handles trailing commas, single quotes, unescaped newlines, etc.)
+ * Layer 3: Extract JSON object/array with regex + JSON5
+ */
+function parseAIJson(text: string): ReturnType<typeof JSON.parse> {
+  // Layer 1: strict JSON
+  try {
+    return JSON.parse(text)
+  } catch { /* continue */ }
+
+  // Layer 2: JSON5 (lenient — handles most LLM quirks)
+  try {
+    return JSON5.parse(text)
+  } catch { /* continue */ }
+
+  // Layer 3: extract JSON object/array from surrounding text, then JSON5
+  const objectMatch = text.match(/\{[\s\S]*\}/)
+  if (objectMatch) {
+    try { return JSON5.parse(objectMatch[0]) } catch { /* continue */ }
+  }
+  const arrayMatch = text.match(/\[[\s\S]*\]/)
+  if (arrayMatch) {
+    try { return JSON5.parse(arrayMatch[0]) } catch { /* continue */ }
+  }
+
+  throw new Error(`Failed to parse AI JSON response (tried JSON, JSON5, regex extraction). First 200 chars: ${text.slice(0, 200)}`)
 }
 
 // ---- Stub: YouTube Search ----

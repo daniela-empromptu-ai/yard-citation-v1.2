@@ -300,7 +300,7 @@ async function discoverByYouTubeSearch(
       const handle = ch.handle?.replace(/^@/, '') || null
 
       // Skip brand-owned channels
-      if (isBrandOwned(ch.channelTitle, handle, ch.url)) {
+      if (isBrandOwned(ch.channelTitle, handle, ch.url, ch.description)) {
         console.log(`[discovery] YouTube Search: skipping brand-owned "${ch.channelTitle}"`)
         continue
       }

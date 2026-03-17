@@ -12,6 +12,7 @@
  * 6. Persist results to DB
  */
 
+import JSON5 from 'json5'
 import { dbQuery, t, callAIApi } from '@/lib/db'
 import { isDormant } from '@/lib/creator-guardrails'
 import { isYouTubeConfigured } from '@/lib/anthropic'
@@ -211,12 +212,14 @@ TOPICS: {campaign_topics}
 CREATORS (score each 0-100 on campaign fit):
 {creators_block}
 
-EXCLUSION RULES — penalize or score 0 for any of these:
-- Company/vendor-owned channels (e.g. AWS, HashiCorp, Microsoft, Google Cloud)
+EXCLUSION RULES — score 0 for any of these:
+- Company/vendor-owned channels — cloud providers, DevOps vendors, testing/QA tool companies (BrowserStack, Applitools, TestRail, mabl, etc.), developer platforms (Vercel, Supabase). If it's a company selling a product, score 0.
+- Training/certification companies or bootcamp channels
 - Creators who haven't published in 2+ years (dormant)
 - Channels with primarily AI-generated or synthetic content
 - Auto-dubbed/auto-translated content
 - Lifestyle, vlog, or non-technical content creators
+ONLY score independent creators — individuals or small creator-led channels, not companies.
 
 Scoring rules:
 - Creators WITH content (transcripts or articles): score based on content relevance, topic alignment, and quality signals
@@ -771,28 +774,28 @@ export async function runPrequalifyPipeline(
 // ─── Helpers ───
 
 function parseJsonFromResponse<T>(text: string): T | null {
-  // Try direct parse
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    // Try extracting JSON from markdown code block
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[1].trim()) as T
-      } catch {
-        return null
-      }
-    }
-    // Try finding JSON object/array in text
-    const bracketMatch = text.match(/[\[{][\s\S]*[\]}]/)
-    if (bracketMatch) {
-      try {
-        return JSON.parse(bracketMatch[0]) as T
-      } catch {
-        return null
-      }
-    }
-    return null
+  // Layer 1: strict JSON
+  try { return JSON.parse(text) as T } catch { /* continue */ }
+
+  // Layer 2: JSON5 (handles trailing commas, single quotes, unescaped chars, etc.)
+  try { return JSON5.parse(text) as T } catch { /* continue */ }
+
+  // Layer 3: extract from markdown code block
+  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (jsonMatch) {
+    try { return JSON5.parse(jsonMatch[1].trim()) as T } catch { /* continue */ }
   }
+
+  // Layer 4: extract JSON object/array from surrounding text
+  const objectMatch = text.match(/\{[\s\S]*\}/)
+  if (objectMatch) {
+    try { return JSON5.parse(objectMatch[0]) as T } catch { /* continue */ }
+  }
+  const arrayMatch = text.match(/\[[\s\S]*\]/)
+  if (arrayMatch) {
+    try { return JSON5.parse(arrayMatch[0]) as T } catch { /* continue */ }
+  }
+
+  console.error('[prequalify] Failed to parse AI JSON. First 200 chars:', text.slice(0, 200))
+  return null
 }

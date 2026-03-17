@@ -43,12 +43,30 @@ const BRAND_BLOCKLIST: BrandEntry[] = [
 ]
 
 /**
- * Check if a creator appears to be a brand/vendor-owned channel.
- * Matches against name, handle, and URL (case-insensitive substring match).
+ * Signals in channel name/description that indicate a company/vendor channel
+ * rather than an independent creator. Used as heuristics alongside the blocklist.
  */
-export function isBrandOwned(name: string, handle?: string | null, url?: string | null): boolean {
+const VENDOR_SIGNALS = [
+  'official channel', 'official youtube', 'official video',
+  'inc.', 'ltd.', 'llc', 'gmbh',
+  'try free', 'free trial', 'sign up', 'get started',
+  'our platform', 'our product', 'our solution',
+  'pricing', 'enterprise plan',
+  'test automation platform', 'testing platform', 'testing solution',
+  'codeless test', 'no-code test', 'ai-powered test',
+  'end-to-end testing solution', 'test management',
+]
+
+/**
+ * Check if a creator appears to be a brand/vendor-owned channel.
+ * Uses two layers:
+ * 1. Exact blocklist match (known infra/cloud vendors)
+ * 2. Heuristic vendor signals in name/description (catches testing tool companies etc.)
+ */
+export function isBrandOwned(name: string, handle?: string | null, url?: string | null, description?: string | null): boolean {
   const haystack = [name, handle || '', url || ''].join(' ').toLowerCase()
 
+  // Layer 1: Exact blocklist
   for (const brand of BRAND_BLOCKLIST) {
     for (const pattern of brand.patterns) {
       if (haystack.includes(pattern.toLowerCase())) {
@@ -56,6 +74,16 @@ export function isBrandOwned(name: string, handle?: string | null, url?: string 
       }
     }
   }
+
+  // Layer 2: Heuristic vendor signals (checks name + description)
+  const fullText = [haystack, (description || '').toLowerCase()].join(' ')
+  let signalCount = 0
+  for (const signal of VENDOR_SIGNALS) {
+    if (fullText.includes(signal)) signalCount++
+  }
+  // Require 2+ signals to avoid false positives on independent creators
+  // who mention "free" or "platform" casually
+  if (signalCount >= 2) return true
 
   return false
 }
@@ -100,9 +128,11 @@ export function isAutodubbed(metadata: Record<string, unknown>): boolean {
 
 export const EXCLUSION_RULES_PROMPT = `
 EXCLUSION RULES — do NOT suggest any of these:
-- Company/vendor-owned channels (e.g. AWS, HashiCorp, Microsoft, Google Cloud, IBM, Red Hat, Docker Inc, CNCF, GitLab, Datadog, New Relic, Splunk)
+- Company/vendor-owned channels — this includes cloud providers (AWS, Azure, Google Cloud), DevOps tool vendors (HashiCorp, GitLab, Datadog), AND testing/QA tool companies (BrowserStack, Applitools, TestRail, Sauce Labs, mabl, Testsigma, ACCELQ, TestGrid, LambdaTest). If it's a company selling a product, exclude it.
+- Developer platform company channels (Vercel, Supabase, Netlify, PlanetScale, etc.)
 - Creators who haven't published in 2+ years
 - Channels with primarily AI-generated or synthetic content
 - Auto-dubbed/auto-translated content
 - Lifestyle, vlog, or non-technical content creators
-Only suggest independent technical content creators.`
+- Training/certification companies or bootcamp channels
+Only suggest INDEPENDENT technical content creators — individuals or small creator-led channels, not companies.`
