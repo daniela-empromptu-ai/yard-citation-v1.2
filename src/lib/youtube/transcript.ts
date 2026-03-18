@@ -36,12 +36,11 @@ export async function buildTranscriptFromTimedText(
     const result = await supadata.transcript({ url, lang, text: false })
     console.log(`[transcript] ${videoId} response keys:`, Object.keys(result), 'content type:', typeof (result as { content?: unknown }).content)
 
-    // Handle async job (large videos)
+    // Skip async jobs — they take 10-15s and often return nothing
+    // The next video in the list will likely have a direct transcript
     if ('jobId' in result && result.jobId) {
-      console.log(`[transcript] ${videoId} is async job: ${result.jobId}`)
-      const transcript = await pollJob(supadata, result.jobId)
-      if (!transcript) { console.log(`[transcript] ${videoId} job returned no transcript`); return null }
-      return toTranscriptData(videoId, lang, transcript)
+      console.log(`[transcript] ${videoId} is async job, skipping (too slow)`)
+      return null
     }
 
     // Direct response

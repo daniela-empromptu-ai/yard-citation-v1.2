@@ -470,6 +470,45 @@ function parseAIJson(text: string): ReturnType<typeof JSON.parse> {
     try { return JSON5.parse(arrayMatch[0]) } catch { /* continue */ }
   }
 
+  // Layer 4: Truncated JSON recovery — extract score fields from incomplete JSON
+  // The builder API sometimes truncates long responses mid-JSON
+  const scoreFields = [
+    'overall_score', 'score_technical_relevance', 'score_audience_alignment',
+    'score_content_quality', 'score_channel_performance', 'score_brand_fit',
+  ]
+  const recovered: Record<string, unknown> = {}
+  let hasScores = false
+  for (const field of scoreFields) {
+    const match = text.match(new RegExp(`"${field}"\\s*:\\s*(\\d+)`))
+    if (match) {
+      recovered[field] = parseInt(match[1], 10)
+      hasScores = true
+    }
+  }
+  if (hasScores) {
+    // Extract what text fields we can
+    const rationaleMatch = text.match(/"rationale_md"\s*:\s*"((?:[^"\\]|\\.)*)/)
+    if (rationaleMatch) recovered.rationale_md = rationaleMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+
+    const strengthsMatch = text.match(/"strengths"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
+    if (strengthsMatch) {
+      try { recovered.strengths = JSON5.parse(`[${strengthsMatch[1]}]`) } catch { recovered.strengths = [] }
+    }
+
+    const weaknessesMatch = text.match(/"weaknesses"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
+    if (weaknessesMatch) {
+      try { recovered.weaknesses = JSON5.parse(`[${weaknessesMatch[1]}]`) } catch { recovered.weaknesses = [] }
+    }
+
+    recovered.evidence_snippets = []
+    recovered.content_angles = []
+    recovered.needs_manual_review = true
+    recovered.needs_manual_review_reason = 'Recovered from truncated AI response'
+
+    console.log(`[ai] Recovered truncated JSON with scores: ${JSON.stringify(Object.fromEntries(scoreFields.map(f => [f, recovered[f]])))}`)
+    return recovered
+  }
+
   throw new Error(`Failed to parse AI JSON response (tried JSON, JSON5, regex extraction). First 200 chars: ${text.slice(0, 200)}`)
 }
 

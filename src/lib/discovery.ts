@@ -7,12 +7,12 @@
  * Phase C: LLM suggests new creators → verify → dedup → insert → link.
  */
 
-import { dbQuery, t } from '@/lib/db'
+import { dbQuery, t, callAIApi } from '@/lib/db'
 import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
 import { verifyCreator } from '@/lib/verify-creator'
-import { searchYouTubeChannelsByTerms, YouTubeSearchResult } from '@/lib/youtube'
+import { searchYouTubeChannelsByTerms, getChannelVideos, resolveChannelId } from '@/lib/youtube'
 import { isYouTubeConfigured } from '@/lib/anthropic'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -267,16 +267,22 @@ async function linkCreatorsToCampaign(
  */
 async function discoverByYouTubeSearch(
   campaignId: string,
-  topics: string[]
+  topics: string[],
+  seedTerms: string[] = []
 ): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
   const apiKey = process.env.YOUTUBE_API_KEY || ''
 
-  // Load campaign search terms (more specific than topics)
-  const termsRes = await dbQuery<{ term: string }>(
-    `SELECT term FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = true ORDER BY order_index LIMIT 15`,
-    [campaignId]
-  )
-  let searchTerms = termsRes.data.map(r => r.term)
+  // Prefer seed-derived terms (from Phase 0.5), then campaign search terms, then topics
+  let searchTerms = seedTerms.length > 0 ? seedTerms : []
+
+  if (searchTerms.length === 0) {
+    // Load campaign search terms (more specific than topics)
+    const termsRes = await dbQuery<{ term: string }>(
+      `SELECT term FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = true ORDER BY order_index LIMIT 15`,
+      [campaignId]
+    )
+    searchTerms = termsRes.data.map(r => r.term)
+  }
 
   // Fall back to topics if no approved search terms
   if (searchTerms.length === 0) {
@@ -292,18 +298,33 @@ async function discoverByYouTubeSearch(
 
     console.log(`[discovery] YouTube Search: ${results.length} unique channels from ${searchTerms.length} terms`)
 
+    // Layer 1: Fast static filter for obvious brands
+    const afterStatic = results.filter(ch => {
+      const handle = ch.handle?.replace(/^@/, '') || null
+      if (isBrandOwned(ch.channelTitle, handle, ch.url, ch.description)) {
+        console.log(`[discovery] YouTube Search: static filter removed "${ch.channelTitle}"`)
+        return false
+      }
+      return true
+    })
+
+    // Layer 2: LLM quality filter for the rest (catches brands, tutorial mills, unrelated content)
+    const llmRejects = await llmChannelFilter(afterStatic.map(ch => ({
+      channelTitle: ch.channelTitle,
+      handle: ch.handle?.replace(/^@/, '') || null,
+      description: ch.description,
+      subscriberCount: ch.subscriberCount,
+    })), topics)
+
+    const filtered = afterStatic.filter(ch => !llmRejects.has(ch.channelTitle))
+    console.log(`[discovery] YouTube Search: ${results.length} → ${afterStatic.length} (static) → ${filtered.length} (LLM quality) channels`)
+
     const creators: MatchedCreator[] = []
     let newInserted = 0
     const now = new Date().toISOString()
 
-    for (const ch of results) {
+    for (const ch of filtered) {
       const handle = ch.handle?.replace(/^@/, '') || null
-
-      // Skip brand-owned channels
-      if (isBrandOwned(ch.channelTitle, handle, ch.url, ch.description)) {
-        console.log(`[discovery] YouTube Search: skipping brand-owned "${ch.channelTitle}"`)
-        continue
-      }
 
       // Check if already in DB by handle or channel URL
       let existingId: string | null = null
@@ -366,6 +387,184 @@ async function discoverByYouTubeSearch(
   } catch (e) {
     console.error('[discovery] YouTube Search failed:', (e as Error).message)
     return { creators: [], newInserted: 0 }
+  }
+}
+
+// ─── Phase 0.5: Seed-Based Vocabulary Extraction ───
+
+async function setupPrompt(name: string, variables: string[], text: string) {
+  await callAIApi('/setup_ai_prompt', {
+    prompt_name: name,
+    input_variables: variables,
+    prompt_text: text,
+  })
+}
+
+async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string) {
+  const result = await callAIApi('/apply_prompt_to_data', {
+    prompt_name: name,
+    input_data: { ...inputData, return_type: returnType },
+  }) as { value: unknown }
+  return result.value
+}
+
+/**
+ * Extract search phrases from seed creators' video titles using LLM.
+ * Returns 15 phrases that capture the vocabulary of the seed creators,
+ * which will find similar creators via YouTube Search.
+ */
+async function extractSeedVocabulary(
+  seedCreators: MatchedCreator[],
+  campaignTopics: string[]
+): Promise<string[]> {
+  // Filter to YouTube-only, non-brand seed creators
+  const ytSeeds = seedCreators.filter(
+    c => c.platform === 'youtube' && !isBrandOwned(c.name, c.handle, '')
+  )
+  if (ytSeeds.length === 0) return []
+
+  // Fetch video titles from each seed creator via RSS (free, no API cost)
+  const allTitles: string[] = []
+  const apiKey = process.env.YOUTUBE_API_KEY || ''
+
+  for (const seed of ytSeeds.slice(0, 5)) {
+    try {
+      const handle = (seed.handle || '').replace(/^@/, '')
+      const url = `https://www.youtube.com/@${handle}`
+      const resolution = await resolveChannelId(url, apiKey)
+      if (!resolution.channelId) continue
+
+      const videos = await getChannelVideos(resolution.channelId, 15)
+      allTitles.push(...videos.map(v => v.title))
+      console.log(`[discovery] Seed vocab: ${seed.name} — ${videos.length} video titles`)
+    } catch (e) {
+      console.log(`[discovery] Seed vocab: failed for ${seed.name}: ${(e as Error).message}`)
+    }
+  }
+
+  if (allTitles.length === 0) return []
+
+  // Use LLM to extract search phrases from seed video titles
+  try {
+    await setupPrompt(
+      'extract_seed_vocabulary',
+      ['video_titles', 'campaign_topics'],
+      `You are a YouTube search strategist. Given video titles from known-good creators and campaign topics, extract 15 YouTube search phrases that would find SIMILAR independent creators.
+
+VIDEO TITLES FROM SEED CREATORS:
+{video_titles}
+
+CAMPAIGN TOPICS:
+{campaign_topics}
+
+Rules:
+- Extract phrases that capture HOW these creators talk about tech (their vocabulary, not generic terms)
+- Mix specific technical terms with the creator style (e.g. "production kubernetes lessons learned" not just "kubernetes")
+- Avoid generic tutorial phrases like "how to install X" or "X tutorial for beginners"
+- Phrases should find independent creators sharing real-world experience, NOT tutorial mills
+- Each phrase should be 2-5 words
+
+Return ONLY a JSON array of 15 strings, no other text:
+["phrase one", "phrase two", ...]`
+    )
+
+    const raw = await applyPrompt('extract_seed_vocabulary', {
+      video_titles: allTitles.join('\n'),
+      campaign_topics: campaignTopics.join(', '),
+    }, 'raw_text') as string
+
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      console.log(`[discovery] Seed vocabulary: ${parsed.length} search phrases extracted`)
+      return parsed.slice(0, 15).map(String)
+    }
+  } catch (e) {
+    console.log(`[discovery] Seed vocabulary extraction failed: ${(e as Error).message}`)
+  }
+
+  return []
+}
+
+// ─── LLM Channel Quality Filter ───
+
+interface ChannelForQualityCheck {
+  channelTitle: string
+  handle: string | null
+  description: string
+  subscriberCount: number | null
+}
+
+/**
+ * Use LLM to filter channels — reject brands, tutorial mills, academies, and unrelated content.
+ * Campaign-aware: uses topics to judge relevance.
+ * Returns the set of channel titles to REJECT.
+ * One batch LLM call for all channels.
+ */
+async function llmChannelFilter(
+  channels: ChannelForQualityCheck[],
+  campaignTopics: string[]
+): Promise<Set<string>> {
+  if (channels.length === 0) return new Set()
+
+  const channelsBlock = channels.map((ch, i) =>
+    `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${(ch.description || '').slice(0, 150)}`
+  ).join('\n')
+
+  try {
+    await setupPrompt(
+      'filter_channels_quality',
+      ['channels_block', 'campaign_topics'],
+      `You are filtering YouTube channels for a creator sponsorship campaign. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior developer would subscribe to.
+
+CAMPAIGN TOPICS: {campaign_topics}
+
+CHANNELS:
+{channels_block}
+
+REJECT these types (return their numbers):
+- Company/vendor channels, product channels, corporate channels. If it exists to sell a product/service, reject.
+- Tutorial mills and academies — channels that ONLY teach beginners step-by-step ("How to Install X", "X Tutorial for Beginners", "Learn X in 10 Minutes"). Names with "Academy", "Learn", "Tutorial", "Mentor" are strong signals.
+- Training/certification companies, bootcamp channels
+- Conference/event channels
+- Content unrelated to the campaign topics (e.g. gaming, cooking, lifestyle, entertainment)
+
+KEEP these types:
+- Independent developers sharing production experience, war stories, tool reviews
+- Consultants/freelancers with hands-on expertise
+- Small creator-led channels where the person IS the brand
+- Creators who mix tutorials with real-world insights (not pure tutorial mills)
+
+Return ONLY a JSON array of channel numbers to REJECT (1-indexed), no other text:
+[1, 3, 7]
+
+If all should be kept, return: []`
+    )
+
+    const raw = await applyPrompt('filter_channels_quality', {
+      channels_block: channelsBlock,
+      campaign_topics: campaignTopics.join(', '),
+    }, 'raw_text') as string
+
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const rejectIndices = JSON.parse(cleaned) as number[]
+
+    if (!Array.isArray(rejectIndices)) return new Set()
+
+    const rejectNames = new Set<string>()
+    for (const idx of rejectIndices) {
+      const ch = channels[idx - 1]
+      if (ch) {
+        rejectNames.add(ch.channelTitle)
+        console.log(`[discovery] LLM quality filter: "${ch.channelTitle}" → rejected`)
+      }
+    }
+
+    console.log(`[discovery] LLM quality filter: ${rejectNames.size}/${channels.length} rejected`)
+    return rejectNames
+  } catch (e) {
+    console.log(`[discovery] LLM quality filter failed, falling back to static filter: ${(e as Error).message}`)
+    return new Set()
   }
 }
 
@@ -488,11 +687,42 @@ export async function runDiscovery(
   // Phase A: DB category matching
   const dbMatched = await discoverByCategories(campaignId, topics, options.dbLimit || 50)
 
-  // Phase B: YouTube Search API — find real channels by search terms
+  // Phase 0.5: Filter Gumshoe seeds for quality, then extract vocabulary
+  let seedTerms: string[] = []
+  if (gumshoeCreators.length > 0 && isYouTubeConfigured()) {
+    try {
+      // Filter seeds: remove tutorial mills and low-quality channels before extracting vocabulary
+      const ytGumshoe = gumshoeCreators.filter(c => c.platform === 'youtube')
+      if (ytGumshoe.length > 0) {
+        const seedRejects = await llmChannelFilter(ytGumshoe.map(c => ({
+          channelTitle: c.name,
+          handle: c.handle?.replace(/^@/, '') || null,
+          description: '',
+          subscriberCount: null,
+        })), topics)
+
+        const qualitySeeds = gumshoeCreators.filter(c =>
+          c.platform !== 'youtube' || !seedRejects.has(c.name)
+        )
+        console.log(`[discovery] Seed quality filter: ${gumshoeCreators.length} → ${qualitySeeds.length} quality seeds`)
+
+        if (qualitySeeds.length > 0) {
+          seedTerms = await extractSeedVocabulary(qualitySeeds, topics)
+          if (seedTerms.length > 0) {
+            console.log(`[discovery] Seed vocabulary: using ${seedTerms.length} seed-derived search terms instead of campaign terms`)
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[discovery] Seed vocabulary extraction failed, using campaign terms: ${(e as Error).message}`)
+    }
+  }
+
+  // Phase B: YouTube Search API — find real channels by search terms (seed-derived or campaign)
   let ytSearchCreators: MatchedCreator[] = []
   let ytSearchNew = 0
   if (isYouTubeConfigured()) {
-    const ytResult = await discoverByYouTubeSearch(campaignId, topics)
+    const ytResult = await discoverByYouTubeSearch(campaignId, topics, seedTerms)
     ytSearchCreators = ytResult.creators
     ytSearchNew = ytResult.newInserted
     console.log(`[discovery] YouTube Search: ${ytResult.creators.length} channels found (${ytResult.newInserted} new)`)

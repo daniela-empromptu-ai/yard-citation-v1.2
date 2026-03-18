@@ -130,6 +130,70 @@ async function getChannelDetails(
   return map
 }
 
+// ─── Per-Channel Video Search ───
+
+export interface ChannelVideoResult {
+  videoId: string
+  title: string
+  publishedAt: string
+  channelId: string
+  channelTitle: string
+  thumbnailUrl: string | null
+}
+
+/**
+ * Search for videos within a specific channel matching a query.
+ * Uses search.list with channelId filter (100 API units per call).
+ * This is Jack's workflow: find topic-relevant videos within a creator's channel.
+ */
+export async function searchChannelVideos(
+  channelId: string,
+  query: string,
+  apiKey: string,
+  options: { maxResults?: number; publishedAfter?: string } = {}
+): Promise<ChannelVideoResult[]> {
+  const { maxResults = 3, publishedAfter } = options
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/search')
+  url.searchParams.set('part', 'snippet')
+  url.searchParams.set('channelId', channelId)
+  url.searchParams.set('q', query)
+  url.searchParams.set('type', 'video')
+  url.searchParams.set('order', 'relevance')
+  url.searchParams.set('maxResults', String(maxResults))
+  url.searchParams.set('key', apiKey)
+  if (publishedAfter) {
+    url.searchParams.set('publishedAfter', publishedAfter)
+  }
+
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`YouTube channel video search failed (${res.status}): ${text.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+  const items = (data.items || []) as Array<{
+    id: { videoId: string }
+    snippet: {
+      title: string
+      publishedAt: string
+      channelId: string
+      channelTitle: string
+      thumbnails?: { default?: { url: string } }
+    }
+  }>
+
+  return items.map(item => ({
+    videoId: item.id.videoId,
+    title: item.snippet.title,
+    publishedAt: item.snippet.publishedAt,
+    channelId: item.snippet.channelId,
+    channelTitle: item.snippet.channelTitle,
+    thumbnailUrl: item.snippet.thumbnails?.default?.url || null,
+  }))
+}
+
 /**
  * Search for YouTube channels across multiple search terms.
  * Deduplicates by channel ID, returns unique channels sorted by subscriber count.

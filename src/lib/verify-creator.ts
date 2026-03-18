@@ -1,13 +1,14 @@
 /**
  * Verify LLM-suggested creators actually exist on the claimed platform
- * and have content relevant to the campaign topics.
+ * and have content in the tech domain.
  *
  * Catches two classes of errors:
  * 1. Fictional handles (don't exist at all)
- * 2. Wrong-person handles (exist but wrong identity, e.g. @angiejones → cooking channel)
+ * 2. Wrong-domain handles (exist but are cooking, yoga, gaming channels)
  *
- * The relevance check is intentionally a LOW bar — it only rejects creators
- * whose content is clearly in a different domain (cooking, yoga, etc.).
+ * The relevance check is a broad TECH DOMAIN gate (~80 words).
+ * If ANY tech word appears in video titles → verified (let prequalify AI handle relevance).
+ * If ZERO tech words in 10 titles → rejected (wrong domain).
  * Fine-grained relevance scoring happens later in the prequalify AI step.
  */
 
@@ -30,64 +31,69 @@ interface CreatorToVerify {
 }
 
 /**
- * Extract meaningful keywords from topics and categories for fuzzy matching.
- * Splits multi-word phrases into individual words and filters out noise.
+ * Broad tech vocabulary set. If ANY of these words appear in content titles,
+ * the creator is in the tech domain. This replaces narrow campaign-keyword matching
+ * which false-rejected creators like Joe Karlsson.
  */
-function extractKeywords(topics: string[], categories: string[] = []): string[] {
-  const STOP_WORDS = new Set([
-    'the', 'a', 'an', 'and', 'or', 'for', 'in', 'on', 'of', 'to', 'with', 'by', 'is', 'at', 'as',
-    'how', 'what', 'why', 'best', 'top', 'new', 'use', 'using', 'your', 'from',
-  ])
-
-  const allPhrases = [...topics, ...categories]
-  const words = new Set<string>()
-
-  for (const phrase of allPhrases) {
-    // Keep the full phrase as a keyword (lowercased)
-    const lower = phrase.toLowerCase().trim()
-    if (lower.length >= 3) words.add(lower)
-
-    // Also split into individual words
-    for (const word of lower.split(/[\s\-_/,]+/)) {
-      if (word.length >= 3 && !STOP_WORDS.has(word)) {
-        words.add(word)
-      }
-    }
-  }
-
-  return Array.from(words)
-}
+const TECH_VOCABULARY = new Set([
+  // Programming & languages
+  'code', 'coding', 'programming', 'developer', 'dev', 'software', 'engineer',
+  'javascript', 'typescript', 'python', 'rust', 'golang', 'java', 'react', 'vue',
+  'angular', 'node', 'nodejs', 'deno', 'bun', 'swift', 'kotlin', 'ruby', 'php',
+  'html', 'css', 'sql', 'graphql', 'grpc',
+  // DevOps & infrastructure
+  'devops', 'kubernetes', 'k8s', 'docker', 'container', 'terraform', 'ansible',
+  'jenkins', 'ci/cd', 'cicd', 'pipeline', 'deploy', 'deployment', 'infrastructure',
+  'cloud', 'aws', 'azure', 'gcp', 'linux', 'nginx', 'helm', 'argocd', 'gitops',
+  // Testing & quality
+  'testing', 'test', 'qa', 'automation', 'selenium', 'cypress', 'playwright',
+  'unit test', 'integration', 'e2e', 'tdd', 'bdd',
+  // AI & data
+  'ai', 'machine learning', 'llm', 'gpt', 'chatgpt', 'openai', 'langchain',
+  'neural', 'deep learning', 'data science', 'ml', 'nlp', 'rag',
+  // General tech
+  'api', 'backend', 'frontend', 'fullstack', 'full-stack', 'microservice',
+  'database', 'postgres', 'mongodb', 'redis', 'kafka',
+  'git', 'github', 'gitlab', 'open source', 'opensource',
+  'security', 'cybersecurity', 'infosec', 'vulnerability',
+  'monitoring', 'observability', 'prometheus', 'grafana',
+  'serverless', 'lambda', 'function', 'webhook', 'rest',
+  'architecture', 'scalability', 'performance', 'debugging',
+  'tutorial', 'tech', 'terminal', 'cli', 'sdk', 'framework',
+  'agile', 'scrum', 'sprint', 'jira',
+])
 
 /**
- * Check if content text has any keyword overlap. Returns the number of keyword hits.
- * Uses word-level matching: keyword "devops" matches anywhere in the text.
+ * Check if content text contains any tech domain words.
  */
-function countKeywordHits(contentText: string, keywords: string[]): number {
+function hasTechContent(contentText: string): boolean {
   const lower = contentText.toLowerCase()
-  return keywords.filter(kw => lower.includes(kw)).length
+  const words = Array.from(TECH_VOCABULARY)
+  for (let i = 0; i < words.length; i++) {
+    if (lower.includes(words[i])) return true
+  }
+  return false
 }
 
 /**
- * Check that a creator handle exists on the platform and has relevant content.
- * Returns verified=true only if the handle exists AND content signals match.
+ * Check that a creator handle exists on the platform and has tech-domain content.
+ * Returns verified=true only if the handle exists AND content is in the tech domain.
  */
 export async function verifyCreator(
   creator: CreatorToVerify,
-  campaignTopics: string[]
+  _campaignTopics: string[] // kept for API compatibility, no longer used for matching
 ): Promise<VerificationResult> {
   const handle = (creator.handle || '').replace(/^@/, '')
   if (!handle) return { verified: false, reason: 'No handle provided' }
 
-  const keywords = extractKeywords(campaignTopics, creator.suggested_categories || [])
-
   try {
     switch (creator.platform) {
       case 'youtube':
-        return await verifyYouTube(creator, handle, keywords)
+        return await verifyYouTube(creator, handle)
       case 'devto':
-        return await verifyDevto(handle, keywords)
+        return await verifyDevto(handle)
       case 'medium':
-        return await verifyMedium(handle, keywords)
+        return await verifyMedium(handle)
       default:
         return { verified: false, reason: `Unsupported platform: ${creator.platform}` }
     }
@@ -101,8 +107,7 @@ export async function verifyCreator(
 
 async function verifyYouTube(
   creator: CreatorToVerify,
-  handle: string,
-  keywords: string[]
+  handle: string
 ): Promise<VerificationResult> {
   const apiKey = process.env.YOUTUBE_API_KEY || ''
   const url = creator.url || `https://www.youtube.com/@${handle}`
@@ -119,28 +124,23 @@ async function verifyYouTube(
     return { verified: false, reason: `YouTube channel @${handle} has no videos` }
   }
 
-  // Step 3: Do any video titles contain relevant keywords?
+  // Step 3: Do any video titles contain tech-domain words?
   const videoText = videos.map(v => v.title).join(' ')
-  const hits = countKeywordHits(videoText, keywords)
-
-  if (hits === 0) {
+  if (!hasTechContent(videoText)) {
     const sampleTitles = videos.slice(0, 3).map(v => `"${v.title}"`).join(', ')
     return {
       verified: false,
-      reason: `YouTube @${handle} exists but content doesn't match (0/${keywords.length} keywords). Videos: ${sampleTitles}`,
+      reason: `YouTube @${handle} exists but not tech content. Videos: ${sampleTitles}`,
     }
   }
 
-  console.log(`[verify] youtube/@${handle}: verified (${hits}/${keywords.length} keyword hits in ${videos.length} videos)`)
-  return { verified: true, reason: 'Channel exists with relevant content' }
+  console.log(`[verify] youtube/@${handle}: verified (tech domain content found in ${videos.length} videos)`)
+  return { verified: true, reason: 'Channel exists with tech-domain content' }
 }
 
 // ─── Dev.to ───
 
-async function verifyDevto(
-  handle: string,
-  keywords: string[]
-): Promise<VerificationResult> {
+async function verifyDevto(handle: string): Promise<VerificationResult> {
   const result = await fetchDevtoArticles(handle, 5)
 
   if (result.status === 'no_user') {
@@ -155,26 +155,21 @@ async function verifyDevto(
     .map(a => `${a.title} ${Array.isArray(a.tags) ? a.tags.join(' ') : (a.tags || '')}`)
     .join(' ')
 
-  const hits = countKeywordHits(allText, keywords)
-
-  if (hits === 0) {
+  if (!hasTechContent(allText)) {
     const sampleTitles = result.articles.slice(0, 3).map(a => `"${a.title}"`).join(', ')
     return {
       verified: false,
-      reason: `Dev.to "${handle}" exists but content doesn't match (0/${keywords.length} keywords). Articles: ${sampleTitles}`,
+      reason: `Dev.to "${handle}" exists but not tech content. Articles: ${sampleTitles}`,
     }
   }
 
-  console.log(`[verify] devto/${handle}: verified (${hits}/${keywords.length} keyword hits)`)
-  return { verified: true, reason: 'User exists with relevant content' }
+  console.log(`[verify] devto/${handle}: verified (tech domain content found)`)
+  return { verified: true, reason: 'User exists with tech-domain content' }
 }
 
 // ─── Medium ───
 
-async function verifyMedium(
-  handle: string,
-  keywords: string[]
-): Promise<VerificationResult> {
+async function verifyMedium(handle: string): Promise<VerificationResult> {
   const result = await fetchMediumArticles(handle, 5)
 
   if (result.status === 'no_feed') {
@@ -186,16 +181,15 @@ async function verifyMedium(
   }
 
   const allText = result.articles.map(a => a.title).join(' ')
-  const hits = countKeywordHits(allText, keywords)
 
-  if (hits === 0) {
+  if (!hasTechContent(allText)) {
     const sampleTitles = result.articles.slice(0, 3).map(a => `"${a.title}"`).join(', ')
     return {
       verified: false,
-      reason: `Medium "@${handle}" exists but content doesn't match (0/${keywords.length} keywords). Articles: ${sampleTitles}`,
+      reason: `Medium "@${handle}" exists but not tech content. Articles: ${sampleTitles}`,
     }
   }
 
-  console.log(`[verify] medium/@${handle}: verified (${hits}/${keywords.length} keyword hits)`)
-  return { verified: true, reason: 'User exists with relevant content' }
+  console.log(`[verify] medium/@${handle}: verified (tech domain content found)`)
+  return { verified: true, reason: 'User exists with tech-domain content' }
 }

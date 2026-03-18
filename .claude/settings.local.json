@@ -10,7 +10,12 @@
       "Bash(git push:*)",
       "Bash(curl:*)",
       "Bash(head:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:blog.gumshoe.ai)",
+      "WebFetch(domain:support.gumshoe.ai)",
+      "WebFetch(domain:omaha-seo.com)",
+      "WebSearch",
+      "WebFetch(domain:app.gumshoe.ai)"
     ]
   }
 }

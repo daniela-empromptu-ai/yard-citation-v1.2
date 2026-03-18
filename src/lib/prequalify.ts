@@ -20,6 +20,7 @@ import {
   resolveChannelId,
   getChannelVideos,
   rankVideosByRelevance,
+  searchChannelVideos,
   buildTranscriptFromTimedText,
   CreatorTranscriptResult,
 } from '@/lib/youtube'
@@ -108,31 +109,64 @@ export async function fetchCreatorTranscripts(
       }
       base.channelId = resolution.channelId
 
-      // Step 2: Fetch ~15 videos via RSS, rank by topic relevance
-      const allVideos = await getChannelVideos(resolution.channelId, 15)
-      if (allVideos.length === 0) {
+      // Step 2: Find topic-relevant videos via per-channel search (semantic)
+      // Use shortest topic as query — long compound queries return nothing
+      // Fallback to RSS + keyword ranking if search returns empty
+      let topVideos: { videoId: string; title: string; publishedAt: string; url: string }[] = []
+      const sortedTopics = [...campaignTopics].sort((a, b) => a.length - b.length)
+      const searchQuery = sortedTopics[0] || ''
+
+      if (searchQuery && apiKey) {
+        try {
+          const channelResults = await searchChannelVideos(
+            resolution.channelId, searchQuery, apiKey,
+            { maxResults: videosPerCreator }
+          )
+          if (channelResults.length > 0) {
+            topVideos = channelResults.map(r => ({
+              videoId: r.videoId,
+              title: r.title,
+              publishedAt: r.publishedAt || new Date().toISOString(),
+              url: `https://www.youtube.com/watch?v=${r.videoId}`,
+            }))
+            console.log(`[transcript] ${creator.creator_name}: per-channel search found ${topVideos.length} videos for "${searchQuery}"`)
+          }
+        } catch (e) {
+          console.log(`[transcript] ${creator.creator_name}: channel search failed (${(e as Error).message})`)
+        }
+      }
+
+      // Fallback to RSS + keyword ranking
+      if (topVideos.length === 0) {
+        const rssVideos = await getChannelVideos(resolution.channelId, 15)
+        const ranked = campaignTopics.length > 0
+          ? rankVideosByRelevance(rssVideos, campaignTopics)
+          : rssVideos
+        topVideos = ranked.slice(0, videosPerCreator)
+        if (topVideos.length > 0) {
+          console.log(`[transcript] ${creator.creator_name}: RSS fallback — ${topVideos.length} videos`)
+        }
+      }
+
+      if (topVideos.length === 0) {
         console.log(`[transcript] ${creator.creator_name}: no videos found for channel ${resolution.channelId}`)
         results.push({ ...base, status: 'no_video' })
         continue
       }
 
-      const ranked = campaignTopics.length > 0
-        ? rankVideosByRelevance(allVideos, campaignTopics)
-        : allVideos
-      const topVideos = ranked.slice(0, videosPerCreator)
-      console.log(`[transcript] ${creator.creator_name}: ranked ${allVideos.length} videos, fetching top ${topVideos.length}`)
+      console.log(`[transcript] ${creator.creator_name}: fetching transcripts for ${topVideos.length} videos`)
 
       base.video = topVideos[0]
       base.videos = topVideos
 
-      // Step 3: Fetch transcripts for top N videos (1.2s delay between requests)
+      // Step 3: Fetch transcripts for top N videos (0.5s delay between requests)
       const allSegments: { text: string; start: number; duration: number }[] = []
       const allFullTexts: string[] = []
       let transcriptLanguage = 'en'
       let anyTranscript = false
 
       for (const video of topVideos) {
-        if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 1200))
+        if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 500))
         transcriptRequests++
 
         const transcript = await buildTranscriptFromTimedText(video.videoId)
@@ -221,8 +255,14 @@ EXCLUSION RULES — score 0 for any of these:
 - Lifestyle, vlog, or non-technical content creators
 ONLY score independent creators — individuals or small creator-led channels, not companies.
 
+QUALITY SIGNALS — use these to differentiate:
+- Score HIGHER (60+) for channels where a senior developer or CTO would learn something new — production war stories, architecture deep-dives, real-world tooling reviews, conference talks
+- Score LOWER for tutorial mills that only teach beginners step-by-step instructions ("How to Install X", "X Tutorial for Beginners") — cap these at 15 even if topic-relevant
+- Independent creators sharing real-world experience and production insights — score 60+
+- Creators who demonstrate hands-on expertise (debugging live, showing real codebases, sharing failures) — score higher
+
 Scoring rules:
-- Creators WITH content (transcripts or articles): score based on content relevance, topic alignment, and quality signals
+- Creators WITH content (transcripts or articles): score based on content depth, originality, and whether a senior engineer would subscribe
 - Creators WITHOUT content: score based on topic match and follower count only, cap score at 20
 
 Return ONLY a JSON array, no other text:
