@@ -28,48 +28,47 @@ const EVENT_ICONS: Record<string, string> = {
 };
 
 const EVENT_COLORS: Record<string, string> = {
-  campaign_created: 'bg-blue-100 text-blue-700',
-  evaluation_completed: 'bg-purple-100 text-purple-700',
-  review_decision: 'bg-orange-100 text-orange-700',
-  outreach_sent: 'bg-teal-100 text-teal-700',
-  outreach_replied: 'bg-green-100 text-green-700',
-  outreach_booked: 'bg-emerald-100 text-emerald-700',
-  outreach_state_changed: 'bg-gray-100 text-gray-600',
-  default: 'bg-gray-100 text-gray-600',
+  campaign_created: 'bg-blue-900/30 text-blue-400',
+  evaluation_completed: 'bg-purple-900/30 text-purple-400',
+  review_decision: 'bg-orange-900/30 text-orange-400',
+  outreach_sent: 'bg-teal-900/30 text-teal-400',
+  outreach_replied: 'bg-green-900/30 text-green-400',
+  outreach_booked: 'bg-emerald-900/30 text-emerald-400',
+  outreach_state_changed: 'bg-slate-800/50 text-slate-400',
+  default: 'bg-slate-800/50 text-slate-400',
 };
 
 function EventDetail({ event_type, data }: { event_type: string; data: Record<string, unknown> }) {
   if (event_type === 'evaluation_completed') {
     return (
-      <span className="text-xs text-gray-500">
-        Score: <strong className="text-gray-700">{data.score as number}</strong> · Coverage: {data.coverage as string}
+      <span className="text-xs text-slate-500">
+        Score: <strong className="text-slate-300">{data.score as number}</strong> · Coverage: {data.coverage as string}
         {Boolean(data.needs_manual_review) && ' · ⚠ NMR'}
       </span>
     );
   }
   if (event_type === 'review_decision') {
     return (
-      <span className="text-xs text-gray-500">
-        Decision: <strong className="text-gray-700">{(data.decision as string)?.replace(/_/g, ' ')}</strong>
+      <span className="text-xs text-slate-500">
+        Decision: <strong className="text-slate-300">{(data.decision as string)?.replace(/_/g, ' ')}</strong>
         {Boolean(data.notes_md) && ` · "${data.notes_md as string}"`}
       </span>
     );
   }
   if (event_type === 'outreach_state_changed') {
-    return <span className="text-xs text-gray-500">State → <strong className="text-gray-700">{data.state as string}</strong></span>;
+    return <span className="text-xs text-slate-500">State → <strong className="text-slate-300">{data.state as string}</strong></span>;
   }
   if (event_type === 'outreach_booked') {
     return (
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-slate-500">
         Booked 🎉 {data.deal_value ? `$${data.deal_value}` : ''}
       </span>
     );
   }
-  // Fallback: show key stats from event data
   const entries = Object.entries(data).filter(([, v]) => typeof v === 'string' || typeof v === 'number');
   if (entries.length === 0) return null;
   return (
-    <span className="text-xs text-gray-400">
+    <span className="text-xs text-slate-600">
       {entries.slice(0, 3).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')}
     </span>
   );
@@ -96,41 +95,41 @@ export default function ActivityTab({ activityLog }: Props) {
   }
 
   return (
-    <div className="card divide-y divide-gray-100">
-      <div className="px-4 py-3 flex items-center justify-between bg-gray-50">
-        <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Campaign Activity</span>
-        <span className="text-xs text-gray-400">{entries.length} events</span>
+    <div className="card divide-y divide-[#2d3748]">
+      <div className="px-4 py-3 flex items-center justify-between bg-[#111827]">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Campaign Activity</span>
+        <span className="text-xs text-slate-500">{entries.length} events</span>
       </div>
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-[#1e293b]">
         {visible.map(entry => {
           const icon = EVENT_ICONS[entry.event_type] || EVENT_ICONS.default;
           const colorClass = EVENT_COLORS[entry.event_type] || EVENT_COLORS.default;
           return (
-            <div key={entry.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+            <div key={entry.id} className="flex items-start gap-3 px-4 py-3 hover:bg-[#263044]">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${colorClass}`}>
                 {icon}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900 capitalize">
+                  <span className="text-sm font-medium text-slate-200 capitalize">
                     {entry.event_type.replace(/_/g, ' ')}
                   </span>
                   {entry.actor_name && (
-                    <span className="text-xs text-gray-400">by {entry.actor_name}</span>
+                    <span className="text-xs text-slate-500">by {entry.actor_name}</span>
                   )}
                 </div>
                 <EventDetail event_type={entry.event_type} data={entry.event_data_json || {}} />
               </div>
-              <span className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(entry.created_at)}</span>
+              <span className="text-xs text-slate-500 flex-shrink-0">{formatDateTime(entry.created_at)}</span>
             </div>
           );
         })}
       </div>
       {hasMore && (
-        <div className="px-4 py-2 border-t border-gray-100 text-center">
+        <div className="px-4 py-2 border-t border-[#2d3748] text-center">
           <button
             onClick={() => setShowAll(v => !v)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-blue-400 hover:underline"
           >
             {showAll ? `Show less` : `Show all ${entries.length} events`}
           </button>

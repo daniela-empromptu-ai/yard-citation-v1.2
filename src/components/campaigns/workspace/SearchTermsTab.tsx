@@ -30,7 +30,6 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
   const { addToast } = useToast();
   const { userId } = useRole();
 
-  // Poll for terms if campaign was just created and terms are being generated
   const pollForTerms = useCallback(async () => {
     if (terms.length > 0 || polling) return;
     if (campaign.stage !== 'draft' && campaign.stage !== 'terms') return;
@@ -87,7 +86,6 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
       const newTerms = Array.isArray(data) ? data : data.terms;
       if (newTerms && newTerms.length > 0) {
         addToast('success', `Generated ${newTerms.length} search terms`);
-        // Refresh terms from DB to get full records with IDs
         const refreshRes = await fetch(`/api/campaigns/${campaign.id}/search-terms`);
         if (refreshRes.ok) {
           const freshTerms = await refreshRes.json();
@@ -116,9 +114,7 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
       const data = await res.json();
       if (res.ok && data.ok) {
         addToast('success', 'Terms approved — finding creators…');
-        // Update local state
         setTerms(prev => prev.map(t => ({ ...t, approved: true })));
-        // Signal parent to switch to Creators tab
         onPipelineStarted?.();
       } else {
         addToast('error', 'Failed to approve terms');
@@ -141,8 +137,8 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
       {polling && terms.length === 0 && (
         <div className="card p-6 text-center">
           <div className="animate-spin text-2xl mb-3">{'\u27F3'}</div>
-          <p className="text-sm font-medium text-gray-700">Generating search terms from your campaign brief…</p>
-          <p className="text-xs text-gray-500 mt-1">This typically takes 10-20 seconds.</p>
+          <p className="text-sm font-medium text-slate-300">Generating search terms from your campaign brief…</p>
+          <p className="text-xs text-slate-500 mt-1">This typically takes 10-20 seconds.</p>
         </div>
       )}
 
@@ -167,15 +163,15 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
               </button>
             )}
             {terms.length > 0 && approvedCount === terms.length && (
-              <span className="text-xs text-green-700 font-medium flex items-center gap-1">
+              <span className="text-xs text-green-400 font-medium flex items-center gap-1">
                 All terms approved
               </span>
             )}
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-slate-500">
             {terms.length} terms · {approvedCount} approved
             {terms.length > 0 && terms.length !== 15 && (
-              <span className="text-orange-600 ml-2">Expected 15</span>
+              <span className="text-orange-400 ml-2">Expected 15</span>
             )}
           </div>
         </div>
@@ -207,16 +203,16 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
               <tbody>
                 {terms.map((term, i) => (
                   <tr key={term.id}>
-                    <td className="text-gray-400 font-mono text-xs">{i + 1}</td>
-                    <td className="font-medium text-gray-900 font-mono text-xs">{term.term}</td>
+                    <td className="text-slate-500 font-mono text-xs">{i + 1}</td>
+                    <td className="font-medium text-slate-200 font-mono text-xs">{term.term}</td>
                     <td>
                       <span className={`badge text-xs ${categoryTagColor(term.category_tag)}`}>
                         {term.category_tag.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="text-gray-600 text-xs max-w-xs">{term.why_it_helps}</td>
+                    <td className="text-slate-400 text-xs max-w-xs">{term.why_it_helps}</td>
                     <td>
-                      <span className={`badge text-xs ${term.approved ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                      <span className={`badge text-xs ${term.approved ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-500 border-slate-600/50'}`}>
                         {term.approved ? 'Yes' : 'No'}
                       </span>
                     </td>

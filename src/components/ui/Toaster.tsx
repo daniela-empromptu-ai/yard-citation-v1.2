@@ -41,21 +41,21 @@ export function Toaster() {
         <div
           key={t.id}
           className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border max-w-sm animate-fade-in ${
-            t.type === 'success' ? 'bg-green-50 border-green-200' :
-            t.type === 'error' ? 'bg-red-50 border-red-200' :
-            t.type === 'warning' ? 'bg-amber-50 border-amber-200' :
-            'bg-blue-50 border-blue-200'
+            t.type === 'success' ? 'bg-green-900/40 border-green-700/50' :
+            t.type === 'error' ? 'bg-red-900/40 border-red-700/50' :
+            t.type === 'warning' ? 'bg-amber-900/40 border-amber-700/50' :
+            'bg-blue-900/40 border-blue-700/50'
           }`}
         >
-          {t.type === 'success' && <CheckCircle size={16} className="text-green-600 mt-0.5 shrink-0" />}
-          {t.type === 'error' && <XCircle size={16} className="text-red-600 mt-0.5 shrink-0" />}
+          {t.type === 'success' && <CheckCircle size={16} className="text-green-400 mt-0.5 shrink-0" />}
+          {t.type === 'error' && <XCircle size={16} className="text-red-400 mt-0.5 shrink-0" />}
           <span className={`text-sm flex-1 ${
-            t.type === 'success' ? 'text-green-800' :
-            t.type === 'error' ? 'text-red-800' :
-            t.type === 'warning' ? 'text-amber-800' :
-            'text-blue-800'
+            t.type === 'success' ? 'text-green-300' :
+            t.type === 'error' ? 'text-red-300' :
+            t.type === 'warning' ? 'text-amber-300' :
+            'text-blue-300'
           }`}>{t.message}</span>
-          <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600">
+          <button onClick={() => dismiss(t.id)} className="text-slate-500 hover:text-slate-300">
             <X size={14} />
           </button>
         </div>

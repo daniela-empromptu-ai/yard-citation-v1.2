@@ -46,10 +46,10 @@ const RELATIONSHIP_STATUSES = ['none', 'cold', 'warm', 'hot']
 function RelationshipBadge({ status }: { status: string | null }) {
   const s = status || 'none'
   const colors: Record<string, string> = {
-    none: 'bg-slate-100 text-slate-500',
-    cold: 'bg-blue-100 text-blue-700',
-    warm: 'bg-amber-100 text-amber-700',
-    hot: 'bg-red-100 text-red-700',
+    none: 'bg-slate-800/50 text-slate-500',
+    cold: 'bg-blue-900/30 text-blue-400',
+    warm: 'bg-amber-900/30 text-amber-400',
+    hot: 'bg-red-900/30 text-red-400',
   }
   return <span className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ${colors[s] || colors.none}`}>{s}</span>
 }
@@ -66,6 +66,7 @@ export default function CreatorsPage() {
   const [search, setSearch] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterQuality, setFilterQuality] = useState('vetted')
 
   // Modals
   const [addOpen, setAddOpen] = useState(false)
@@ -109,8 +110,12 @@ export default function CreatorsPage() {
   useEffect(() => { fetchCategories() }, [fetchCategories])
   useEffect(() => { fetchCreators() }, [fetchCreators])
 
-  // Reset page when filters change
   useEffect(() => { setPage(1) }, [search, filterPlatform, filterCategory])
+
+  // Client-side quality filter: vetted = relationship_status != 'none' or has categories
+  const displayCreators = filterQuality === 'vetted'
+    ? creators.filter(c => (c.relationship_status && c.relationship_status !== 'none') || c.category_names)
+    : creators
 
   async function handleAdd() {
     if (!form.name.trim() || !form.platform) return
@@ -237,7 +242,7 @@ export default function CreatorsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Search by name or handle..."
@@ -246,7 +251,7 @@ export default function CreatorsPage() {
             className="input pl-9 w-full text-sm"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
               <X size={14} />
             </button>
           )}
@@ -259,15 +264,31 @@ export default function CreatorsPage() {
           <option value="">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
+        {/* Quality toggle pills */}
+        <div className="flex items-center gap-1">
+          {(['all', 'vetted'] as const).map(q => (
+            <button
+              key={q}
+              onClick={() => setFilterQuality(q)}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                filterQuality === q
+                  ? 'bg-blue-900/30 text-blue-400 border-blue-700/50'
+                  : 'bg-[#1e293b] text-slate-400 border-[#2d3748] hover:bg-[#263044]'
+              }`}
+            >
+              {q === 'all' ? 'All Creators' : 'Vetted'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-400">
+          <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-500">
             <RefreshCw size={14} className="animate-spin" /> Loading...
           </div>
-        ) : creators.length === 0 ? (
+        ) : displayCreators.length === 0 ? (
           <EmptyState
             icon="\ud83d\udc64"
             title="No creators found"
@@ -290,58 +311,58 @@ export default function CreatorsPage() {
                 </tr>
               </thead>
               <tbody>
-                {creators.map(c => (
+                {displayCreators.map(c => (
                   <tr key={c.id} className={c.excluded ? 'opacity-50' : ''}>
                     <td>
-                      <Link href={`/creators/${c.id}`} className="font-medium text-slate-900 hover:text-blue-600">
+                      <Link href={`/creators/${c.id}`} className="font-medium text-slate-200 hover:text-blue-400">
                         {c.name}
                       </Link>
-                      {c.email && <div className="text-[10px] text-slate-400 truncate max-w-[140px]">{c.email}</div>}
+                      {c.email && <div className="text-[10px] text-slate-500 truncate max-w-[140px]">{c.email}</div>}
                     </td>
                     <td><PlatformBadge platform={c.platform} /></td>
-                    <td className="text-xs text-slate-600 max-w-[140px] truncate">
+                    <td className="text-xs text-slate-400 max-w-[140px] truncate">
                       {c.handle ? (
                         <a
                           href={c.url || (c.platform === 'youtube' ? `https://www.youtube.com/@${c.handle}` : c.platform === 'medium' ? `https://medium.com/@${c.handle}` : c.platform === 'devto' ? `https://dev.to/${c.handle}` : '#')}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
+                          className="text-blue-400 hover:underline"
                         >
                           {c.platform === 'youtube' || c.platform === 'medium' ? `@${c.handle.replace(/^@/, '')}` : c.handle}
                         </a>
                       ) : '\u2014'}
                     </td>
                     <td className="text-[10px] text-slate-500 max-w-[150px] truncate">{c.category_names || '\u2014'}</td>
-                    <td className="text-xs text-slate-600">{formatNumber(c.subscriber_count)}</td>
+                    <td className="text-xs text-slate-400">{formatNumber(c.subscriber_count)}</td>
                     <td>
                       <select
                         value={c.relationship_status || 'none'}
                         onChange={e => handleInlineUpdate(c.id, 'relationship_status', e.target.value)}
-                        className="text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white"
+                        className="text-[10px] border border-[#2d3748] rounded px-1 py-0.5 bg-[#111827] text-slate-300"
                       >
                         {RELATIONSHIP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-0.5">
-                        {c.too_expensive && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-100 text-amber-700">$$$</span>}
-                        {c.brand_owned && <span className="text-[10px] px-1.5 py-0 rounded bg-purple-100 text-purple-700">brand</span>}
-                        {c.excluded && <span className="text-[10px] px-1.5 py-0 rounded bg-red-100 text-red-700">excluded</span>}
+                        {c.too_expensive && <span className="text-[10px] px-1.5 py-0 rounded bg-amber-900/30 text-amber-400">$$$</span>}
+                        {c.brand_owned && <span className="text-[10px] px-1.5 py-0 rounded bg-purple-900/30 text-purple-400">brand</span>}
+                        {c.excluded && <span className="text-[10px] px-1.5 py-0 rounded bg-red-900/30 text-red-400">excluded</span>}
                       </div>
                     </td>
-                    <td className="text-[10px] text-slate-400 max-w-[120px] truncate">{c.notes || ''}</td>
+                    <td className="text-[10px] text-slate-500 max-w-[120px] truncate">{c.notes || ''}</td>
                     <td>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => { setEditCreator({ ...c }); setEditOpen(true) }}
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"
+                          className="p-1 text-slate-500 hover:text-slate-300 rounded hover:bg-[#263044]"
                           title="Edit"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => handleDelete(c.id, c.name)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                          className="p-1 text-slate-500 hover:text-red-400 rounded hover:bg-red-900/20"
                           title="Delete"
                         >
                           <Trash2 size={13} />
@@ -403,7 +424,7 @@ export default function CreatorsPage() {
             <div className="flex flex-wrap gap-1.5 mt-1">
               {categories.map(cat => (
                 <label key={cat.id} className={`text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors ${
-                  form.category_ids.includes(cat.id) ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  form.category_ids.includes(cat.id) ? 'bg-blue-900/30 border-blue-700/50 text-blue-400' : 'bg-[#111827] border-[#2d3748] text-slate-400 hover:bg-[#263044]'
                 }`}>
                   <input
                     type="checkbox"
@@ -475,15 +496,15 @@ export default function CreatorsPage() {
               </div>
             </div>
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
                 <input type="checkbox" checked={editCreator.too_expensive} onChange={e => setEditCreator(c => c ? { ...c, too_expensive: e.target.checked } : c)} />
                 Too Expensive
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
                 <input type="checkbox" checked={editCreator.brand_owned} onChange={e => setEditCreator(c => c ? { ...c, brand_owned: e.target.checked } : c)} />
                 Brand Owned
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
                 <input type="checkbox" checked={editCreator.excluded} onChange={e => setEditCreator(c => c ? { ...c, excluded: e.target.checked } : c)} />
                 Excluded
               </label>
@@ -521,12 +542,12 @@ export default function CreatorsPage() {
             />
             <button onClick={handleAddCategory} disabled={!newCatName.trim()} className="btn-primary text-sm disabled:opacity-50">Add</button>
           </div>
-          <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
-            {categories.length === 0 && <div className="text-sm text-slate-400 py-4 text-center">No categories yet</div>}
+          <div className="divide-y divide-[#2d3748] max-h-[300px] overflow-y-auto">
+            {categories.length === 0 && <div className="text-sm text-slate-500 py-4 text-center">No categories yet</div>}
             {categories.map(cat => (
               <div key={cat.id} className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-700">{cat.name}</span>
-                <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="text-slate-400 hover:text-red-500 p-1">
+                <span className="text-sm text-slate-300">{cat.name}</span>
+                <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="text-slate-500 hover:text-red-400 p-1">
                   <Trash2 size={13} />
                 </button>
               </div>

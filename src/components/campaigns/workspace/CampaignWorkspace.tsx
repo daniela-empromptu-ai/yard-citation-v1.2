@@ -52,7 +52,6 @@ export default function CampaignWorkspace({
   const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
   const router = useRouter();
 
-  // Sync liveSearchTerms when server-side props change (e.g. navigating between tabs)
   useEffect(() => {
     setLiveSearchTerms(searchTerms);
   }, [searchTerms]);
@@ -71,13 +70,13 @@ export default function CampaignWorkspace({
   const visibleTabs = TABS.filter(t => t.show);
 
   const stageColors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    setup: 'bg-gray-100 text-gray-600',
-    terms: 'bg-blue-100 text-blue-700',
-    discovery: 'bg-cyan-100 text-cyan-700',
-    scoring: 'bg-purple-100 text-purple-700',
-    review: 'bg-orange-100 text-orange-700',
-    complete: 'bg-gray-100 text-gray-500',
+    draft: 'bg-slate-800/50 text-slate-400',
+    setup: 'bg-slate-800/50 text-slate-400',
+    terms: 'bg-blue-900/30 text-blue-400',
+    discovery: 'bg-cyan-900/30 text-cyan-400',
+    scoring: 'bg-purple-900/30 text-purple-400',
+    review: 'bg-orange-900/30 text-orange-400',
+    complete: 'bg-slate-800/50 text-slate-500',
   };
 
   const handlePipelineStarted = () => {
@@ -90,33 +89,33 @@ export default function CampaignWorkspace({
   return (
     <div className="flex flex-col h-full">
       {/* Campaign header */}
-      <div className="px-6 pt-5 pb-0 bg-white border-b border-gray-200">
+      <div className="px-6 pt-5 pb-0 bg-[#1e293b] border-b border-[#2d3748]">
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href="/campaigns" className="text-xs text-gray-400 hover:text-gray-600">Campaigns</Link>
-              <span className="text-xs text-gray-300">/</span>
-              <span className="text-xs text-gray-600">{campaign.client_name}</span>
+              <Link href="/campaigns" className="text-xs text-slate-500 hover:text-slate-300">Campaigns</Link>
+              <span className="text-xs text-slate-600">/</span>
+              <span className="text-xs text-slate-400">{campaign.client_name}</span>
             </div>
-            <h1 className="text-xl font-semibold text-gray-900">{campaign.name}</h1>
+            <h1 className="text-xl font-semibold text-slate-100">{campaign.name}</h1>
             <div className="flex items-center gap-2 mt-1.5">
-              <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+              <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-500 border-slate-600/50'}`}>
                 {campaign.status}
               </span>
-              <span className={`badge text-xs ${stageColors[campaign.stage] || 'bg-gray-100 text-gray-600'}`}>
+              <span className={`badge text-xs ${stageColors[campaign.stage] || 'bg-slate-800/50 text-slate-400'}`}>
                 Stage: {stageLabel(campaign.stage)}
               </span>
               {pipelineRunning && (
-                <span className="badge text-xs bg-blue-100 text-blue-700 border-blue-200 animate-pulse">
+                <span className="badge text-xs bg-blue-900/30 text-blue-400 border-blue-700/50 animate-pulse">
                   Pipeline running...
                 </span>
               )}
               {campaign.geo_targets && (
-                <span className="text-xs text-gray-500">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
+                <span className="text-xs text-slate-500">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>Owner: {campaign.owner_name}</span>
           </div>
         </div>
@@ -129,13 +128,13 @@ export default function CampaignWorkspace({
               onClick={() => { setActiveTab(tab.id); router.replace(`/campaigns/${campaign.id}/${tab.id}`, { scroll: false }); }}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tab.id
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
               }`}
             >
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="ml-1.5 badge bg-gray-100 text-gray-600 border-gray-200 text-xs">
+                <span className="ml-1.5 badge bg-slate-800/50 text-slate-400 border-slate-600/50 text-xs">
                   {tab.count}
                 </span>
               )}

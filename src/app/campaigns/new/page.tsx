@@ -130,33 +130,33 @@ export default function NewCampaignPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-800">New Campaign</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Set up a creator discovery campaign</p>
+        <h1 className="text-xl font-bold text-slate-100">New Campaign</h1>
+        <p className="text-sm text-slate-400 mt-0.5">Set up a creator discovery campaign</p>
       </div>
 
       {/* Progress */}
       <div className="flex items-center gap-0 mb-8">
         {STEPS.map((s, i) => (
           <div key={s} className="flex items-center">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : i < step ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : i < step ? 'bg-green-900/30 text-green-400' : 'bg-slate-800/50 text-slate-500'}`}>
               <span>{i < step ? '\u2713' : i + 1}</span>
               <span>{s}</span>
             </div>
-            {i < STEPS.length - 1 && <ChevronRight size={14} className="text-slate-300 mx-1" />}
+            {i < STEPS.length - 1 && <ChevronRight size={14} className="text-slate-600 mx-1" />}
           </div>
         ))}
       </div>
 
       {/* STEP 0: Basics */}
       {step === 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Client *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Client *</label>
             <div className="flex gap-2">
               <select
                 value={form.client_id}
                 onChange={e => update('client_id', e.target.value)}
-                className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select client...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -165,40 +165,40 @@ export default function NewCampaignPage() {
                 placeholder="Or create new..."
                 value={form.newClientName}
                 onChange={e => update('newClientName', e.target.value)}
-                className="w-40 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-40 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => e.key === 'Enter' && createClient()}
               />
-              <button onClick={createClient} className="px-3 h-9 bg-slate-100 hover:bg-slate-200 text-sm rounded-lg text-slate-600 font-medium">Add</button>
+              <button onClick={createClient} className="px-3 h-9 bg-[#263044] hover:bg-slate-700 text-sm rounded-lg text-slate-300 font-medium">Add</button>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Campaign Name *</label>
             <input
               value={form.name}
               onChange={e => update('name', e.target.value)}
               placeholder="e.g. CloudForge — Kubernetes Cost Optimization (US)"
-              className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">GEO Targets</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">GEO Targets</label>
             <div className="flex gap-2 mb-2">
               <input
                 value={form.newGeo}
                 onChange={e => update('newGeo', e.target.value)}
                 placeholder="e.g. United States"
-                className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => e.key === 'Enter' && addToArray('geo_targets', 'newGeo')}
               />
-              <button onClick={() => addToArray('geo_targets', 'newGeo')} className="px-3 h-9 bg-slate-100 hover:bg-slate-200 text-sm rounded-lg text-slate-600 font-medium">
+              <button onClick={() => addToArray('geo_targets', 'newGeo')} className="px-3 h-9 bg-[#263044] hover:bg-slate-700 text-sm rounded-lg text-slate-300 font-medium">
                 <Plus size={14} />
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {form.geo_targets.map(g => (
-                <span key={g} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                <span key={g} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-900/30 text-blue-400 text-xs rounded-full">
                   {g}
                   <button onClick={() => removeFromArray('geo_targets', g)}><X size={10} /></button>
                 </span>
@@ -208,20 +208,20 @@ export default function NewCampaignPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Language</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Language</label>
               <input
                 value={form.language}
                 onChange={e => update('language', e.target.value)}
-                className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Product Category</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Product Category</label>
               <input
                 value={form.product_category}
                 onChange={e => update('product_category', e.target.value)}
                 placeholder="e.g. FinOps / Kubernetes"
-                className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -230,27 +230,27 @@ export default function NewCampaignPage() {
 
       {/* STEP 1: Brief + Gumshoe */}
       {step === 1 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Creative Brief * <span className="text-slate-400 font-normal">(Markdown supported)</span></label>
-            <p className="text-xs text-slate-400 mb-2">This brief provides context for topic extraction and creator fit.</p>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Creative Brief * <span className="text-slate-500 font-normal">(Markdown supported)</span></label>
+            <p className="text-xs text-slate-500 mb-2">This brief provides context for topic extraction and creator fit.</p>
             <textarea
               value={form.creative_brief}
               onChange={e => update('creative_brief', e.target.value)}
               placeholder="# Campaign Brief&#10;&#10;## Key message&#10;..."
               rows={14}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full px-3 py-2 border border-[#2d3748] rounded-lg text-sm font-mono bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Gumshoe Report URL <span className="text-slate-400 font-normal">(optional)</span></label>
-            <p className="text-xs text-slate-400 mb-2">Link a Gumshoe report to automatically extract cited creators during discovery.</p>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Gumshoe Report URL <span className="text-slate-500 font-normal">(optional)</span></label>
+            <p className="text-xs text-slate-500 mb-2">Link a Gumshoe report to automatically extract cited creators during discovery.</p>
             <input
               type="url"
               value={form.gumshoe_notes}
               onChange={e => update('gumshoe_notes', e.target.value)}
               placeholder="https://app.gumshoe.ai/r/brand/report/12345"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -258,23 +258,23 @@ export default function NewCampaignPage() {
 
       {/* STEP 2: Personas + Topics */}
       {step === 2 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
+        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-6">
           {/* Personas */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Personas</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Personas</label>
             <div className="flex gap-2 mb-2">
               <input
                 value={form.newPersona}
                 onChange={e => update('newPersona', e.target.value)}
                 placeholder="e.g. Platform Engineer"
-                className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => e.key === 'Enter' && addToArray('personas', 'newPersona')}
               />
-              <button onClick={() => addToArray('personas', 'newPersona')} className="px-3 h-9 bg-slate-100 text-slate-600 text-sm rounded-lg font-medium hover:bg-slate-200">Add</button>
+              <button onClick={() => addToArray('personas', 'newPersona')} className="px-3 h-9 bg-[#263044] text-slate-300 text-sm rounded-lg font-medium hover:bg-slate-700">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {form.personas.map(p => (
-                <span key={p} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                <span key={p} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-900/30 text-purple-400 text-xs rounded-full">
                   {p}
                   <button onClick={() => removeFromArray('personas', p)}><X size={10} /></button>
                 </span>
@@ -285,7 +285,7 @@ export default function NewCampaignPage() {
           {/* Topics */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-slate-700">Topics</label>
+              <label className="text-sm font-medium text-slate-300">Topics</label>
               <button
                 onClick={suggestTopics}
                 disabled={suggestingTopics || !form.creative_brief}
@@ -300,22 +300,22 @@ export default function NewCampaignPage() {
                 value={form.newTopic}
                 onChange={e => update('newTopic', e.target.value)}
                 placeholder="e.g. Kubernetes cost optimization"
-                className="flex-1 h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => e.key === 'Enter' && addToArray('topics', 'newTopic')}
               />
-              <button onClick={() => addToArray('topics', 'newTopic')} className="px-3 h-9 bg-slate-100 text-slate-600 text-sm rounded-lg font-medium hover:bg-slate-200">Add</button>
+              <button onClick={() => addToArray('topics', 'newTopic')} className="px-3 h-9 bg-[#263044] text-slate-300 text-sm rounded-lg font-medium hover:bg-slate-700">Add</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {form.topics.map(t => (
-                <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-900/30 text-blue-400 text-xs rounded-full">
                   {t}
                   <button onClick={() => removeFromArray('topics', t)}><X size={10} /></button>
                 </span>
               ))}
             </div>
             {suggestedTopics.length > 0 && (
-              <div className="border border-purple-200 rounded-lg p-3 bg-purple-50">
-                <p className="text-xs font-semibold text-purple-700 mb-2">AI Suggestions (click to add):</p>
+              <div className="border border-purple-700/50 rounded-lg p-3 bg-purple-900/20">
+                <p className="text-xs font-semibold text-purple-400 mb-2">AI Suggestions (click to add):</p>
                 {suggestedTopics.map((s, i) => (
                   <div key={i} className="flex items-start gap-2 mb-2">
                     <button
@@ -328,8 +328,8 @@ export default function NewCampaignPage() {
                       + {s.topic}
                     </button>
                     <div>
-                      <span className="text-[10px] text-purple-600 font-medium">Confidence: {Math.round(s.confidence * 100)}%</span>
-                      <p className="text-[11px] text-slate-600">{s.rationale}</p>
+                      <span className="text-[10px] text-purple-400 font-medium">Confidence: {Math.round(s.confidence * 100)}%</span>
+                      <p className="text-[11px] text-slate-400">{s.rationale}</p>
                     </div>
                   </div>
                 ))}
@@ -344,7 +344,7 @@ export default function NewCampaignPage() {
         <button
           onClick={() => setStep(s => Math.max(0, s - 1))}
           disabled={step === 0}
-          className="flex items-center gap-2 px-4 h-9 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          className="flex items-center gap-2 px-4 h-9 border border-[#2d3748] rounded-lg text-sm text-slate-400 hover:bg-[#263044] disabled:opacity-40"
         >
           <ChevronLeft size={14} /> Back
         </button>

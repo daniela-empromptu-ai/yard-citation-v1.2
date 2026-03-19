@@ -68,9 +68,9 @@ export function RubricBars({ scores }: RubricBarsProps) {
         return (
           <div key={d.key}>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-slate-600 font-medium">{d.label}</span>
+              <span className="text-xs text-slate-400 font-medium">{d.label}</span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">{d.weight}% weight</span>
+                <span className="text-[10px] text-slate-500">{d.weight}% weight</span>
                 <span className={clsx('text-xs font-bold', c.text)}>{score}</span>
               </div>
             </div>

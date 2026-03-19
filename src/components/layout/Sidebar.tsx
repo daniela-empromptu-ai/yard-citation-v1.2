@@ -17,9 +17,9 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="sidebar fixed top-0 left-0 bg-slate-900 text-white flex flex-col z-30 border-r border-slate-700">
+    <aside className="sidebar fixed top-0 left-0 bg-slate-900 text-white flex flex-col z-30 border-r border-[#2d3748]">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-5 h-14 border-b border-slate-700">
+      <div className="flex items-center gap-2 px-5 h-14 border-b border-[#2d3748]">
         <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center">
           <Zap size={14} className="text-white" />
         </div>
@@ -53,7 +53,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-slate-700">
+      <div className="px-5 py-3 border-t border-[#2d3748]">
         <div className="text-[10px] text-slate-500 uppercase tracking-widest">Internal V0</div>
         <div className="text-[11px] text-slate-400 mt-0.5">Evidence required for all scores</div>
       </div>

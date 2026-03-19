@@ -35,9 +35,9 @@ export default function DashboardPage() {
     </div>
   )
   if (error) return (
-    <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
-      <p className="text-red-600 text-sm">Error: {error}</p>
-      <button onClick={load} className="mt-2 text-xs text-red-700 underline hover:no-underline">Retry</button>
+    <div className="mt-6 p-4 bg-red-900/20 rounded-lg border border-red-700/40">
+      <p className="text-red-400 text-sm">Error: {error}</p>
+      <button onClick={load} className="mt-2 text-xs text-red-300 underline hover:no-underline">Retry</button>
     </div>
   )
   if (!data) return null
@@ -52,10 +52,10 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Campaign scoring and creator discovery at a glance</p>
+          <h1 className="text-xl font-bold text-slate-100">Dashboard</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Campaign scoring and creator discovery at a glance</p>
         </div>
-        <button onClick={load} className="flex items-center gap-1.5 px-3 h-8 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50">
+        <button onClick={load} className="flex items-center gap-1.5 px-3 h-8 border border-[#2d3748] rounded-lg text-xs text-slate-400 hover:bg-[#263044]">
           <RefreshCw size={12} /> Refresh
         </button>
       </div>
@@ -72,18 +72,18 @@ export default function DashboardPage() {
         {/* Left column: Tables */}
         <div className="col-span-2 space-y-6">
           {/* Needs Manual Review */}
-          <div className="bg-white border border-slate-200 rounded-xl">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+          <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2d3748]">
               <div className="flex items-center gap-2">
-                <AlertTriangle size={15} className="text-amber-500" />
-                <h2 className="text-sm font-semibold text-slate-800">Needs Manual Review</h2>
+                <AlertTriangle size={15} className="text-amber-400" />
+                <h2 className="text-sm font-semibold text-slate-200">Needs Manual Review</h2>
                 {needsReview.length > 0 && (
-                  <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">{needsReview.length}</span>
+                  <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 bg-amber-900/30 text-amber-400 rounded-full">{needsReview.length}</span>
                 )}
               </div>
             </div>
             {needsReview.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">
                 <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
                 No creators pending manual review
               </div>
@@ -102,10 +102,10 @@ export default function DashboardPage() {
                   {needsReview.map((row) => (
                     <tr key={String(row.cc_id)}>
                       <td>
-                        <span className="font-medium text-slate-800">{String(row.creator_name)}</span>
+                        <span className="font-medium text-slate-200">{String(row.creator_name)}</span>
                         {row.platform ? <PlatformBadge platform={String(row.platform)} /> : null}
                       </td>
-                      <td className="text-slate-600">{String(row.campaign_name)}</td>
+                      <td className="text-slate-400">{String(row.campaign_name)}</td>
                       <td>{row.overall_score != null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
                       <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
                       <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || '—')}</td>
@@ -117,13 +117,13 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Scoring Runs */}
-          <div className="bg-white border border-slate-200 rounded-xl">
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-              <BarChart3 size={15} className="text-blue-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Recent Scoring</h2>
+          <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-[#2d3748]">
+              <BarChart3 size={15} className="text-blue-400" />
+              <h2 className="text-sm font-semibold text-slate-200">Recent Scoring</h2>
             </div>
             {recentScoring.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">
                 No scoring runs yet. Create a campaign and run discovery first.
               </div>
             ) : (
@@ -142,18 +142,18 @@ export default function DashboardPage() {
                   {recentScoring.map((row) => (
                     <tr key={String(row.id)}>
                       <td>
-                        <span className="font-medium text-slate-800">{String(row.creator_name)}</span>
+                        <span className="font-medium text-slate-200">{String(row.creator_name)}</span>
                         {row.platform ? <PlatformBadge platform={String(row.platform)} /> : null}
                       </td>
                       <td>
-                        <Link href={`/campaigns/${row.campaign_id}/creators`} className="text-slate-600 hover:text-blue-600 hover:underline">
+                        <Link href={`/campaigns/${row.campaign_id}/creators`} className="text-slate-400 hover:text-blue-400 hover:underline">
                           {String(row.campaign_name)}
                         </Link>
                       </td>
                       <td><ScorePill score={Number(row.overall_score)} /></td>
                       <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
-                      <td className="text-slate-400 text-xs">{row.evaluated_at ? formatDateTime(String(row.evaluated_at)) : '—'}</td>
-                      <td>{row.needs_manual_review ? <span className="text-amber-600 text-xs font-medium">Needs Review</span> : <span className="text-green-600 text-xs font-medium">OK</span>}</td>
+                      <td className="text-slate-500 text-xs">{row.evaluated_at ? formatDateTime(String(row.evaluated_at)) : '—'}</td>
+                      <td>{row.needs_manual_review ? <span className="text-amber-400 text-xs font-medium">Needs Review</span> : <span className="text-green-400 text-xs font-medium">OK</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -164,30 +164,30 @@ export default function DashboardPage() {
 
         {/* Right column: Activity feed */}
         <div className="col-span-1">
-          <div className="bg-white border border-slate-200 rounded-xl">
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-              <Activity size={15} className="text-slate-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Recent Activity</h2>
+          <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-[#2d3748]">
+              <Activity size={15} className="text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-200">Recent Activity</h2>
             </div>
             {recentActivity.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">No activity yet.</div>
+              <div className="px-5 py-8 text-center text-slate-500 text-sm">No activity yet.</div>
             ) : (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[#1e293b]">
                 {recentActivity.map((evt, i) => (
                   <div key={i} className="px-4 py-3">
                     <div className="flex items-start gap-2">
-                      <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                      <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs text-slate-700 leading-relaxed">
+                        <p className="text-xs text-slate-300 leading-relaxed">
                           <span className="font-medium">{formatEventType(String(evt.event_type))}</span>
                           {evt.creator_name ? <span className="text-slate-500"> — {String(evt.creator_name)}</span> : null}
                         </p>
                         {evt.campaign_name ? (
-                          <Link href={`/campaigns/${evt.campaign_id}`} className="text-[11px] text-blue-600 hover:underline">
+                          <Link href={`/campaigns/${evt.campaign_id}`} className="text-[11px] text-blue-400 hover:underline">
                             {String(evt.campaign_name)}
                           </Link>
                         ) : null}
-                        <p className="text-[11px] text-slate-400 mt-0.5">{evt.created_at ? formatDateTime(String(evt.created_at)) : ''}</p>
+                        <p className="text-[11px] text-slate-600 mt-0.5">{evt.created_at ? formatDateTime(String(evt.created_at)) : ''}</p>
                       </div>
                     </div>
                   </div>
@@ -200,10 +200,10 @@ export default function DashboardPage() {
 
       {/* Quick links */}
       <div className="mt-6 flex items-center gap-4 justify-center">
-        <Link href="/campaigns" className="text-xs text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1">
+        <Link href="/campaigns" className="text-xs text-slate-500 hover:text-blue-400 hover:underline flex items-center gap-1">
           <Megaphone size={12} /> All Campaigns
         </Link>
-        <Link href="/creators" className="text-xs text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1">
+        <Link href="/creators" className="text-xs text-slate-500 hover:text-blue-400 hover:underline flex items-center gap-1">
           <Users size={12} /> Creator Database
         </Link>
       </div>

@@ -1,9 +1,9 @@
 import clsx from 'clsx'
 
 const VARIANTS = {
-  info: 'bg-blue-50 border-blue-200 text-blue-700',
-  warning: 'bg-amber-50 border-amber-200 text-amber-700',
-  danger: 'bg-red-50 border-red-200 text-red-700',
+  info: 'bg-blue-900/20 border-blue-700/40 text-blue-400',
+  warning: 'bg-amber-900/20 border-amber-700/40 text-amber-400',
+  danger: 'bg-red-900/20 border-red-700/40 text-red-400',
 }
 
 interface NoticeBoxProps {

@@ -3,20 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import ScorePill from '@/components/ui/ScorePill';
 import { CoverageTag } from '@/components/ui/Badge';
-import { pipelineStageColor, stageLabel, formatDate, formatDateTime } from '@/lib/utils';
+import { pipelineStageColor, stageLabel, formatDate, getScoreColor } from '@/lib/utils';
 import Drawer from '@/components/ui/Drawer';
 import EvidenceCard from '@/components/ui/EvidenceCard';
-import { RubricBars } from '@/components/ui/ScorePill';
+import ScoreGauge, { DIMENSION_COLOR_HEX } from '@/components/ui/ScoreGauge';
 import { useRole } from '@/components/layout/Shell';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 // ─── Helpers ───
 
-/** Safely parse a jsonb field that may arrive as a string or already-parsed array.
- *  Handles nested objects by extracting their text/title or stringifying. */
 function parseJsonArray(val: unknown): string[] {
   let arr: unknown[];
   if (Array.isArray(val)) {
@@ -104,7 +101,6 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
       setStage(data.stage);
       if (data.job) {
         setJob(data.job);
-        // Detect stale jobs: running for more than 10 minutes
         if ((data.job.status === 'queued' || data.job.status === 'running') && data.job.started_at) {
           const elapsed = Date.now() - new Date(data.job.started_at).getTime();
           if (elapsed > 10 * 60 * 1000) setStale(true);
@@ -116,7 +112,6 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
     } catch { /* ignore */ }
   }, [campaignId]);
 
-  // When pipeline transitions from running → completed/failed, refresh server data
   useEffect(() => {
     if (wasRunning && !isRunning) {
       router.refresh();
@@ -127,7 +122,6 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
   useEffect(() => {
     poll();
     if (!isRunning) return;
-    // Poll slower when stale (every 30s vs 5s) but don't stop
     const interval = setInterval(poll, stale ? 30000 : 5000);
     return () => clearInterval(interval);
   }, [isRunning, stale, poll]);
@@ -145,17 +139,17 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
 
   return (
     <div className={`card p-4 border-l-4 ${
-      job.status === 'failed' ? 'border-l-red-400' :
-      isRunning ? 'border-l-blue-400' :
+      job.status === 'failed' ? 'border-l-red-500' :
+      isRunning ? 'border-l-blue-500' :
       'border-l-green-500'
     }`}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">Pipeline Progress</h3>
+        <h3 className="text-sm font-semibold text-slate-100">Pipeline Progress</h3>
         <span className={`badge text-xs ${
-          job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
-          job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
-          stale ? 'bg-amber-50 text-amber-700 border-amber-200' :
-          'bg-blue-50 text-blue-700 border-blue-200'
+          job.status === 'completed' ? 'bg-green-900/30 text-green-400 border-green-700/50' :
+          job.status === 'failed' ? 'bg-red-900/30 text-red-400 border-red-700/50' :
+          stale ? 'bg-amber-900/30 text-amber-400 border-amber-700/50' :
+          'bg-blue-900/30 text-blue-400 border-blue-700/50'
         }`}>
           {stale ? 'Stalled' : job.status === 'running' ? 'Running…' : job.status}
         </span>
@@ -166,47 +160,243 @@ function PipelineProgress({ campaignId, initialJob }: { campaignId: string; init
         {STEPS.map((step, i) => (
           <div key={step.key} className="flex items-center flex-1">
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium w-full justify-center ${
-              i < doneIndex ? 'bg-green-100 text-green-700' :
-              i === doneIndex && isRunning ? 'bg-blue-100 text-blue-700 animate-pulse' :
-              'bg-gray-100 text-gray-400'
+              i < doneIndex ? 'bg-green-900/30 text-green-400' :
+              i === doneIndex && isRunning ? 'bg-blue-900/30 text-blue-400 animate-pulse' :
+              'bg-slate-800/50 text-slate-500'
             }`}>
               <span>{i < doneIndex ? '\u2713' : String(i + 1)}</span>
               <span>{step.label}</span>
             </div>
-            {i < STEPS.length - 1 && <div className="w-4 h-px bg-gray-200 flex-shrink-0" />}
+            {i < STEPS.length - 1 && <div className="w-4 h-px bg-[#2d3748] flex-shrink-0" />}
           </div>
         ))}
       </div>
 
       {/* Error */}
       {job.status === 'failed' && job.error_message && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-2 mb-2">
-          <p className="text-xs text-red-700">{job.error_message}</p>
+        <div className="bg-red-900/20 border border-red-700/40 rounded-md p-2 mb-2">
+          <p className="text-xs text-red-400">{job.error_message}</p>
         </div>
       )}
 
       {/* Stale warning */}
       {stale && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mb-2">
-          <p className="text-xs text-amber-700">Pipeline appears stalled (running &gt; 10 min). Try re-running.</p>
+        <div className="bg-amber-900/20 border border-amber-700/40 rounded-md p-2 mb-2">
+          <p className="text-xs text-amber-400">Pipeline appears stalled (running &gt; 10 min). Try re-running.</p>
         </div>
       )}
 
       {/* Events log */}
       {events.length > 0 && (
-        <div className="max-h-32 overflow-y-auto space-y-0.5 bg-gray-50 rounded-md p-2">
+        <div className="max-h-32 overflow-y-auto space-y-0.5 bg-[#111827] rounded-md p-2">
           {events.map((ev, i) => (
             <div key={i} className={`text-xs flex gap-2 ${
-              ev.level === 'error' ? 'text-red-600' :
-              ev.level === 'warn' ? 'text-amber-600' :
-              'text-gray-600'
+              ev.level === 'error' ? 'text-red-400' :
+              ev.level === 'warn' ? 'text-amber-400' :
+              'text-slate-400'
             }`}>
-              <span className="text-gray-400 flex-shrink-0 font-mono">
+              <span className="text-slate-600 flex-shrink-0 font-mono">
                 {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
               <span>{ev.message}</span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Dimension Config ───
+
+const DIMS = [
+  { key: 'technical_relevance', label: 'Technical', weight: 30 },
+  { key: 'audience_alignment', label: 'Audience', weight: 25 },
+  { key: 'content_quality', label: 'Quality', weight: 20 },
+  { key: 'channel_performance', label: 'Channel', weight: 15 },
+  { key: 'brand_fit', label: 'Brand Fit', weight: 10 },
+] as const;
+
+// ─── Drawer Content ───
+
+function DrawerContent({ evaluation, evidence, contentItems, angles }: {
+  evaluation: Evaluation;
+  evidence: EvidenceSnippet[];
+  contentItems: ContentItem[];
+  angles: ContentAngle[];
+}) {
+  const [showAllEvidence, setShowAllEvidence] = useState(false);
+  const featuredEvidence = evidence.slice(0, 3);
+  const remainingEvidence = evidence.slice(3);
+
+  return (
+    <div className="space-y-0">
+      {/* Section A: Hero Score */}
+      <div className="drawer-hero px-6 py-6 -mx-5 -mt-5 mb-5 flex flex-col items-center gap-3">
+        <ScoreGauge score={evaluation.overall_score} size="lg" />
+        <div className="flex items-center gap-3">
+          <CoverageTag coverage={evaluation.evidence_coverage || 'none'} />
+          {evaluation.evaluated_at && (
+            <span className="text-[11px] text-slate-500">
+              Evaluated {formatDate(evaluation.evaluated_at)}
+            </span>
+          )}
+        </div>
+        {evaluation.needs_manual_review && (
+          <div className="w-full bg-orange-900/20 border border-orange-700/40 rounded-md p-3 mt-2">
+            <p className="text-xs font-semibold text-orange-400">{'\u26A0'} Needs Manual Review</p>
+            <p className="text-xs text-orange-300 mt-0.5">{evaluation.needs_manual_review_reason}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Section B: Dimension Gauges */}
+      <div className="px-1 mb-5">
+        <div className="grid grid-cols-5 gap-3">
+          {DIMS.map(d => {
+            const score = (evaluation as unknown as Record<string, number>)[`score_${d.key}`] ?? 0;
+            return (
+              <ScoreGauge
+                key={d.key}
+                score={score}
+                size="md"
+                label={d.label}
+                weight={d.weight}
+                color={DIMENSION_COLOR_HEX[d.key]}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Section C: Featured Evidence */}
+      {evidence.length > 0 && (
+        <div className="mb-5">
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+            Key Evidence ({evidence.length})
+          </h4>
+          <div className="space-y-1">
+            {featuredEvidence.map((ev, i) => (
+              <EvidenceCard
+                key={i}
+                featured
+                quote={ev.quote}
+                url={ev.url}
+                title={ev.title}
+                platform={ev.platform}
+                timestamp_start={ev.timestamp_start_seconds}
+                timestamp_end={ev.timestamp_end_seconds}
+                dimension={ev.dimension}
+                why_it_matters={ev.why_it_matters}
+                published_at={ev.published_at}
+              />
+            ))}
+          </div>
+          {remainingEvidence.length > 0 && (
+            <>
+              {showAllEvidence ? (
+                <div className="space-y-2 mt-2">
+                  {remainingEvidence.map((ev, i) => (
+                    <EvidenceCard
+                      key={i + 3}
+                      quote={ev.quote}
+                      url={ev.url}
+                      title={ev.title}
+                      platform={ev.platform}
+                      timestamp_start={ev.timestamp_start_seconds}
+                      timestamp_end={ev.timestamp_end_seconds}
+                      dimension={ev.dimension}
+                      why_it_matters={ev.why_it_matters}
+                      published_at={ev.published_at}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAllEvidence(true)}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 font-medium"
+                >
+                  <ChevronDown size={14} />
+                  Show {remainingEvidence.length} more...
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Section D: Strengths & Weaknesses */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        <div>
+          <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-2">Strengths</h4>
+          <ul className="space-y-1">
+            {(parseJsonArray(evaluation.strengths_json)).map((s: string, i: number) => (
+              <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
+                <span className="text-green-400 flex-shrink-0 mt-0.5">{'\u2713'}</span>{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">Weaknesses</h4>
+          <ul className="space-y-1">
+            {(parseJsonArray(evaluation.weaknesses_json)).map((w: string, i: number) => (
+              <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
+                <span className="text-red-400 flex-shrink-0 mt-0.5">{'\u00D7'}</span>{w}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Content Evaluated */}
+      {contentItems.length > 0 && (
+        <div className="mb-5">
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+            Content Evaluated ({contentItems.length})
+          </h4>
+          <div className="space-y-1.5">
+            {contentItems.map(ci => (
+              <div key={ci.id} className="bg-[#111827] rounded-md p-2 flex items-center gap-2 text-xs">
+                <span className="badge bg-slate-800/50 text-slate-400 border-slate-600/50 text-[10px] shrink-0">{ci.platform}</span>
+                <a
+                  href={ci.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline truncate"
+                  title={ci.title}
+                >
+                  {ci.title}
+                </a>
+                {ci.published_at && (
+                  <span className="text-slate-500 shrink-0">{formatDate(ci.published_at)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Content Angles */}
+      {angles.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Content Angles</h4>
+          <div className="space-y-2">
+            {angles.map((angle, i) => (
+              <div key={i} className="bg-[#111827] rounded-md p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium text-slate-200">{angle.title}</span>
+                  <span className="badge bg-teal-900/30 text-teal-400 border-teal-700/50 text-xs">{angle.format}</span>
+                  {angle.persona && <span className="badge bg-purple-900/30 text-purple-400 border-purple-700/50 text-xs">{angle.persona}</span>}
+                </div>
+                <ul className="space-y-0.5">
+                  {parseJsonArray(angle.key_points_json).map((kp: string, j: number) => (
+                    <li key={j} className="text-xs text-slate-400">{'\u00B7'} {kp}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -228,14 +418,13 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
   const [addLoading, setAddLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [showExcluded, setShowExcluded] = useState(false);
-  const [stageFilter, setStageFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('scored');
   const [creatorsPage, setCreatorsPage] = useState(1);
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
   const { addToast } = useToast();
   const { userId } = useRole();
 
-  // Auto-refresh while pipeline is running
   const isRunning = pipelineJob?.status === 'queued' || pipelineJob?.status === 'running';
   useEffect(() => {
     if (!isRunning) return;
@@ -251,8 +440,17 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
   const creatorsTotalPages = Math.max(1, Math.ceil(filteredCreators.length / CREATORS_PAGE_SIZE));
   const pagedCreators = filteredCreators.slice((creatorsPage - 1) * CREATORS_PAGE_SIZE, creatorsPage * CREATORS_PAGE_SIZE);
 
-  // Reset page when filters change
   useEffect(() => { setCreatorsPage(1); }, [showExcluded, stageFilter]);
+
+  // Funnel counts
+  const stageCounts = {
+    all: campaignCreators.filter(cc => cc.pipeline_stage !== 'excluded').length,
+    discovered: campaignCreators.filter(cc => cc.pipeline_stage === 'discovered').length,
+    ingested: campaignCreators.filter(cc => cc.pipeline_stage === 'ingested').length,
+    scored: campaignCreators.filter(cc => cc.pipeline_stage === 'scored').length,
+    approved: campaignCreators.filter(cc => cc.pipeline_stage === 'approved').length,
+    needs_manual_review: campaignCreators.filter(cc => cc.pipeline_stage === 'needs_manual_review').length,
+  };
 
   const loadEvaluation = async (cc: CampaignCreator) => {
     setSelectedCc(cc);
@@ -353,27 +551,55 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
     }
   };
 
-  const stages = Array.from(new Set(campaignCreators.map(cc => cc.pipeline_stage)));
+  const FILTER_PILLS = [
+    { key: 'all', label: 'All', count: stageCounts.all },
+    { key: 'scored', label: 'Scored', count: stageCounts.scored },
+    { key: 'needs_manual_review', label: 'Needs Review', count: stageCounts.needs_manual_review },
+    { key: 'approved', label: 'Approved', count: stageCounts.approved },
+    { key: 'discovered', label: 'Discovered', count: stageCounts.discovered },
+  ];
 
   return (
     <div className="space-y-4">
       {/* Pipeline Progress */}
       <PipelineProgress campaignId={campaign.id} initialJob={pipelineJob} />
 
+      {/* Funnel summary */}
+      {stageCounts.all > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-slate-500">Funnel:</span>
+          <span className="text-slate-400">Discovered ({stageCounts.discovered})</span>
+          <span className="text-slate-600">&rarr;</span>
+          <span className="text-slate-400">Ingested ({stageCounts.ingested})</span>
+          <span className="text-slate-600">&rarr;</span>
+          <span className="text-purple-400 font-medium">Scored ({stageCounts.scored})</span>
+          <span className="text-slate-600">&rarr;</span>
+          <span className="text-green-400 font-medium">Approved ({stageCounts.approved})</span>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex items-center gap-3 flex-wrap">
+        {/* Stage pill buttons */}
+        <div className="flex items-center gap-1">
+          {FILTER_PILLS.map(pill => (
+            <button
+              key={pill.key}
+              onClick={() => setStageFilter(pill.key)}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                stageFilter === pill.key
+                  ? 'bg-blue-900/30 text-blue-400 border-blue-700/50'
+                  : 'bg-[#1e293b] text-slate-400 border-[#2d3748] hover:bg-[#263044]'
+              }`}
+            >
+              {pill.label} {pill.count > 0 && <span className="ml-1 text-slate-500">{pill.count}</span>}
+            </button>
+          ))}
+        </div>
         <label className="flex items-center gap-1.5 text-xs cursor-pointer">
           <input type="checkbox" checked={showExcluded} onChange={e => setShowExcluded(e.target.checked)} className="rounded" />
-          <span className="text-gray-700">Show excluded</span>
+          <span className="text-slate-400">Show excluded</span>
         </label>
-        <select
-          className="select-field text-xs py-1 px-2"
-          value={stageFilter}
-          onChange={e => setStageFilter(e.target.value)}
-        >
-          <option value="all">All stages</option>
-          {stages.map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
-        </select>
         <div className="flex-1" />
         <div className="flex gap-2">
           <input
@@ -410,8 +636,8 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-600">{filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''}</span>
+          <div className="px-3 py-2 border-b border-[#2d3748] bg-[#111827] flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400">{filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full table-dense">
@@ -429,34 +655,38 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
               <tbody>
                 {pagedCreators.map(cc => (
                   <tr key={cc.id}>
-                    <td>
+                    <td style={{
+                      borderLeft: cc.overall_score != null
+                        ? `2px solid ${cc.overall_score >= 80 ? '#22c55e' : cc.overall_score >= 65 ? '#f59e0b' : '#ef4444'}`
+                        : undefined
+                    }}>
                       <button
-                        className="font-medium text-gray-900 hover:text-accent text-left"
+                        className="font-medium text-slate-200 hover:text-blue-400 text-left"
                         onClick={() => loadEvaluation(cc)}
                       >
                         {cc.creator_name}
                       </button>
                       {cc.creator_handle && (
-                        <div className="text-xs text-gray-400">{cc.creator_handle}</div>
+                        <div className="text-xs text-slate-500">{cc.creator_handle}</div>
                       )}
                     </td>
                     <td>
-                      <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-xs">{cc.creator_platform}</span>
+                      <span className="badge bg-slate-800/50 text-slate-400 border-slate-600/50 text-xs">{cc.creator_platform}</span>
                     </td>
                     <td>
                       <span className={`badge text-xs ${pipelineStageColor(cc.pipeline_stage)}`}>
                         {stageLabel(cc.pipeline_stage)}
                       </span>
                     </td>
-                    <td>{cc.overall_score != null ? <ScorePill score={cc.overall_score} showBar /> : <span className="text-gray-400">—</span>}</td>
-                    <td>{cc.overall_score != null ? <CoverageTag coverage={cc.evidence_coverage || 'none'} /> : <span className="text-gray-400">—</span>}</td>
+                    <td>{cc.overall_score != null ? <ScoreGauge score={cc.overall_score} size="sm" /> : <span className="text-slate-600">—</span>}</td>
+                    <td>{cc.overall_score != null ? <CoverageTag coverage={cc.evidence_coverage || 'none'} /> : <span className="text-slate-600">—</span>}</td>
                     <td>
                       {cc.needs_manual_review ? (
-                        <span className="badge bg-orange-50 text-orange-700 border-orange-200 text-xs">{'\u26A0'} NMR</span>
+                        <span className="badge bg-orange-900/30 text-orange-400 border-orange-700/50 text-xs">{'\u26A0'} NMR</span>
                       ) : cc.overall_score !== null ? (
-                        <span className="badge bg-green-50 text-green-700 border-green-200 text-xs">{'\u2713'} OK</span>
+                        <span className="badge bg-green-900/30 text-green-400 border-green-700/50 text-xs">{'\u2713'} OK</span>
                       ) : (
-                        <span className="text-gray-400 text-xs">—</span>
+                        <span className="text-slate-600 text-xs">—</span>
                       )}
                     </td>
                     <td>
@@ -475,13 +705,13 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
           </div>
           {/* Pagination */}
           {creatorsTotalPages > 1 && (
-            <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 bg-gray-50">
-              <span className="text-xs text-gray-500">Page {creatorsPage} of {creatorsTotalPages}</span>
+            <div className="flex items-center justify-between px-3 py-2 border-t border-[#2d3748] bg-[#111827]">
+              <span className="text-xs text-slate-500">Page {creatorsPage} of {creatorsTotalPages}</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 text-gray-500 hover:bg-gray-200 rounded disabled:opacity-30">
+                <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 text-slate-500 hover:bg-[#263044] rounded disabled:opacity-30">
                   <ChevronLeft size={14} />
                 </button>
-                <button onClick={() => setCreatorsPage(p => Math.min(creatorsTotalPages, p + 1))} disabled={creatorsPage >= creatorsTotalPages} className="p-1 text-gray-500 hover:bg-gray-200 rounded disabled:opacity-30">
+                <button onClick={() => setCreatorsPage(p => Math.min(creatorsTotalPages, p + 1))} disabled={creatorsPage >= creatorsTotalPages} className="p-1 text-slate-500 hover:bg-[#263044] rounded disabled:opacity-30">
                   <ChevronRight size={14} />
                 </button>
               </div>
@@ -491,138 +721,22 @@ export default function CreatorsTab({ campaign, campaignCreators, pipelineJob }:
       )}
 
       {/* Evaluation Drawer */}
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Evaluation: ${selectedCc?.creator_name || ''}`} width="w-[600px]">
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Evaluation: ${selectedCc?.creator_name || ''}`} width="680px">
         {loadingEval ? (
-          <div className="flex items-center justify-center h-32 text-gray-400">
+          <div className="flex items-center justify-center h-32 text-slate-500">
             <div className="animate-spin text-2xl">{'\u27F3'}</div>
           </div>
         ) : !evaluation ? (
-          <div className="p-4 text-center text-gray-400">
+          <div className="p-4 text-center text-slate-500">
             <p className="text-sm">{selectedCc?.overall_score === null ? 'Not scored yet.' : 'No evaluation found.'}</p>
           </div>
         ) : (
-          <div className="p-4 space-y-5">
-            {/* Scores */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-gray-900">Overall Score</span>
-                <ScorePill score={evaluation.overall_score} size="md" showBar />
-              </div>
-              <RubricBars scores={{
-                score_technical_relevance: evaluation.score_technical_relevance,
-                score_audience_alignment: evaluation.score_audience_alignment,
-                score_content_quality: evaluation.score_content_quality,
-                score_channel_performance: evaluation.score_channel_performance,
-                score_brand_fit: evaluation.score_brand_fit,
-              }} />
-            </div>
-
-            {/* NMR Warning */}
-            {evaluation.needs_manual_review && (
-              <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                <p className="text-xs font-semibold text-orange-800">{'\u26A0'} Needs Manual Review</p>
-                <p className="text-xs text-orange-700 mt-0.5">{evaluation.needs_manual_review_reason}</p>
-              </div>
-            )}
-
-            {/* Strengths */}
-            <div>
-              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Strengths</h4>
-              <ul className="space-y-1">
-                {(parseJsonArray(evaluation.strengths_json)).map((s: string, i: number) => (
-                  <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-green-500 flex-shrink-0 mt-0.5">{'\u2713'}</span>{s}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Weaknesses */}
-            <div>
-              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Weaknesses</h4>
-              <ul className="space-y-1">
-                {(parseJsonArray(evaluation.weaknesses_json)).map((w: string, i: number) => (
-                  <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                    <span className="text-red-400 flex-shrink-0 mt-0.5">{'\u00D7'}</span>{w}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Content Evaluated */}
-            {contentItems.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                  Content Evaluated ({contentItems.length})
-                </h4>
-                <div className="space-y-1.5">
-                  {contentItems.map(ci => (
-                    <div key={ci.id} className="flex items-center gap-2 text-xs">
-                      <span className="badge bg-gray-100 text-gray-600 border-gray-200 text-[10px] shrink-0">{ci.platform}</span>
-                      <a
-                        href={ci.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline truncate"
-                        title={ci.title}
-                      >
-                        {ci.title}
-                      </a>
-                      {ci.published_at && (
-                        <span className="text-gray-400 shrink-0">{formatDate(ci.published_at)}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Evidence */}
-            <div>
-              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                Evidence Snippets ({evidence.length})
-              </h4>
-              <div className="space-y-2">
-                {evidence.map((ev, i) => (
-                  <EvidenceCard
-                    key={i}
-                    quote={ev.quote}
-                    url={ev.url}
-                    title={ev.title}
-                    platform={ev.platform}
-                    timestamp_start={ev.timestamp_start_seconds}
-                    timestamp_end={ev.timestamp_end_seconds}
-                    dimension={ev.dimension}
-                    why_it_matters={ev.why_it_matters}
-                    published_at={ev.published_at}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Content Angles */}
-            {angles.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Content Angles</h4>
-                <div className="space-y-2">
-                  {angles.map((angle, i) => (
-                    <div key={i} className="bg-gray-50 rounded-md p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-gray-900">{angle.title}</span>
-                        <span className="badge bg-teal-50 text-teal-700 border-teal-200 text-xs">{angle.format}</span>
-                        {angle.persona && <span className="badge bg-purple-50 text-purple-700 border-purple-200 text-xs">{angle.persona}</span>}
-                      </div>
-                      <ul className="space-y-0.5">
-                        {parseJsonArray(angle.key_points_json).map((kp: string, j: number) => (
-                          <li key={j} className="text-xs text-gray-600">{'\u00B7'} {kp}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <DrawerContent
+            evaluation={evaluation}
+            evidence={evidence}
+            contentItems={contentItems}
+            angles={angles}
+          />
         )}
       </Drawer>
     </div>

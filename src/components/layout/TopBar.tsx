@@ -12,9 +12,9 @@ const USERS = [
 ]
 
 const ROLE_COLORS: Record<string, string> = {
-  qualifier: 'bg-purple-100 text-purple-700',
-  outreach: 'bg-blue-100 text-blue-700',
-  admin: 'bg-amber-100 text-amber-700',
+  qualifier: 'bg-purple-900/30 text-purple-400',
+  outreach: 'bg-blue-900/30 text-blue-400',
+  admin: 'bg-amber-900/30 text-amber-400',
 }
 
 export function TopBar() {
@@ -43,16 +43,16 @@ export function TopBar() {
   }
 
   return (
-    <header className="topbar fixed bg-white border-b border-slate-200 flex items-center gap-4 px-6 z-20">
+    <header className="topbar fixed bg-[#1e293b] border-b border-[#2d3748] flex items-center gap-4 px-6 z-20">
       {/* Search */}
       <form onSubmit={handleSearch} className="relative flex-1 max-w-lg">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search campaigns, creators, prompts…"
-          className="w-full pl-8 pr-3 h-8 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+          className="w-full pl-8 pr-3 h-8 text-sm border border-[#2d3748] rounded-lg bg-[#111827] text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </form>
 
@@ -71,7 +71,7 @@ export function TopBar() {
       <div className="flex-1" />
 
       {/* Badge */}
-      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded border border-slate-200 tracking-widest uppercase">
+      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800/50 text-slate-500 rounded border border-slate-600/50 tracking-widest uppercase">
         Internal V0
       </span>
 
@@ -79,37 +79,37 @@ export function TopBar() {
       <div className="relative">
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
-          className="flex items-center gap-2 px-3 h-8 border border-slate-200 rounded-lg hover:bg-slate-50"
+          className="flex items-center gap-2 px-3 h-8 border border-[#2d3748] rounded-lg hover:bg-[#263044]"
         >
-          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-[10px] font-bold">
+          <div className="w-6 h-6 rounded-full bg-blue-900/40 flex items-center justify-center text-blue-400 text-[10px] font-bold">
             {currentUser.name.charAt(0)}
           </div>
-          <span className="text-xs font-medium text-slate-700">{currentUser.name}</span>
+          <span className="text-xs font-medium text-slate-300">{currentUser.name}</span>
           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${ROLE_COLORS[currentUser.role]}`}>
             {currentUser.role}
           </span>
-          <ChevronDown size={12} className="text-slate-400" />
+          <ChevronDown size={12} className="text-slate-500" />
         </button>
 
         {showUserMenu && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-            <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
-              <div className="p-2 border-b border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide px-2">Switch User / Role</p>
+            <div className="absolute right-0 top-full mt-1 w-64 bg-[#1e293b] border border-[#2d3748] rounded-lg shadow-lg z-50">
+              <div className="p-2 border-b border-[#2d3748]">
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide px-2">Switch User / Role</p>
               </div>
               {USERS.map(u => (
                 <button
                   key={u.id}
                   onClick={() => switchUser(u)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50 ${currentUser.id === u.id ? 'bg-blue-50' : ''}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-[#263044] ${currentUser.id === u.id ? 'bg-blue-900/20' : ''}`}
                 >
-                  <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
+                  <div className="w-7 h-7 rounded-full bg-blue-900/40 flex items-center justify-center text-blue-400 text-xs font-bold">
                     {u.name.charAt(0)}
                   </div>
                   <div className="flex-1 text-left">
-                    <div className="font-medium text-slate-800">{u.name}</div>
-                    <div className="text-[11px] text-slate-400">{u.email}</div>
+                    <div className="font-medium text-slate-200">{u.name}</div>
+                    <div className="text-[11px] text-slate-500">{u.email}</div>
                   </div>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${ROLE_COLORS[u.role]}`}>
                     {u.role}

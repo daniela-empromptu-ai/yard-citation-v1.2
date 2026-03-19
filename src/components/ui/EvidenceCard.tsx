@@ -1,4 +1,4 @@
-import { ExternalLink, Clock, Quote } from 'lucide-react'
+import { ExternalLink, Clock } from 'lucide-react'
 
 interface EvidenceCardProps {
   quote: string;
@@ -6,7 +6,6 @@ interface EvidenceCardProps {
   title?: string;
   platform?: string;
   published_at?: string | null;
-  // Accept both camelCase and snake_case for flexibility
   timestampStart?: number | null;
   timestampEnd?: number | null;
   timestamp_start?: number | null;
@@ -14,6 +13,7 @@ interface EvidenceCardProps {
   whyItMatters?: string;
   why_it_matters?: string;
   dimension?: string;
+  featured?: boolean;
 }
 
 function formatTime(seconds: number | null | undefined): string {
@@ -24,37 +24,106 @@ function formatTime(seconds: number | null | undefined): string {
 }
 
 const DIMENSION_COLORS: Record<string, string> = {
-  technical_relevance: 'border-blue-400 bg-blue-50',
-  audience_alignment: 'border-purple-400 bg-purple-50',
-  content_quality: 'border-green-400 bg-green-50',
-  channel_performance: 'border-amber-400 bg-amber-50',
-  brand_fit: 'border-pink-400 bg-pink-50',
-  general: 'border-slate-400 bg-slate-50',
+  technical_relevance: 'border-blue-500/50 bg-blue-900/20',
+  audience_alignment: 'border-purple-500/50 bg-purple-900/20',
+  content_quality: 'border-green-500/50 bg-green-900/20',
+  channel_performance: 'border-amber-500/50 bg-amber-900/20',
+  brand_fit: 'border-pink-500/50 bg-pink-900/20',
+  general: 'border-slate-500/50 bg-slate-800/30',
+}
+
+const DIMENSION_BORDER_HEX: Record<string, string> = {
+  technical_relevance: '#3b82f6',
+  audience_alignment: '#a855f7',
+  content_quality: '#22c55e',
+  channel_performance: '#f59e0b',
+  brand_fit: '#ec4899',
+  general: '#64748b',
 }
 
 export function EvidenceCard({
   quote, url, title, platform,
   timestampStart, timestampEnd, timestamp_start, timestamp_end,
-  whyItMatters, why_it_matters, dimension
+  whyItMatters, why_it_matters, dimension, featured
 }: EvidenceCardProps) {
   const tsStart = timestampStart ?? timestamp_start
   const tsEnd = timestampEnd ?? timestamp_end
   const whyMatters = whyItMatters ?? why_it_matters
+
+  if (featured) {
+    const borderColor = dimension ? (DIMENSION_BORDER_HEX[dimension] || DIMENSION_BORDER_HEX.general) : DIMENSION_BORDER_HEX.general
+    return (
+      <div
+        className="evidence-card-featured mb-3"
+        style={{ borderLeftColor: borderColor, boxShadow: `0 0 20px ${borderColor}15` }}
+      >
+        <span className="quote-mark">&ldquo;</span>
+        <blockquote className="text-sm text-slate-200 italic leading-relaxed mb-2 pl-4">
+          {quote}
+        </blockquote>
+
+        {(tsStart !== null && tsStart !== undefined) && (
+          <div className="flex items-center gap-1.5 text-[11px] text-blue-400 mb-1.5 pl-4">
+            <Clock size={11} />
+            <a
+              href={`${url}?t=${tsStart}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline font-medium"
+            >
+              [{formatTime(tsStart)}
+              {tsEnd ? ` → ${formatTime(tsEnd)}` : ''}]
+            </a>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-1.5 truncate pl-4">
+          <ExternalLink size={10} />
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-blue-400 hover:underline truncate"
+            title={url}
+          >
+            {title || url}
+          </a>
+          {platform && <span className="text-slate-600 shrink-0">· {platform}</span>}
+        </div>
+
+        {whyMatters && (
+          <div className="mt-2 pt-2 border-t border-slate-700/50 pl-4">
+            <p className="text-xs text-slate-300">
+              <span className="font-semibold text-slate-400">Why it matters:</span> {whyMatters}
+            </p>
+          </div>
+        )}
+
+        {dimension && (
+          <div className="mt-1.5 pl-4">
+            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+              {dimension.replace(/_/g, ' ')}
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Standard (non-featured) card — unchanged
   const colorClass = dimension ? (DIMENSION_COLORS[dimension] || DIMENSION_COLORS.general) : DIMENSION_COLORS.general
 
   return (
     <div className={`evidence-card rounded-lg border-l-4 p-3 ${colorClass} mb-2`}>
-      {/* Quote */}
       <div className="flex items-start gap-2 mb-2">
-        <Quote size={12} className="text-slate-400 mt-0.5 shrink-0" />
-        <blockquote className="text-[13px] text-slate-700 italic leading-relaxed">
-          &ldquo;{quote}&rdquo;
+        <span className="text-slate-500 mt-0.5 shrink-0 text-xs">&ldquo;</span>
+        <blockquote className="text-[13px] text-slate-300 italic leading-relaxed">
+          {quote}&rdquo;
         </blockquote>
       </div>
 
-      {/* Timestamp */}
       {(tsStart !== null && tsStart !== undefined) && (
-        <div className="flex items-center gap-1.5 text-[11px] text-blue-600 mb-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] text-blue-400 mb-1.5">
           <Clock size={11} />
           <a
             href={`${url}?t=${tsStart}`}
@@ -68,29 +137,26 @@ export function EvidenceCard({
         </div>
       )}
 
-      {/* Source URL */}
       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-1.5 truncate">
         <ExternalLink size={10} />
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-blue-600 hover:underline truncate"
+          className="hover:text-blue-400 hover:underline truncate"
           title={url}
         >
           {title || url}
         </a>
-        {platform && <span className="text-slate-400 shrink-0">· {platform}</span>}
+        {platform && <span className="text-slate-600 shrink-0">· {platform}</span>}
       </div>
 
-      {/* Why it matters */}
       {whyMatters && (
-        <p className="text-[11px] text-slate-600 mt-1.5 pt-1.5 border-t border-slate-200">
+        <p className="text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-700/50">
           <span className="font-semibold">Why it matters:</span> {whyMatters}
         </p>
       )}
 
-      {/* Dimension pill */}
       {dimension && (
         <div className="mt-1.5">
           <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
