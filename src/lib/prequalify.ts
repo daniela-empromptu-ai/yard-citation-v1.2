@@ -41,6 +41,8 @@ interface CreatorRow {
   topics: string[]
   follower_count: number | null
   platform_url: string | null
+  /** Videos found during discovery — skip video search, fetch these directly */
+  anchorVideos?: { videoId: string; title: string; publishedAt: string }[]
 }
 
 interface Stage1Score {
@@ -109,42 +111,53 @@ export async function fetchCreatorTranscripts(
       }
       base.channelId = resolution.channelId
 
-      // Step 2: Find topic-relevant videos via per-channel search (semantic)
-      // Use shortest topic as query — long compound queries return nothing
-      // Fallback to RSS + keyword ranking if search returns empty
+      // Step 2: Select videos for transcript fetching
+      // Priority: anchor videos from discovery > per-channel search > RSS fallback
       let topVideos: { videoId: string; title: string; publishedAt: string; url: string }[] = []
-      const sortedTopics = [...campaignTopics].sort((a, b) => a.length - b.length)
-      const searchQuery = sortedTopics[0] || ''
 
-      if (searchQuery && apiKey) {
-        try {
-          const channelResults = await searchChannelVideos(
-            resolution.channelId, searchQuery, apiKey,
-            { maxResults: videosPerCreator }
-          )
-          if (channelResults.length > 0) {
-            topVideos = channelResults.map(r => ({
-              videoId: r.videoId,
-              title: r.title,
-              publishedAt: r.publishedAt || new Date().toISOString(),
-              url: `https://www.youtube.com/watch?v=${r.videoId}`,
-            }))
-            console.log(`[transcript] ${creator.creator_name}: per-channel search found ${topVideos.length} videos for "${searchQuery}"`)
+      if (creator.anchorVideos && creator.anchorVideos.length > 0) {
+        // Use anchor videos from discovery — already known to be relevant
+        topVideos = creator.anchorVideos.slice(0, videosPerCreator).map(v => ({
+          videoId: v.videoId,
+          title: v.title,
+          publishedAt: v.publishedAt,
+          url: `https://www.youtube.com/watch?v=${v.videoId}`,
+        }))
+        console.log(`[transcript] ${creator.creator_name}: using ${topVideos.length} anchor videos from discovery`)
+      } else {
+        // No anchor videos — fall back to per-channel search, then RSS
+        const sortedTopics = [...campaignTopics].sort((a, b) => a.length - b.length)
+        const searchQuery = sortedTopics[0] || ''
+
+        if (searchQuery && apiKey) {
+          try {
+            const channelResults = await searchChannelVideos(
+              resolution.channelId, searchQuery, apiKey,
+              { maxResults: videosPerCreator }
+            )
+            if (channelResults.length > 0) {
+              topVideos = channelResults.map(r => ({
+                videoId: r.videoId,
+                title: r.title,
+                publishedAt: r.publishedAt || new Date().toISOString(),
+                url: `https://www.youtube.com/watch?v=${r.videoId}`,
+              }))
+              console.log(`[transcript] ${creator.creator_name}: per-channel search found ${topVideos.length} videos`)
+            }
+          } catch (e) {
+            console.log(`[transcript] ${creator.creator_name}: channel search failed (${(e as Error).message})`)
           }
-        } catch (e) {
-          console.log(`[transcript] ${creator.creator_name}: channel search failed (${(e as Error).message})`)
         }
-      }
 
-      // Fallback to RSS + keyword ranking
-      if (topVideos.length === 0) {
-        const rssVideos = await getChannelVideos(resolution.channelId, 15)
-        const ranked = campaignTopics.length > 0
-          ? rankVideosByRelevance(rssVideos, campaignTopics)
-          : rssVideos
-        topVideos = ranked.slice(0, videosPerCreator)
-        if (topVideos.length > 0) {
-          console.log(`[transcript] ${creator.creator_name}: RSS fallback — ${topVideos.length} videos`)
+        if (topVideos.length === 0) {
+          const rssVideos = await getChannelVideos(resolution.channelId, 15)
+          const ranked = campaignTopics.length > 0
+            ? rankVideosByRelevance(rssVideos, campaignTopics)
+            : rssVideos
+          topVideos = ranked.slice(0, videosPerCreator)
+          if (topVideos.length > 0) {
+            console.log(`[transcript] ${creator.creator_name}: RSS fallback — ${topVideos.length} videos`)
+          }
         }
       }
 
@@ -632,6 +645,7 @@ export async function runPrequalifyPipeline(
     platform: string
     url: string | null
     subscriber_count: number | null
+    notes: string | null
   }>(
     `SELECT
        cc.id AS cc_id,
@@ -639,7 +653,8 @@ export async function runPrequalifyPipeline(
        c.name,
        c.platform,
        c.url,
-       c.subscriber_count
+       c.subscriber_count,
+       cc.notes
      FROM ${t('campaign_creators')} cc
      JOIN ${t('creators')} c ON c.id = cc.creator_id
      WHERE cc.campaign_id = $1 AND cc.pipeline_stage = 'discovered'
@@ -670,15 +685,27 @@ export async function runPrequalifyPipeline(
 
   const ARTICLE_PLATFORMS = new Set(['medium', 'devto'])
 
-  const creators: CreatorRow[] = creatorsRes.data.map(r => ({
-    creator_id: r.creator_id,
-    creator_name: r.name,
-    cc_id: r.cc_id,
-    platform: r.platform,
-    topics: creatorTopics.get(r.creator_id) || [],
-    follower_count: r.subscriber_count,
-    platform_url: (r.platform === 'youtube' || ARTICLE_PLATFORMS.has(r.platform)) ? r.url : null,
-  }))
+  const creators: CreatorRow[] = creatorsRes.data.map(r => {
+    // Parse anchor videos from notes JSON if present
+    let anchorVideos: { videoId: string; title: string; publishedAt: string }[] | undefined
+    if (r.notes) {
+      try {
+        const parsed = JSON.parse(r.notes)
+        if (parsed.anchorVideos) anchorVideos = parsed.anchorVideos
+      } catch { /* notes is plain text, not JSON */ }
+    }
+
+    return {
+      creator_id: r.creator_id,
+      creator_name: r.name,
+      cc_id: r.cc_id,
+      platform: r.platform,
+      topics: creatorTopics.get(r.creator_id) || [],
+      follower_count: r.subscriber_count,
+      platform_url: (r.platform === 'youtube' || ARTICLE_PLATFORMS.has(r.platform)) ? r.url : null,
+      anchorVideos,
+    }
+  })
 
   // Split by platform type
   const youtubeCreators = creators.filter(c => c.platform === 'youtube')
