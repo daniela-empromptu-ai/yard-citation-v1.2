@@ -11,7 +11,7 @@ import { dbQuery, t, callAIApi } from '@/lib/db'
 import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
-import { verifyCreator } from '@/lib/verify-creator'
+import { verifyCreator, VerificationResult } from '@/lib/verify-creator'
 import { searchYouTubeVideosByTerms, VideoDiscoveryResult } from '@/lib/youtube'
 import { isYouTubeConfigured } from '@/lib/anthropic'
 import { v4 as uuidv4 } from 'uuid'
@@ -138,7 +138,16 @@ export async function discoverByLLM(
   let rejected = 0
   const now = new Date().toISOString()
 
-  for (const suggestion of filtered) {
+  // Process suggestions in parallel batches with timeout (prevents pipeline hang)
+  const VERIFY_BATCH_SIZE = 5
+  const VERIFY_TIMEOUT_MS = 15_000
+
+  const processSuggestion = async (suggestion: typeof filtered[0]): Promise<
+    | { type: 'existing'; creator: MatchedCreator }
+    | { type: 'brand' }
+    | { type: 'rejected' }
+    | { type: 'new'; creator: MatchedCreator }
+  > => {
     const handle = (suggestion.handle || '').replace(/^@/, '')
 
     // Try to find existing creator
@@ -149,10 +158,7 @@ export async function discoverByLLM(
         `SELECT id FROM ${t('creators')} WHERE platform = $1 AND LOWER(handle) = LOWER($2) LIMIT 1`,
         [suggestion.platform, handle]
       )
-      if (existing.data.length > 0) {
-        existingId = existing.data[0].id
-        deduped++
-      }
+      if (existing.data.length > 0) existingId = existing.data[0].id
     }
 
     if (!existingId && suggestion.url) {
@@ -160,77 +166,100 @@ export async function discoverByLLM(
         `SELECT id FROM ${t('creators')} WHERE url = $1 LIMIT 1`,
         [suggestion.url]
       )
-      if (existing.data.length > 0) {
-        existingId = existing.data[0].id
-        deduped++
-      }
+      if (existing.data.length > 0) existingId = existing.data[0].id
     }
 
     if (existingId) {
-      suggestions.push({
-        id: existingId,
-        name: suggestion.name,
-        platform: suggestion.platform,
-        handle: suggestion.handle,
-        source: 'ai_discovery',
-      })
-    } else {
-      // Skip brand-owned
-      const brandOwned = isBrandOwned(suggestion.name, suggestion.handle, suggestion.url)
-      if (brandOwned) {
-        deduped++
-        continue
+      return {
+        type: 'existing',
+        creator: { id: existingId, name: suggestion.name, platform: suggestion.platform, handle: suggestion.handle, source: 'ai_discovery' },
       }
+    }
 
-      // Verify creator exists on platform with relevant content before inserting
-      const verification = await verifyCreator(suggestion, campaign.topics)
-      if (!verification.verified) {
-        console.log(`[discovery] Rejected ${suggestion.platform}/${handle}: ${verification.reason}`)
+    // Skip brand-owned
+    if (isBrandOwned(suggestion.name, suggestion.handle, suggestion.url)) {
+      return { type: 'brand' }
+    }
+
+    // Verify creator exists on platform — with timeout to prevent hangs
+    const verification = await Promise.race([
+      verifyCreator(suggestion, campaign.topics),
+      new Promise<VerificationResult>(resolve =>
+        setTimeout(() => resolve({ verified: false, reason: 'Verification timed out (15s)' }), VERIFY_TIMEOUT_MS)
+      ),
+    ])
+
+    if (!verification.verified) {
+      console.log(`[discovery] Rejected ${suggestion.platform}/${handle}: ${verification.reason}`)
+      return { type: 'rejected' }
+    }
+
+    // Verified — insert new creator
+    const creatorId = uuidv4()
+    await dbQuery(
+      `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
+       VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', false, $6, $6)
+       ON CONFLICT DO NOTHING`,
+      [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
+    )
+
+    // Auto-tag with suggested categories
+    if (suggestion.suggested_categories?.length > 0) {
+      for (const catName of suggestion.suggested_categories) {
+        const catRes = await dbQuery<{ id: string }>(
+          `SELECT id FROM ${t('categories')} WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+          [catName]
+        )
+        let categoryId: string
+        if (catRes.data.length > 0) {
+          categoryId = catRes.data[0].id
+        } else {
+          categoryId = uuidv4()
+          await dbQuery(
+            `INSERT INTO ${t('categories')} (id, name, created_at) VALUES ($1, $2, now()) ON CONFLICT DO NOTHING`,
+            [categoryId, catName]
+          )
+        }
+        await dbQuery(
+          `INSERT INTO ${t('creator_categories')} (creator_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [creatorId, categoryId]
+        )
+      }
+    }
+
+    return {
+      type: 'new',
+      creator: { id: creatorId, name: suggestion.name, platform: suggestion.platform, handle: suggestion.handle, source: 'ai_discovery' },
+    }
+  }
+
+  // Run in batches of 5 to limit concurrent API calls
+  for (let i = 0; i < filtered.length; i += VERIFY_BATCH_SIZE) {
+    const batch = filtered.slice(i, i + VERIFY_BATCH_SIZE)
+    const batchResults = await Promise.allSettled(batch.map(processSuggestion))
+
+    for (const result of batchResults) {
+      if (result.status === 'rejected') {
+        console.log(`[discovery] Verification error: ${result.reason}`)
         rejected++
         continue
       }
-
-      // Verified — insert new creator
-      const creatorId = uuidv4()
-      await dbQuery(
-        `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
-         VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', false, $6, $6)
-         ON CONFLICT DO NOTHING`,
-        [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
-      )
-
-      // Auto-tag with suggested categories
-      if (suggestion.suggested_categories?.length > 0) {
-        for (const catName of suggestion.suggested_categories) {
-          const catRes = await dbQuery<{ id: string }>(
-            `SELECT id FROM ${t('categories')} WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-            [catName]
-          )
-          let categoryId: string
-          if (catRes.data.length > 0) {
-            categoryId = catRes.data[0].id
-          } else {
-            categoryId = uuidv4()
-            await dbQuery(
-              `INSERT INTO ${t('categories')} (id, name, created_at) VALUES ($1, $2, now()) ON CONFLICT DO NOTHING`,
-              [categoryId, catName]
-            )
-          }
-          await dbQuery(
-            `INSERT INTO ${t('creator_categories')} (creator_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-            [creatorId, categoryId]
-          )
-        }
+      switch (result.value.type) {
+        case 'existing':
+          suggestions.push(result.value.creator)
+          deduped++
+          break
+        case 'brand':
+          deduped++
+          break
+        case 'rejected':
+          rejected++
+          break
+        case 'new':
+          suggestions.push(result.value.creator)
+          newInserted++
+          break
       }
-
-      suggestions.push({
-        id: creatorId,
-        name: suggestion.name,
-        platform: suggestion.platform,
-        handle: suggestion.handle,
-        source: 'ai_discovery',
-      })
-      newInserted++
     }
   }
 
@@ -372,7 +401,7 @@ async function discoverByYouTubeSearch(
           anchorVideos: ch.anchorVideos,
         })
         newInserted++
-        console.log(`[discovery] YouTube Video Search: "${ch.channelTitle}" (@${handle}, ${ch.subscriberCount?.toLocaleString() || '?'} subs) — videos: ${ch.anchorVideos.map(v => `"${v.title}"`).join(', ')}`)
+        console.log(`[discovery] YouTube Video Search: "${ch.channelTitle}" (${handle ? '@' + handle : 'no handle'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs) — videos: ${ch.anchorVideos.map(v => `"${v.title}"`).join(', ')}`)
       }
     }
 
@@ -381,24 +410,6 @@ async function discoverByYouTubeSearch(
     console.error('[discovery] YouTube Search failed:', (e as Error).message)
     return { creators: [], newInserted: 0 }
   }
-}
-
-// ─── Phase 0.5: Seed-Based Vocabulary Extraction ───
-
-async function setupPrompt(name: string, variables: string[], text: string) {
-  await callAIApi('/setup_ai_prompt', {
-    prompt_name: name,
-    input_variables: variables,
-    prompt_text: text,
-  })
-}
-
-async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string) {
-  const result = await callAIApi('/apply_prompt_to_data', {
-    prompt_name: name,
-    input_data: { ...inputData, return_type: returnType },
-  }) as { value: unknown }
-  return result.value
 }
 
 // ─── LLM Channel Quality Filter ───
@@ -414,7 +425,7 @@ interface ChannelForQualityCheck {
  * Use LLM to filter channels — reject brands, tutorial mills, academies, and unrelated content.
  * Campaign-aware: uses topics to judge relevance.
  * Returns the set of channel titles to REJECT.
- * One batch LLM call for all channels.
+ * Uses create-agent + chat for stronger model quality than apply_prompt_to_data.
  */
 async function llmChannelFilter(
   channels: ChannelForQualityCheck[],
@@ -427,41 +438,41 @@ async function llmChannelFilter(
   ).join('\n')
 
   try {
-    await setupPrompt(
-      'filter_channels_quality',
-      ['channels_block', 'campaign_topics'],
-      `You are filtering YouTube channels for a creator sponsorship campaign. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior developer would subscribe to.
+    // Create agent (0 credits) — idempotent, overwrites if exists
+    await callAIApi('/create-agent', {
+      agent_name: 'yard_quality_filter',
+      instructions: `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior developer would subscribe to.
 
-CAMPAIGN TOPICS: {campaign_topics}
-
-CHANNELS:
-{channels_block}
-
-REJECT these types (return their numbers):
-- Company/vendor channels, product channels, corporate channels. If it exists to sell a product/service, reject.
+REJECT these types:
+- B2B company/vendor channels — channels that exist to market a software product or service (e.g., Checkly, Datadog, HashiCorp). The test: is this a COMPANY selling software/infrastructure, or an INDIVIDUAL creator?
 - Tutorial mills and academies — channels that ONLY teach beginners step-by-step ("How to Install X", "X Tutorial for Beginners", "Learn X in 10 Minutes"). Names with "Academy", "Learn", "Tutorial", "Mentor" are strong signals.
 - Training/certification companies, bootcamp channels
-- Conference/event channels
+- Conference/event channels (e.g., NDC Conferences, GOTO, InfoQ)
 - Content unrelated to the campaign topics (e.g. gaming, cooking, lifestyle, entertainment)
 
-KEEP these types:
+KEEP these types (do NOT reject):
 - Independent developers sharing production experience, war stories, tool reviews
 - Consultants/freelancers with hands-on expertise
-- Small creator-led channels where the person IS the brand
+- Creator-led channels where the person IS the brand — even if the channel has a recognizable brand name, courses, memberships, or sponsors (e.g., Fireship, Theo, ThePrimeagen, Traversy Media)
 - Creators who mix tutorials with real-world insights (not pure tutorial mills)
 
+When asked to filter channels, return ONLY a JSON array of channel numbers to REJECT (1-indexed). If all should be kept, return [].`,
+    })
+
+    // Chat with agent (1 credit) — fresh session each time
+    const result = await callAIApi('/chat', {
+      agent_id: 'yard_quality_filter',
+      session_id: `filter-${Date.now()}`,
+      message: `CAMPAIGN TOPICS: ${campaignTopics.join(', ')}
+
+CHANNELS:
+${channelsBlock}
+
 Return ONLY a JSON array of channel numbers to REJECT (1-indexed), no other text:
-[1, 3, 7]
+[]`,
+    }) as { response: string }
 
-If all should be kept, return: []`
-    )
-
-    const raw = await applyPrompt('filter_channels_quality', {
-      channels_block: channelsBlock,
-      campaign_topics: campaignTopics.join(', '),
-    }, 'raw_text') as string
-
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const rejectIndices = JSON.parse(cleaned) as number[]
 
     if (!Array.isArray(rejectIndices)) return new Set()
@@ -629,8 +640,16 @@ export async function runDiscovery(
         name: c.name, platform: c.platform, handle: c.handle!,
       }))
 
-  // Phase C: LLM look-alike discovery (supplementary to API search)
-  const llmResult = await discoverByLLM(campaign, seeds, options.llmCount || 20)
+  // Phase C: LLM look-alike discovery (supplementary to API search) — with overall timeout
+  const llmResult = await Promise.race([
+    discoverByLLM(campaign, seeds, options.llmCount || 20),
+    new Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number; rejected: number }>(resolve =>
+      setTimeout(() => {
+        console.log('[discovery] LLM discovery phase timed out (90s), continuing with other results')
+        resolve({ suggestions: [], newInserted: 0, deduped: 0, rejected: 0 })
+      }, 90_000)
+    ),
+  ])
 
   // Link all discovered creators to campaign
   const allCreators = [...gumshoeCreators, ...dbMatched, ...ytSearchCreators, ...llmResult.suggestions]

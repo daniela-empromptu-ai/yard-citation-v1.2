@@ -115,31 +115,49 @@ async function getChannelDetails(
   const map = new Map<string, ChannelItem>()
   if (channelIds.length === 0) return map
 
-  // Batch in groups of 50 (YouTube API limit)
+  // Batch in groups of 50 (YouTube API limit), retry once on failure
   for (let i = 0; i < channelIds.length; i += 50) {
     const batch = channelIds.slice(i, i + 50)
-    const url = new URL('https://www.googleapis.com/youtube/v3/channels')
-    url.searchParams.set('part', 'snippet,statistics')
-    url.searchParams.set('id', batch.join(','))
-    url.searchParams.set('key', apiKey)
 
-    try {
-      const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
-      if (!res.ok) {
-        console.log(`[yt-search] Channel details batch failed: ${res.status}`)
-        continue
-      }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const url = new URL('https://www.googleapis.com/youtube/v3/channels')
+      url.searchParams.set('part', 'snippet,statistics')
+      url.searchParams.set('id', batch.join(','))
+      url.searchParams.set('key', apiKey)
 
-      const data = await res.json()
-      for (const item of (data.items || []) as ChannelItem[]) {
-        map.set(item.id, item)
+      try {
+        const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          console.log(`[yt-search] Channel details batch failed (attempt ${attempt + 1}): ${res.status} — ${errText.slice(0, 100)}`)
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 1000)); continue }
+          break
+        }
+
+        const data = await res.json()
+        const items = (data.items || []) as ChannelItem[]
+        for (const item of items) {
+          map.set(item.id, item)
+        }
+
+        // Check for missing channels in this batch
+        const resolved = items.length
+        if (resolved < batch.length && attempt === 0) {
+          console.log(`[yt-search] Channel details: only ${resolved}/${batch.length} resolved in batch, retrying...`)
+          await new Promise(r => setTimeout(r, 1000))
+          continue
+        }
+        break // Success
+      } catch (e) {
+        console.log(`[yt-search] Channel details batch error (attempt ${attempt + 1}): ${(e as Error).message}`)
+        if (attempt === 0) { await new Promise(r => setTimeout(r, 1000)); continue }
       }
-    } catch (e) {
-      console.log(`[yt-search] Channel details batch error: ${(e as Error).message}`)
     }
   }
 
-  console.log(`[yt-search] Channel details: ${map.size}/${channelIds.length} resolved`)
+  // Diagnostic: how many have handles
+  const withHandle = Array.from(map.values()).filter(ch => ch.snippet.customUrl).length
+  console.log(`[yt-search] Channel details: ${map.size}/${channelIds.length} resolved, ${withHandle}/${map.size} have handles`)
   return map
 }
 

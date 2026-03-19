@@ -18,6 +18,7 @@ import { isDormant } from '@/lib/creator-guardrails'
 import { isYouTubeConfigured } from '@/lib/anthropic'
 import {
   resolveChannelId,
+  getLatestVideo,
   getChannelVideos,
   rankVideosByRelevance,
   searchChannelVideos,
@@ -110,6 +111,13 @@ export async function fetchCreatorTranscripts(
         continue
       }
       base.channelId = resolution.channelId
+
+      // Fetch latest video date via RSS for dormancy check (free, ~1s)
+      // Anchor videos may be old but topically relevant — not a signal of dormancy
+      const latestRssVideo = await getLatestVideo(resolution.channelId)
+      if (latestRssVideo) {
+        base.latestPublishDate = latestRssVideo.publishedAt
+      }
 
       // Step 2: Select videos for transcript fetching
       // Priority: anchor videos from discovery > per-channel search > RSS fallback
@@ -780,10 +788,10 @@ export async function runPrequalifyPipeline(
   const allResultsRaw: CreatorTranscriptResult[] = [...youtubeResults, ...articleAsTranscript, ...otherResults]
 
   // ── Dormancy check: exclude creators whose most recent content is 2+ years old ──
-  // Only apply when we have an actual publish date — unknown dates pass through to AI scoring
+  // Use latestPublishDate (from RSS) if available — anchor video dates can be old but topically relevant
   const allResults: CreatorTranscriptResult[] = []
   for (const cr of allResultsRaw) {
-    const publishedAt = cr.video?.publishedAt || null
+    const publishedAt = cr.latestPublishDate || cr.video?.publishedAt || null
     if (publishedAt && isDormant(publishedAt)) {
       // We have a date and it's stale — mark as excluded
       const now = new Date().toISOString()
@@ -796,7 +804,7 @@ export async function runPrequalifyPipeline(
          WHERE campaign_id = $1 AND creator_id = $4`,
         [campaignId, 'Excluded: dormant creator (no content in 2+ years)', now, cr.creatorId]
       )
-      console.log(`[prequalify] ${cr.creatorName}: excluded (dormant — last published ${publishedAt.slice(0, 10)})`)
+      console.log(`[prequalify] ${cr.creatorName}: excluded (dormant — last RSS video ${publishedAt.slice(0, 10)})`)
       continue
     }
     allResults.push(cr)

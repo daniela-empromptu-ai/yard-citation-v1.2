@@ -47,4 +47,6 @@ export interface CreatorTranscriptResult {
   followerCount?: number
   topics?: string[]
   error?: string
+  /** Latest video publish date from RSS — used for dormancy check instead of anchor video date */
+  latestPublishDate?: string
 }

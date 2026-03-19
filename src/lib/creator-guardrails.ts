@@ -40,6 +40,16 @@ const BRAND_BLOCKLIST: BrandEntry[] = [
   { name: 'DigitalOcean', patterns: ['digitalocean'] },
   { name: 'Vercel', patterns: ['vercel official'] },
   { name: 'Supabase', patterns: ['supabase official'] },
+  // Testing / monitoring tool companies
+  { name: 'Checkly', patterns: ['checkly'] },
+  { name: 'BrowserStack', patterns: ['browserstack'] },
+  { name: 'Sauce Labs', patterns: ['sauce labs', 'saucelabs'] },
+  { name: 'LambdaTest', patterns: ['lambdatest'] },
+  { name: 'Applitools', patterns: ['applitools'] },
+  { name: 'TestRail', patterns: ['testrail'] },
+  { name: 'mabl', patterns: ['mabl testing', 'mabl inc'] },
+  { name: 'Tricentis', patterns: ['tricentis'] },
+  { name: 'SmartBear', patterns: ['smartbear'] },
 ]
 
 /**
