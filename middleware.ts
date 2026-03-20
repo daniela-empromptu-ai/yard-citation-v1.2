@@ -9,7 +9,7 @@ export function middleware(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
   if (authHeader) {
     const encoded = authHeader.split(' ')[1]
-    const decoded = Buffer.from(encoded, 'base64').toString('utf-8')
+    const decoded = atob(encoded)
     const [incomingUser, incomingPass] = decoded.split(':')
     if (incomingUser === user && incomingPass === pass) {
       return NextResponse.next()
