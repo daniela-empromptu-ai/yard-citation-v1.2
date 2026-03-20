@@ -40,7 +40,14 @@ export default function DemoPage() {
     }
   }
 
-  useEffect(() => { setup() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // /demo?reset — wipe and re-seed
+    if (window.location.search.includes('reset')) {
+      reset()
+    } else {
+      setup()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
