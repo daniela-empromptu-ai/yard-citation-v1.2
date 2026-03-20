@@ -81,7 +81,7 @@ export async function POST() {
     // ── Topics ────────────────────────────────────────────────────
     const topics = ['AI-powered software testing', 'End-to-end test automation', 'CI/CD pipeline optimization', 'Visual regression testing', 'Developer productivity tools']
     for (let i = 0; i < topics.length; i++) {
-      await dbQuery(`INSERT INTO ${t('campaign_topics')} (campaign_id, topic, source, confidence, order_index, approved, created_at, updated_at) VALUES ($1,$2,'ai',$3,$4,true,now(),now())`,
+      await dbQuery(`INSERT INTO ${t('campaign_topics')} (campaign_id, topic, source, confidence, order_index, approved, created_at) VALUES ($1,$2,'ai',$3,$4,true,now())`,
         [campaignId, topics[i], 0.95 - i * 0.03, i])
     }
 
