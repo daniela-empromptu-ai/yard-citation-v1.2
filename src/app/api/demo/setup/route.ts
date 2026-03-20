@@ -25,8 +25,7 @@ export async function DELETE() {
       await dbQuery(`DELETE FROM ${t('campaign_topics')} WHERE campaign_id = $1`, [camp.id])
       await dbQuery(`DELETE FROM ${t('campaigns')} WHERE id = $1`, [camp.id])
     }
-    // Clean up demo content items
-    await dbQuery(`DELETE FROM ${t('content_items')} WHERE url LIKE 'https://youtube.com/watch?v=demo-%'`, [])
+    // NOTE: creators and content_items are permanent — never deleted
     return NextResponse.json({ ok: true, deleted: camps.data.length })
   } catch (e) {
     console.error('[demo/setup DELETE]', e)
@@ -69,6 +68,17 @@ export async function POST() {
     }
 
     // ── Campaign ──────────────────────────────────────────────────
+    // Re-check after potential DELETE (guard against concurrent calls)
+    const recheck = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaigns')} WHERE name LIKE '[DEMO]%' LIMIT 1`, [])
+    if (recheck.data[0]?.id) {
+      // Another concurrent call already created it — wait briefly and return it
+      const ccCount2 = await dbQuery<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${t('campaign_creators')} WHERE campaign_id = $1`, [recheck.data[0].id])
+      if (parseInt(ccCount2.data[0]?.count || '0') > 0) {
+        return NextResponse.json({ campaign_id: recheck.data[0].id })
+      }
+    }
+
     console.log('[demo/setup] Creating campaign...')
     const campaignId = uuidv4()
     await dbQuery(
@@ -175,10 +185,12 @@ export async function POST() {
       if (!creatorId) continue
       const existCI = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
       if (existCI.data.length === 0) {
-        await dbQuery(
-          `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, ingestion_method, ingestion_status, created_at, updated_at)
-           VALUES ($1,'youtube','youtube_video',$2,$3, now() - interval '${ci.daysAgo} days', now(),'English','[demo transcript]',$4,'demo','complete',now(),now())`,
-          [creatorId, ci.title, ci.url, ci.words])
+        try {
+          await dbQuery(
+            `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, ingestion_method, ingestion_status, created_at, updated_at)
+             VALUES ($1,'youtube','youtube_video',$2,$3, now() - interval '${ci.daysAgo} days', now(),'English','[demo transcript]',$4,'demo','complete',now(),now())`,
+            [creatorId, ci.title, ci.url, ci.words])
+        } catch { /* duplicate from race — safe to ignore */ }
       }
       const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
       if (row.data[0]?.id) contentIds[ci.url] = row.data[0].id
