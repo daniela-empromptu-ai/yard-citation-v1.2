@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic'
 export async function DELETE(req: NextRequest) {
   try {
     const platform = new URL(req.url).searchParams.get('platform')
-    const where = platform ? `WHERE platform = '${platform}'` : ''
+    const where = platform
+      ? `WHERE platform = '${platform}' AND (discovered_via IS NULL OR discovered_via != 'demo')`
+      : `WHERE (discovered_via IS NULL OR discovered_via != 'demo')`
     const creatorIds = await dbQuery<{ id: string }>(`SELECT id FROM creators ${where}`, [])
     const ids = creatorIds.data.map(r => r.id)
     if (ids.length === 0) return NextResponse.json({ message: 'No creators to delete' })
@@ -31,12 +33,12 @@ export async function DELETE(req: NextRequest) {
       await dbQuery('DELETE FROM creators WHERE id = $1', [id])
     }
 
-    // If deleting all, also clean campaigns and remaining activity
+    // If deleting all, also clean campaigns and remaining activity (but protect Pixelcraft demo)
     if (!platform) {
-      await dbQuery('DELETE FROM activity_log', [])
-      await dbQuery('DELETE FROM campaign_search_terms', [])
-      await dbQuery('DELETE FROM campaign_topics', [])
-      await dbQuery('DELETE FROM campaigns', [])
+      await dbQuery("DELETE FROM activity_log WHERE campaign_id NOT IN (SELECT id FROM campaigns WHERE name LIKE 'Pixelcraft%')", [])
+      await dbQuery("DELETE FROM campaign_search_terms WHERE campaign_id NOT IN (SELECT id FROM campaigns WHERE name LIKE 'Pixelcraft%')", [])
+      await dbQuery("DELETE FROM campaign_topics WHERE campaign_id NOT IN (SELECT id FROM campaigns WHERE name LIKE 'Pixelcraft%')", [])
+      await dbQuery("DELETE FROM campaigns WHERE name NOT LIKE 'Pixelcraft%'", [])
     }
 
     return NextResponse.json({ deleted: ids.length, platform: platform || 'all' })

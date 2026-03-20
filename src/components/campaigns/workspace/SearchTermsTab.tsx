@@ -159,8 +159,7 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
   const handleGenerateEngagement = async () => {
     setStarting(true);
     try {
-      const isDemo = campaign.name?.startsWith('[DEMO]') || false;
-      const endpoint = isDemo ? '/api/demo/fake-pipeline' : '/api/campaigns/search-terms/approve-all';
+      const endpoint = '/api/campaigns/search-terms/approve-all';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

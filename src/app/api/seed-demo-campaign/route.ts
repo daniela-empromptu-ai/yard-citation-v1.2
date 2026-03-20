@@ -251,7 +251,7 @@ export async function GET() {
       if (existing.data.length === 0) {
         await dbQuery(
           `INSERT INTO ${t('creators')} (name, display_name, platform, handle, url, subscriber_count, content_language, relationship_status, notes, discovered_via, created_at, updated_at)
-           VALUES ($1, $1, $2, $3, $4, $5, 'English', 'cold', '', 'manual', now(), now())`,
+           VALUES ($1, $1, $2, $3, $4, $5, 'English', 'cold', '', 'demo', now(), now())`,
           [cr.name, cr.platform, cr.handle, cr.url, cr.subscriber_count]
         )
       }
@@ -627,8 +627,8 @@ export async function GET() {
         if (!contentItemId) continue
 
         await dbQuery(
-          `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, now(), now())`,
+          `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now())`,
           [evalId, contentItemId, snippet.quote, snippet.dimension, snippet.why_it_matters, snippet.timestamp]
         )
       }
@@ -636,8 +636,8 @@ export async function GET() {
       // Insert content angles
       for (const angle of ev.angles) {
         await dbQuery(
-          `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5::jsonb, now(), now())`,
+          `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at)
+           VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
           [evalId, angle.title, angle.format, angle.persona, JSON.stringify(angle.key_points)]
         )
       }
