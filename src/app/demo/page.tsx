@@ -1,47 +1,14 @@
-'use client'
+import { redirect } from 'next/navigation'
+import { dbQuery, t } from '@/lib/db'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+export const dynamic = 'force-dynamic'
 
-export default function DemoPage() {
-  const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const doReset = window.location.search.includes('reset')
-    ;(async () => {
-      try {
-        if (doReset) {
-          await fetch('/api/demo/setup', { method: 'DELETE' })
-        }
-        const res = await fetch('/api/demo/setup', { method: 'POST' })
-        const data = await res.json()
-        if (data.campaign_id) {
-          router.replace(`/campaigns/${data.campaign_id}/engage`)
-        } else {
-          setError(data.error || 'Demo campaign not found')
-        }
-      } catch (e) {
-        setError((e as Error).message)
-      }
-    })()
-  }, [router])
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <p className="text-red-400 text-sm mb-3">{error}</p>
-          <button onClick={() => window.location.reload()} className="btn-primary text-sm">Retry</button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Loader2 size={28} className="animate-spin text-blue-400" />
-    </div>
+export default async function DemoPage() {
+  const result = await dbQuery<{ id: string }>(
+    `SELECT id FROM ${t('campaigns')} WHERE name = 'Pixelcraft — Design Systems & DX' LIMIT 1`, []
   )
+  if (result.data[0]?.id) {
+    redirect(`/campaigns/${result.data[0].id}/setup`)
+  }
+  return <div className="p-6 text-center text-slate-500">Demo not seeded. Run GET /api/seed-demo-campaign first.</div>
 }

@@ -81,7 +81,7 @@ export default function CampaignWorkspace({
   const TABS = [
     { id: 'setup', label: 'Setup', show: true },
     { id: 'search-terms', label: 'Search Terms', show: true, count: liveSearchTerms.length },
-    { id: 'discovery', label: 'Discovery', show: pipelineRunning || justStartedPipeline },
+    { id: 'discovery', label: 'Discovery', show: pipelineRunning || justStartedPipeline || pipelineCompleted },
     { id: 'engage', label: 'Engage', show: hasScoredCreators || (pipelineCompleted && !pipelineRunning) },
   ];
 
