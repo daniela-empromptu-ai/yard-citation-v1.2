@@ -359,10 +359,16 @@ export default function NewCampaignPage() {
           <button
             onClick={submit}
             disabled={loading}
-            className="flex items-center gap-2 px-5 h-9 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-5 h-9 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : null}
-            Create Campaign
+            {loading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Creating Campaign...
+              </>
+            ) : (
+              'Create Campaign'
+            )}
           </button>
         )}
       </div>

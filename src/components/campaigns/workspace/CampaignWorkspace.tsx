@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { stageLabel } from '@/lib/utils';
 import SetupTab from './SetupTab';
 import SearchTermsTab from './SearchTermsTab';
+import DiscoveryTab from './DiscoveryTab';
 import CreatorsTab from './CreatorsTab';
-import ActivityTab from './ActivityTab';
 
 interface CampaignCreatorRow {
   id: string; creator_id: string; creator_name: string; creator_platform: string;
@@ -48,40 +48,56 @@ interface Props {
 export default function CampaignWorkspace({
   campaign, topics, searchTerms, campaignCreators, activityLog, initialTab, pipelineJob,
 }: Props) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'setup');
+  const mapTab = (t: string) => t === 'creators' ? 'engage' : t === 'activity' ? 'setup' : t;
+  const [activeTab, setActiveTab] = useState(mapTab(initialTab || 'setup'));
   const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
+  const [justStartedPipeline, setJustStartedPipeline] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     setLiveSearchTerms(searchTerms);
   }, [searchTerms]);
 
-  const hasApprovedTerms = liveSearchTerms.some(t => t.approved);
-  const hasScoredCreators = campaignCreators.some(cc => cc.scoring_status === 'scored');
   const pipelineRunning = pipelineJob?.status === 'queued' || pipelineJob?.status === 'running';
+  const pipelineCompleted = pipelineJob?.status === 'completed';
+  const pipelineRan = pipelineJob != null;
+  const hasScoredCreators = campaignCreators.some(cc => cc.overall_score != null);
+
+  // Auto-navigate away from discovery when pipeline finishes
+  useEffect(() => {
+    if (activeTab === 'discovery' && !pipelineRunning && !justStartedPipeline && pipelineCompleted) {
+      setActiveTab('engage');
+      router.replace(`/campaigns/${campaign.id}/engage`, { scroll: false });
+    }
+  }, [activeTab, pipelineRunning, justStartedPipeline, pipelineCompleted, campaign.id, router]);
+
+  // Clear justStartedPipeline once server data catches up
+  useEffect(() => {
+    if (pipelineRunning && justStartedPipeline) {
+      setJustStartedPipeline(false);
+    }
+  }, [pipelineRunning, justStartedPipeline]);
 
   const TABS = [
     { id: 'setup', label: 'Setup', show: true },
     { id: 'search-terms', label: 'Search Terms', show: true, count: liveSearchTerms.length },
-    { id: 'creators', label: 'Creators', show: hasApprovedTerms || campaignCreators.length > 0 || pipelineRunning, count: campaignCreators.filter(cc => cc.pipeline_stage !== 'excluded').length },
-    { id: 'activity', label: 'Activity', show: true },
+    { id: 'discovery', label: 'Discovery', show: pipelineRunning || justStartedPipeline },
+    { id: 'engage', label: 'Engage', show: hasScoredCreators || (pipelineCompleted && !pipelineRunning) },
   ];
 
   const visibleTabs = TABS.filter(t => t.show);
 
-  const stageColors: Record<string, string> = {
-    draft: 'bg-slate-800/50 text-slate-400',
-    setup: 'bg-slate-800/50 text-slate-400',
-    terms: 'bg-blue-900/30 text-blue-400',
-    discovery: 'bg-cyan-900/30 text-cyan-400',
-    scoring: 'bg-purple-900/30 text-purple-400',
-    review: 'bg-orange-900/30 text-orange-400',
-    complete: 'bg-slate-800/50 text-slate-500',
+  const handlePipelineStarted = () => {
+    setJustStartedPipeline(true);
+    setActiveTab('discovery');
+    router.replace(`/campaigns/${campaign.id}/discovery`, { scroll: false });
+    router.refresh();
   };
 
-  const handlePipelineStarted = () => {
-    setActiveTab('creators');
-    router.replace(`/campaigns/${campaign.id}/creators`, { scroll: false });
+  const handleDiscoveryComplete = () => {
+    setActiveTab('engage');
+    router.replace(`/campaigns/${campaign.id}/engage`, { scroll: false });
+    router.refresh();
   };
 
   const tabProps = { campaign, topics, searchTerms: liveSearchTerms, campaignCreators, activityLog };
@@ -102,12 +118,9 @@ export default function CampaignWorkspace({
               <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-500 border-slate-600/50'}`}>
                 {campaign.status}
               </span>
-              <span className={`badge text-xs ${stageColors[campaign.stage] || 'bg-slate-800/50 text-slate-400'}`}>
-                Stage: {stageLabel(campaign.stage)}
-              </span>
               {pipelineRunning && (
                 <span className="badge text-xs bg-blue-900/30 text-blue-400 border-blue-700/50 animate-pulse">
-                  Pipeline running...
+                  Generating...
                 </span>
               )}
               {campaign.geo_targets && (
@@ -147,9 +160,22 @@ export default function CampaignWorkspace({
       <div className="flex-1 overflow-y-auto">
         <div className="p-6">
           {activeTab === 'setup' && <SetupTab {...tabProps} />}
-          {activeTab === 'search-terms' && <SearchTermsTab {...tabProps} onPipelineStarted={handlePipelineStarted} onTermsUpdated={(t) => setLiveSearchTerms(t as typeof searchTerms)} />}
-          {activeTab === 'creators' && <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />}
-          {activeTab === 'activity' && <ActivityTab {...tabProps} />}
+          {activeTab === 'search-terms' && (
+            <SearchTermsTab
+              {...tabProps}
+              pipelineRan={pipelineRan}
+              onPipelineStarted={handlePipelineStarted}
+              onTermsUpdated={(t) => setLiveSearchTerms(t as typeof searchTerms)}
+            />
+          )}
+          {activeTab === 'discovery' && (
+            <DiscoveryTab
+              campaign={campaign}
+              pipelineJob={pipelineJob}
+              onComplete={handleDiscoveryComplete}
+            />
+          )}
+          {activeTab === 'engage' && <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />}
         </div>
       </div>
     </div>

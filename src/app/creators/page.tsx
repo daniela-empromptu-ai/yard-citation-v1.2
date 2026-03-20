@@ -225,7 +225,7 @@ export default function CreatorsPage() {
   return (
     <div className="p-6">
       <PageHeader
-        title="Creator Database"
+        title="Creator Network"
         subtitle={`${total} creators`}
         actions={
           <div className="flex items-center gap-2">
