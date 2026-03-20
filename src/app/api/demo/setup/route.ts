@@ -33,7 +33,7 @@ export async function POST() {
     const campaignId = uuidv4()
     await dbQuery(
       `INSERT INTO ${t('campaigns')} (id, name, client_id, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, personas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'active', 'terms', '{"US","EU","UK"}', 'English', 'FinOps Platform',
+       VALUES ($1, $2, $3, $4, 'active', 'review', '{"US","EU","UK"}', 'English', 'FinOps Platform',
          'Position our FinOps platform as the go-to solution for Kubernetes cost optimization. Target DevOps engineers and platform teams who manage cloud spend across multi-cluster environments. Emphasize real-world cost savings, showback/chargeback workflows, and integration with existing observability stacks (Prometheus, Grafana). Key differentiators: real-time cost anomaly detection, namespace-level cost allocation, and automated right-sizing recommendations.',
          '{"Platform engineer managing K8s clusters","FinOps lead responsible for cloud cost reporting","DevOps team lead evaluating cost management tooling"}',
          now(), now())`,

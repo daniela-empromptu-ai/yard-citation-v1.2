@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { categoryTagColor } from '@/lib/utils';
@@ -78,16 +78,19 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
   const [generating, setGenerating] = useState(false);
   const [starting, setStarting] = useState(false);
   const [polling, setPolling] = useState(false);
+  const pollingRef = useRef(false);
   const [selectedTerm, setSelectedTerm] = useState<SearchTerm | null>(null);
   const [disabledTerms, setDisabledTerms] = useState<Set<string>>(new Set());
   const router = useRouter();
   const { addToast } = useToast();
   const { userId } = useRole();
 
-  const pollForTerms = useCallback(async () => {
-    if (terms.length > 0 || polling) return;
+  // Poll for terms only when stage is draft/terms AND no terms loaded from server
+  useEffect(() => {
+    if (terms.length > 0 || pollingRef.current) return;
     if (campaign.stage !== 'draft' && campaign.stage !== 'terms') return;
 
+    pollingRef.current = true;
     setPolling(true);
     let attempts = 0;
     const interval = setInterval(async () => {
@@ -101,6 +104,7 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
             setTerms(termsArr);
             onTermsUpdated?.(termsArr);
             clearInterval(interval);
+            pollingRef.current = false;
             setPolling(false);
             return;
           }
@@ -108,18 +112,13 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
       } catch { /* ignore */ }
       if (attempts >= 12) {
         clearInterval(interval);
+        pollingRef.current = false;
         setPolling(false);
       }
     }, 3000);
 
-    return () => clearInterval(interval);
-  }, [campaign.id, campaign.stage, terms.length, polling, onTermsUpdated]);
-
-  useEffect(() => {
-    if (terms.length === 0 && (campaign.stage === 'draft' || campaign.stage === 'terms')) {
-      pollForTerms();
-    }
-  }, [terms.length, campaign.stage, pollForTerms]);
+    return () => { clearInterval(interval); pollingRef.current = false; };
+  }, [campaign.id, campaign.stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = async () => {
     setGenerating(true);
