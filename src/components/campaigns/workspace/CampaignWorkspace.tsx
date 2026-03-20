@@ -63,14 +63,6 @@ export default function CampaignWorkspace({
   const pipelineRan = pipelineJob != null;
   const hasScoredCreators = campaignCreators.some(cc => cc.overall_score != null);
 
-  // Auto-navigate away from discovery when pipeline finishes
-  useEffect(() => {
-    if (activeTab === 'discovery' && !pipelineRunning && !justStartedPipeline && pipelineCompleted) {
-      setActiveTab('engage');
-      router.replace(`/campaigns/${campaign.id}/engage`, { scroll: false });
-    }
-  }, [activeTab, pipelineRunning, justStartedPipeline, pipelineCompleted, campaign.id, router]);
-
   // Clear justStartedPipeline once server data catches up
   useEffect(() => {
     if (pipelineRunning && justStartedPipeline) {
