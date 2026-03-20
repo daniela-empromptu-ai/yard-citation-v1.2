@@ -132,71 +132,18 @@ export async function POST() {
 
     console.log('[demo/setup] Terms + topics seeded')
 
-    // ── Creators ──────────────────────────────────────────────────
-    const CREATORS = [
-      { name: 'Fireship', handle: 'fireship', subs: 4120000 },
-      { name: 'Theo - t3.gg', handle: 't3dotgg', subs: 890000 },
-      { name: 'ThePrimeagen', handle: 'theprimeagen', subs: 1200000 },
-      { name: 'Traversy Media', handle: 'traversymedia', subs: 2260000 },
-      { name: 'Jack Herrington', handle: 'jherr', subs: 365000 },
-      { name: 'James Q Quick', handle: 'jamesqquick', subs: 218000 },
-      { name: 'Dave Farley', handle: 'continuousdelivery', subs: 195000 },
-      { name: 'Continuous Delivery', handle: 'inthecodeapp', subs: 42000 },
-    ]
-
+    // ── Look up existing creators (must already be in DB) ─────────
+    const HANDLES = ['fireship', 't3dotgg', 'theprimeagen', 'traversymedia', 'jherr', 'jamesqquick', 'continuousdelivery', 'inthecodeapp']
     const creatorIds: Record<string, string> = {}
-    for (const cr of CREATORS) {
-      const existing = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [cr.handle])
-      if (existing.data.length === 0) {
-        await dbQuery(
-          `INSERT INTO ${t('creators')} (name, display_name, platform, handle, url, subscriber_count, content_language, relationship_status, discovered_via, created_at, updated_at)
-           VALUES ($1,$1,'youtube',$2,$3,$4,'English','cold','demo',now(),now())`,
-          [cr.name, cr.handle, `https://youtube.com/@${cr.handle}`, cr.subs])
-      }
-      const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [cr.handle])
-      if (row.data[0]?.id) creatorIds[cr.handle] = row.data[0].id
+    for (const handle of HANDLES) {
+      const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [handle])
+      if (row.data[0]?.id) creatorIds[handle] = row.data[0].id
+    }
+    console.log('[demo/setup] Found creators:', Object.keys(creatorIds).length, '/', HANDLES.length)
+    if (Object.keys(creatorIds).length === 0) {
+      return NextResponse.json({ error: 'No demo creators found in DB. Run GET /api/seed-demo first.' }, { status: 400 })
     }
 
-    console.log('[demo/setup] Creators upserted:', Object.keys(creatorIds).length)
-
-    // ── Content Items ─────────────────────────────────────────────
-    const CONTENT: { handle: string; title: string; url: string; words: number; daysAgo: number }[] = [
-      { handle: 'fireship', title: 'AI is Killing the Testing Industry', url: 'https://youtube.com/watch?v=demo-fs1', words: 1200, daysAgo: 5 },
-      { handle: 'fireship', title: 'E2E Testing in 100 Seconds', url: 'https://youtube.com/watch?v=demo-fs2', words: 800, daysAgo: 30 },
-      { handle: 't3dotgg', title: 'I Replaced My Entire Test Suite with AI', url: 'https://youtube.com/watch?v=demo-t31', words: 4800, daysAgo: 8 },
-      { handle: 't3dotgg', title: 'The Testing Problem Nobody Talks About', url: 'https://youtube.com/watch?v=demo-t32', words: 5200, daysAgo: 22 },
-      { handle: 'theprimeagen', title: 'AI Testing Tools: Overhyped or Underrated?', url: 'https://youtube.com/watch?v=demo-tp1', words: 6500, daysAgo: 10 },
-      { handle: 'theprimeagen', title: 'Why Your E2E Tests Are Garbage', url: 'https://youtube.com/watch?v=demo-tp2', words: 5800, daysAgo: 25 },
-      { handle: 'traversymedia', title: 'Automated Testing Crash Course 2024', url: 'https://youtube.com/watch?v=demo-tm1', words: 8200, daysAgo: 12 },
-      { handle: 'traversymedia', title: 'AI Developer Tools That Actually Work', url: 'https://youtube.com/watch?v=demo-tm2', words: 6100, daysAgo: 35 },
-      { handle: 'jherr', title: 'Testing React Apps with AI — Is It Ready?', url: 'https://youtube.com/watch?v=demo-jh1', words: 5500, daysAgo: 7 },
-      { handle: 'jherr', title: 'The Future of Frontend Testing', url: 'https://youtube.com/watch?v=demo-jh2', words: 4800, daysAgo: 18 },
-      { handle: 'jamesqquick', title: 'I Tested AI Testing Tools So You Don\'t Have To', url: 'https://youtube.com/watch?v=demo-jq1', words: 5000, daysAgo: 9 },
-      { handle: 'jamesqquick', title: 'Stop Writing Tests Manually', url: 'https://youtube.com/watch?v=demo-jq2', words: 4200, daysAgo: 28 },
-      { handle: 'continuousdelivery', title: 'The Science of Effective Testing', url: 'https://youtube.com/watch?v=demo-df1', words: 7200, daysAgo: 6 },
-      { handle: 'continuousdelivery', title: 'AI in Software Testing: What Actually Works', url: 'https://youtube.com/watch?v=demo-df2', words: 6800, daysAgo: 15 },
-      { handle: 'inthecodeapp', title: 'E2E Testing Without the Pain', url: 'https://youtube.com/watch?v=demo-ic1', words: 4600, daysAgo: 11 },
-      { handle: 'inthecodeapp', title: 'Modern Testing Stack for Web Apps', url: 'https://youtube.com/watch?v=demo-ic2', words: 3800, daysAgo: 32 },
-    ]
-
-    const contentIds: Record<string, string> = {}
-    for (const ci of CONTENT) {
-      const creatorId = creatorIds[ci.handle]
-      if (!creatorId) continue
-      const existCI = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
-      if (existCI.data.length === 0) {
-        try {
-          await dbQuery(
-            `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, ingestion_method, ingestion_status, created_at, updated_at)
-             VALUES ($1,'youtube','youtube_video',$2,$3, now() - interval '${ci.daysAgo} days', now(),'English','[demo transcript]',$4,'demo','complete',now(),now())`,
-            [creatorId, ci.title, ci.url, ci.words])
-        } catch { /* duplicate from race — safe to ignore */ }
-      }
-      const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
-      if (row.data[0]?.id) contentIds[ci.url] = row.data[0].id
-    }
-
-    console.log('[demo/setup] Content items seeded:', Object.keys(contentIds).length)
 
     // ── Campaign Creators + Evaluations + Evidence ────────────────
     // Each creator: cc link → evaluation → evidence snippets → content angles
@@ -206,7 +153,7 @@ export async function POST() {
       overall: number; tech: number; aud: number; qual: number; perf: number; brand: number
       cov: string; nmr: boolean; nmrReason?: string
       strengths: string[]; weaknesses: string[]; rationale: string
-      snippets: { contentUrl: string; dim: string; quote: string; why: string; ts?: number }[]
+      snippets: { dim: string; quote: string; why: string; ts?: number }[]
       angles: { title: string; format: string; persona: string; points: string[] }[]
     }
 
@@ -224,13 +171,13 @@ export async function POST() {
         ],
         rationale: 'Jeff Delaney\'s Fireship is the highest-reach developer channel available. His "AI is Killing the Testing Industry" video demonstrates perfect topical alignment and his audience of 4.1M developers includes a massive segment of our target personas. His authentic, fast-paced style makes sponsored integrations feel like genuine recommendations.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-fs1', dim: 'technical_relevance', ts: 85,
+          { dim: 'technical_relevance', ts: 85,
             quote: 'The days of writing manual E2E test scripts are numbered. AI can now observe your app, understand the user flows, and generate tests that actually catch real bugs.',
             why: 'Directly validates QA.tech\'s core value proposition to a massive audience' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-fs1', dim: 'brand_fit', ts: 210,
+          { dim: 'brand_fit', ts: 210,
             quote: 'The real game-changer isn\'t AI writing tests — it\'s AI maintaining them. Self-healing selectors mean your CI pipeline doesn\'t break every time someone changes a button class.',
             why: 'Highlights QA.tech\'s self-healing feature as the key differentiator, framed in a pain point developers viscerally understand' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-fs2', dim: 'audience_alignment',
+          { dim: 'audience_alignment',
             quote: 'Every developer knows they should test more. The problem isn\'t motivation — it\'s that writing E2E tests is soul-crushing work.',
             why: 'Frames the exact emotional pain point that drives QA.tech adoption' },
         ],
@@ -252,13 +199,13 @@ export async function POST() {
         ],
         rationale: 'Theo\'s "I Replaced My Entire Test Suite with AI" is the exact content we need. His audience of senior TypeScript/React developers maps perfectly to QA.tech\'s ideal customer. His honest, opinionated style means an endorsement from him carries enormous weight — but he\'ll need to genuinely like the product.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-t31', dim: 'technical_relevance', ts: 340,
+          { dim: 'technical_relevance', ts: 340,
             quote: 'I threw out 400 Playwright tests and replaced them with AI-generated ones. The crazy part? The AI tests caught two bugs our manual tests missed for months.',
             why: 'Real-world validation of AI testing superiority with specific, credible numbers' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-t31', dim: 'content_quality', ts: 720,
+          { dim: 'content_quality', ts: 720,
             quote: 'The before and after is ridiculous. We went from a 45-minute CI pipeline to 12 minutes, and our test coverage actually went UP.',
             why: 'Quantified results that directly map to QA.tech\'s value proposition — faster CI + better coverage' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-t32', dim: 'audience_alignment', ts: 180,
+          { dim: 'audience_alignment', ts: 180,
             quote: 'Here\'s what nobody talks about: the maintenance cost. You write 200 E2E tests, ship a redesign, and suddenly half of them are broken. That\'s not a testing problem — it\'s a tooling problem.',
             why: 'Articulates the self-healing selectors value prop as a tooling insight, not a sales pitch' },
         ],
@@ -281,10 +228,10 @@ export async function POST() {
         ],
         rationale: 'Prime\'s "AI Testing Tools: Overhyped or Underrated?" shows genuine curiosity about the space. His massive senior developer audience overlaps strongly with engineering leads evaluating QA tooling. An endorsement from Prime would drive significant attention, but the product must genuinely impress him — he will not pull punches.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-tp1', dim: 'audience_alignment', ts: 445,
+          { dim: 'audience_alignment', ts: 445,
             quote: 'Look, I\'m a testing skeptic. Most testing tools just create more work. But if an AI can actually watch me use the app and generate tests that catch real regressions? That\'s a different conversation.',
             why: 'Skeptic-to-believer narrative from a trusted voice — the most powerful form of endorsement' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-tp2', dim: 'technical_relevance', ts: 280,
+          { dim: 'technical_relevance', ts: 280,
             quote: 'Your E2E tests are garbage because you\'re testing implementation details, not user behavior. AI doesn\'t make that mistake because it doesn\'t know your code — it only knows what the user sees.',
             why: 'Technical insight that positions AI testing as architecturally superior, not just more convenient' },
         ],
@@ -305,10 +252,10 @@ export async function POST() {
         ],
         rationale: 'Brad Traversy\'s "Automated Testing Crash Course 2024" and AI developer tools content show strong topical alignment. His tutorial format is ideal for showing QA.tech\'s workflow from signup to first AI-generated test. The 2.26M subscriber base of actively-learning developers represents a huge adoption funnel.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-tm1', dim: 'content_quality', ts: 560,
+          { dim: 'content_quality', ts: 560,
             quote: 'Testing is the one area where every developer knows they should do more but nobody wants to. If a tool can generate 80% of your tests automatically, that changes the entire equation.',
             why: 'Frames AI testing as the solution to a universal developer guilt — powerful motivator' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-tm2', dim: 'brand_fit', ts: 320,
+          { dim: 'brand_fit', ts: 320,
             quote: 'I\'ve tried a lot of "AI developer tools" this year. Most are glorified autocomplete. The ones that actually work are solving specific, painful problems — not trying to replace you.',
             why: 'Sets up QA.tech\'s positioning as a specific pain-point solver, not generic AI hype' },
         ],
@@ -329,10 +276,10 @@ export async function POST() {
         ],
         rationale: 'Jack Herrington\'s "Testing React Apps with AI — Is It Ready?" is a direct content match. His audience of senior React developers and architects is the highest-quality segment for QA.tech. His deep technical approach means a positive review carries enormous credibility within the React ecosystem.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-jh1', dim: 'technical_relevance', ts: 420,
+          { dim: 'technical_relevance', ts: 420,
             quote: 'I pointed the AI at my React app and said "test the checkout flow." It generated 12 test cases including edge cases I hadn\'t thought of — invalid coupon codes, expired sessions, race conditions on double-submit.',
             why: 'Concrete, specific example of AI test generation quality that will impress technical evaluators' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-jh2', dim: 'content_quality', ts: 190,
+          { dim: 'content_quality', ts: 190,
             quote: 'The future of frontend testing isn\'t writing better tests. It\'s having a system that understands your app well enough to test it for you — and smart enough to fix itself when you ship changes.',
             why: 'Visionary framing that positions QA.tech as the future, not just another tool' },
         ],
@@ -354,10 +301,10 @@ export async function POST() {
         ],
         rationale: 'James\'s "I Tested AI Testing Tools So You Don\'t Have To" is the exact content format QA.tech needs. His honest review style and engaged community make him ideal for a product that wants to build trust through transparency rather than hype.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-jq1', dim: 'brand_fit', ts: 380,
+          { dim: 'brand_fit', ts: 380,
             quote: 'Most AI testing tools I\'ve tried are basically demo-ware — they work great on a todo app but fall apart on anything real. The bar for "actually useful" is higher than people think.',
             why: 'Sets a high bar that QA.tech can clear — implicit endorsement if QA.tech passes his test' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-jq2', dim: 'audience_alignment', ts: 145,
+          { dim: 'audience_alignment', ts: 145,
             quote: 'I spent 3 days last month updating Cypress tests that broke because we changed the nav. Three. Days. There has to be a better way.',
             why: 'Visceral pain point story that every developer relates to — perfect setup for QA.tech\'s self-healing pitch' },
         ],
@@ -379,13 +326,13 @@ export async function POST() {
         ],
         rationale: 'Dave Farley literally wrote the book on Continuous Delivery. His "AI in Software Testing: What Actually Works" shows he\'s actively evaluating AI testing tools with scientific rigor. An endorsement from Dave would give QA.tech unmatched credibility with engineering leadership — the decision-makers who approve tool budgets.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-df1', dim: 'technical_relevance', ts: 680,
+          { dim: 'technical_relevance', ts: 680,
             quote: 'Effective testing is about fast feedback loops and high confidence. If AI can generate tests that provide both — genuine fast feedback on real user behavior — then it\'s not replacing testers, it\'s amplifying engineering teams.',
             why: 'Frames AI testing in rigorous engineering terms that CTOs and VPs will cite in procurement decisions' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-df2', dim: 'content_quality', ts: 340,
+          { dim: 'content_quality', ts: 340,
             quote: 'I was skeptical until I saw the self-healing capability. When your tests adapt to UI changes automatically, you eliminate the single biggest source of test maintenance cost. The ROI math changes completely.',
             why: 'Skeptic-to-convert narrative from the industry\'s most respected testing authority' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-df2', dim: 'brand_fit', ts: 890,
+          { dim: 'brand_fit', ts: 890,
             quote: 'The teams getting value from AI testing are the ones who treat it as an engineering discipline, not a magic wand. The tool generates tests — you still need to understand what good testing looks like.',
             why: 'Nuanced take that positions QA.tech as a serious engineering tool, not AI hype' },
         ],
@@ -408,10 +355,10 @@ export async function POST() {
         ],
         rationale: 'InTheCodeApp\'s dedicated focus on E2E testing makes them a strong niche fit, but the 42K subscriber base limits campaign ROI. Consider for a community-focused campaign or as a secondary placement alongside a higher-reach creator.',
         snippets: [
-          { contentUrl: 'https://youtube.com/watch?v=demo-ic1', dim: 'technical_relevance', ts: 240,
+          { dim: 'technical_relevance', ts: 240,
             quote: 'E2E testing doesn\'t have to be painful. The trick is choosing tools that understand your app structure instead of fighting against it.',
             why: 'Positions the right mindset for QA.tech adoption — tooling over process' },
-          { contentUrl: 'https://youtube.com/watch?v=demo-ic2', dim: 'audience_alignment', ts: 180,
+          { dim: 'audience_alignment', ts: 180,
             quote: 'If you\'re building a modern web app in 2024 and you\'re still writing Selenium tests, we need to talk.',
             why: 'Directly addresses migration from legacy tools — a key QA.tech onboarding path' },
         ],
@@ -453,9 +400,12 @@ export async function POST() {
       const evalId = evalRow.data[0]?.id
       if (!evalId) continue
 
-      // Evidence snippets
-      for (const sn of d.snippets) {
-        const ciId = contentIds[sn.contentUrl]
+      // Evidence snippets — attach to whatever content items this creator has
+      const creatorContent = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE creator_id=$1 ORDER BY published_at DESC LIMIT 5`, [creatorId])
+      const ciIds = creatorContent.data.map(r => r.id)
+      for (let si = 0; si < d.snippets.length; si++) {
+        const sn = d.snippets[si]
+        const ciId = ciIds[si % ciIds.length] // round-robin across available content
         if (!ciId) continue
         await dbQuery(
           `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at, updated_at)
