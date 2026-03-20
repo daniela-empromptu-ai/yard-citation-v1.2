@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+// ── DELETE: wipe demo data ────────────────────────────────────────
+
 export async function DELETE() {
   try {
     const camps = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaigns')} WHERE name LIKE '[DEMO]%'`, [])
@@ -23,12 +25,16 @@ export async function DELETE() {
       await dbQuery(`DELETE FROM ${t('campaign_topics')} WHERE campaign_id = $1`, [camp.id])
       await dbQuery(`DELETE FROM ${t('campaigns')} WHERE id = $1`, [camp.id])
     }
+    // Clean up demo content items
+    await dbQuery(`DELETE FROM ${t('content_items')} WHERE url LIKE 'https://youtube.com/watch?v=demo-%'`, [])
     return NextResponse.json({ ok: true, deleted: camps.data.length })
   } catch (e) {
     console.error('[demo/setup DELETE]', e)
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
+
+// ── POST: seed complete demo campaign ─────────────────────────────
 
 export async function POST() {
   try {
@@ -38,17 +44,16 @@ export async function POST() {
     if (!userId) return NextResponse.json({ error: 'No app_users found' }, { status: 500 })
 
     let clientId: string
-    const existClient = await dbQuery<{ id: string }>(`SELECT id FROM ${t('clients')} WHERE name='Demo Co' LIMIT 1`, [])
+    const existClient = await dbQuery<{ id: string }>(`SELECT id FROM ${t('clients')} WHERE name='QA.tech' LIMIT 1`, [])
     if (existClient.data[0]?.id) {
       clientId = existClient.data[0].id
     } else {
-      await dbQuery(`INSERT INTO ${t('clients')} (name, created_at, updated_at) VALUES ('Demo Co', now(), now())`, [])
-      const newClient = await dbQuery<{ id: string }>(`SELECT id FROM ${t('clients')} WHERE name='Demo Co' LIMIT 1`, [])
-      clientId = newClient.data[0]?.id
-      if (!clientId) return NextResponse.json({ error: 'Failed to create client' }, { status: 500 })
+      const altClient = await dbQuery<{ id: string }>(`SELECT id FROM ${t('clients')} LIMIT 1`, [])
+      clientId = altClient.data[0]?.id
+      if (!clientId) return NextResponse.json({ error: 'No clients found' }, { status: 500 })
     }
 
-    // ── Idempotency: return existing demo campaign ────────────────
+    // ── Idempotency ───────────────────────────────────────────────
     const existCamp = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaigns')} WHERE name LIKE '[DEMO]%' LIMIT 1`, [])
     if (existCamp.data[0]?.id) {
       return NextResponse.json({ campaign_id: existCamp.data[0].id })
@@ -58,99 +63,98 @@ export async function POST() {
     const campaignId = uuidv4()
     await dbQuery(
       `INSERT INTO ${t('campaigns')} (id, name, client_id, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, personas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'active', 'review', '{"US","EU","UK"}', 'English', 'FinOps Platform',
-         'Position our FinOps platform as the go-to solution for Kubernetes cost optimization. Target DevOps engineers and platform teams who manage cloud spend across multi-cluster environments. Emphasize real-world cost savings, showback/chargeback workflows, and integration with existing observability stacks (Prometheus, Grafana). Key differentiators: real-time cost anomaly detection, namespace-level cost allocation, and automated right-sizing recommendations.',
-         '{"Platform engineer managing K8s clusters","FinOps lead responsible for cloud cost reporting","DevOps team lead evaluating cost management tooling"}',
-         now(), now())`,
-      [campaignId, '[DEMO] FinOps & K8s Cost Optimization', clientId, userId]
+       VALUES ($1, $2, $3, $4, 'active', 'review', '{"US","EU","UK"}', 'English', 'AI-Powered Testing',
+         'Drive adoption of QA.tech among senior developers, CTOs, and engineering leads who are building modern web applications. QA.tech uses AI to generate and maintain end-to-end tests automatically — no manual test scripting required. Position QA.tech as the breakthrough solution for teams drowning in flaky tests, slow CI pipelines, and inadequate test coverage. Key differentiators: AI-generated tests from natural language, self-healing selectors, visual regression detection, and integration with GitHub Actions, Vercel, and major CI/CD platforms.',
+         '{"Senior full-stack developer frustrated with flaky E2E tests","Engineering manager looking to improve test coverage without hiring QA","CTO evaluating AI developer tools for engineering productivity"}',
+         now() - interval '3 days', now())`,
+      [campaignId, '[DEMO] QA.tech — AI Testing for Modern Teams', clientId, userId]
+    )
+
+    // ── Completed pipeline job ────────────────────────────────────
+    const jobId = uuidv4()
+    await dbQuery(
+      `INSERT INTO ${t('jobs')} (id, type, status, campaign_id, created_by_user_id, started_at, finished_at, created_at, updated_at)
+       VALUES ($1, 'full_pipeline', 'completed', $2, $3, now() - interval '2 hours', now() - interval '90 minutes', now() - interval '2 hours', now())`,
+      [jobId, campaignId, userId]
     )
 
     // ── Topics ────────────────────────────────────────────────────
-    const topics = [
-      'Kubernetes cost optimization', 'FinOps practices and tooling', 'Cloud cost management',
-      'Container resource right-sizing', 'Multi-cluster cost visibility',
-    ]
+    const topics = ['AI-powered software testing', 'End-to-end test automation', 'CI/CD pipeline optimization', 'Visual regression testing', 'Developer productivity tools']
     for (let i = 0; i < topics.length; i++) {
-      await dbQuery(
-        `INSERT INTO ${t('campaign_topics')} (campaign_id, topic, source, confidence, order_index, approved, created_at, updated_at)
-         VALUES ($1, $2, 'ai', $3, $4, true, now(), now())`,
-        [campaignId, topics[i], 0.95 - i * 0.03, i]
-      )
+      await dbQuery(`INSERT INTO ${t('campaign_topics')} (campaign_id, topic, source, confidence, order_index, approved, created_at, updated_at) VALUES ($1,$2,'ai',$3,$4,true,now(),now())`,
+        [campaignId, topics[i], 0.95 - i * 0.03, i])
     }
 
-    // ── Search Terms (15, all approved) ───────────────────────────
+    // ── Search Terms (15) ─────────────────────────────────────────
     const terms: [string, string, string][] = [
-      ['kubernetes cost optimization tools', 'product_category', 'Directly targets engineers searching for K8s cost solutions'],
-      ['finops kubernetes best practices', 'product_category', 'Reaches FinOps practitioners focused on container workloads'],
-      ['kubecost vs cloudhealth comparison', 'competitor', 'Captures comparison shoppers evaluating cost tools'],
-      ['opencost kubernetes monitoring', 'competitor', 'Targets users of the open-source cost alternative'],
-      ['reduce kubernetes cloud spend', 'problem_solution', 'Matches engineers actively trying to cut costs'],
-      ['kubernetes resource right-sizing guide', 'tutorial_format', 'Tutorial seekers are high-intent learners'],
-      ['cloud cost showback chargeback k8s', 'implementation', 'Specific workflow that FinOps teams implement'],
-      ['multi-cluster cost visibility', 'product_category', 'Key pain point for enterprise platform teams'],
-      ['prometheus cost metrics kubernetes', 'integration', 'Targets users integrating cost data with existing monitoring'],
-      ['spot instances kubernetes autoscaling', 'implementation', 'Practical cost savings implementation topic'],
-      ['finops foundation certified practitioner', 'product_category', 'Reaches FinOps community members and learners'],
-      ['kubernetes namespace cost allocation', 'problem_solution', 'Common enterprise cost attribution challenge'],
-      ['grafana kubernetes cost dashboard', 'integration', 'Targets Grafana users wanting cost visibility'],
-      ['helm chart resource limits best practices', 'tutorial_format', 'DevOps engineers setting resource constraints'],
-      ['GKE EKS AKS cost comparison', 'competitor', 'Multi-cloud cost comparison searchers'],
+      ['AI end-to-end testing tools 2024', 'product_category', 'Directly targets engineers searching for AI testing solutions'],
+      ['playwright vs cypress AI testing', 'competitor', 'Captures engineers comparing testing frameworks — QA.tech automates what these require manually'],
+      ['automated E2E test generation', 'product_category', 'High-intent searchers looking for exactly what QA.tech offers'],
+      ['flaky test fix strategies', 'problem_solution', 'Targets the #1 pain point QA.tech solves — self-healing selectors'],
+      ['visual regression testing tools', 'product_category', 'Key QA.tech feature — captures engineers evaluating visual testing'],
+      ['GitHub Actions E2E testing setup', 'integration', 'Targets developers setting up CI testing — QA.tech integrates natively'],
+      ['reduce CI pipeline time testing', 'problem_solution', 'Pain point: slow pipelines — QA.tech parallel execution angle'],
+      ['no-code test automation platform', 'product_category', 'Natural language test generation — no scripting required'],
+      ['AI developer tools productivity', 'product_category', 'Broader AI dev tools audience with testing interest'],
+      ['test coverage without QA team', 'problem_solution', 'Matches teams without dedicated QA — core QA.tech persona'],
+      ['Vercel deployment testing automation', 'integration', 'Vercel integration is a key QA.tech differentiator'],
+      ['selenium alternative modern testing', 'competitor', 'Engineers looking to move beyond legacy test frameworks'],
+      ['self-healing test selectors', 'implementation', 'Specific QA.tech feature — highly qualified searches'],
+      ['shift left testing DevOps', 'tutorial_format', 'DevOps testing best practices audience'],
+      ['AI code review and testing tools', 'product_category', 'Broader AI dev tools with testing crossover'],
     ]
     for (let i = 0; i < terms.length; i++) {
-      await dbQuery(
-        `INSERT INTO ${t('campaign_search_terms')} (campaign_id, term, category_tag, why_it_helps, order_index, approved, approved_by_user_id, approved_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, true, $6, now(), now(), now())`,
-        [campaignId, terms[i][0], terms[i][1], terms[i][2], i, userId]
-      )
+      await dbQuery(`INSERT INTO ${t('campaign_search_terms')} (campaign_id, term, category_tag, why_it_helps, order_index, approved, approved_by_user_id, approved_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,true,$6,now(),now(),now())`,
+        [campaignId, terms[i][0], terms[i][1], terms[i][2], i, userId])
     }
 
-    // ── Creators (upsert) ─────────────────────────────────────────
-    const creatorDefs = [
-      { name: 'DevOps & AI Toolkit', handle: 'devopstoolkit', subs: 94800, rel: 'warm' },
-      { name: 'Anton Putra', handle: 'antonputra', subs: 117000, rel: 'warm' },
-      { name: 'Abhishek Veeramalla', handle: 'abhishekveeramalla', subs: 595000, rel: 'hot' },
-      { name: 'Techno Tim', handle: 'technotim', subs: 322000, rel: 'cold' },
-      { name: 'Bret Fisher', handle: 'bretfisher', subs: 80700, rel: 'warm' },
-      { name: 'That DevOps Guy', handle: 'marceldempers', subs: 89400, rel: 'cold' },
-      { name: 'Rawkode Academy', handle: 'rawkodeacademy', subs: 28300, rel: 'warm' },
-      { name: 'Cloud With Raj', handle: 'cloudwithraj', subs: 125000, rel: 'cold' },
+    // ── Creators ──────────────────────────────────────────────────
+    const CREATORS = [
+      { name: 'Fireship', handle: 'fireship', subs: 4120000 },
+      { name: 'Theo - t3.gg', handle: 't3dotgg', subs: 890000 },
+      { name: 'ThePrimeagen', handle: 'theprimeagen', subs: 1200000 },
+      { name: 'Traversy Media', handle: 'traversymedia', subs: 2260000 },
+      { name: 'Jack Herrington', handle: 'jherr', subs: 365000 },
+      { name: 'James Q Quick', handle: 'jamesqquick', subs: 218000 },
+      { name: 'Dave Farley', handle: 'continuousdelivery', subs: 195000 },
+      { name: 'Continuous Delivery', handle: 'inthecodeapp', subs: 42000 },
     ]
+
     const creatorIds: Record<string, string> = {}
-    for (const cr of creatorDefs) {
+    for (const cr of CREATORS) {
       const existing = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [cr.handle])
       if (existing.data.length === 0) {
         await dbQuery(
           `INSERT INTO ${t('creators')} (name, display_name, platform, handle, url, subscriber_count, content_language, relationship_status, discovered_via, created_at, updated_at)
-           VALUES ($1,$1,'youtube',$2,$3,$4,'English',$5,'demo',now(),now())`,
-          [cr.name, cr.handle, `https://youtube.com/@${cr.handle}`, cr.subs, cr.rel]
-        )
+           VALUES ($1,$1,'youtube',$2,$3,$4,'English','cold','demo',now(),now())`,
+          [cr.name, cr.handle, `https://youtube.com/@${cr.handle}`, cr.subs])
       }
       const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [cr.handle])
       if (row.data[0]?.id) creatorIds[cr.handle] = row.data[0].id
     }
 
     // ── Content Items ─────────────────────────────────────────────
-    const contentDefs: { handle: string; title: string; url: string; words: number; daysAgo: number }[] = [
-      { handle: 'devopstoolkit', title: 'Kubernetes Cost Optimization — 5 Strategies That Actually Work', url: 'https://youtube.com/watch?v=demo-dt1', words: 4500, daysAgo: 8 },
-      { handle: 'devopstoolkit', title: 'Is Kubecost Worth It? Honest Review After 6 Months', url: 'https://youtube.com/watch?v=demo-dt2', words: 5200, daysAgo: 20 },
-      { handle: 'devopstoolkit', title: 'OpenCost vs Kubecost: Open Source FinOps Compared', url: 'https://youtube.com/watch?v=demo-dt3', words: 3800, daysAgo: 35 },
-      { handle: 'antonputra', title: 'EKS vs GKE: True Cost Comparison 2024', url: 'https://youtube.com/watch?v=demo-ap1', words: 5500, daysAgo: 10 },
-      { handle: 'antonputra', title: 'Grafana Cost Dashboard for Kubernetes', url: 'https://youtube.com/watch?v=demo-ap2', words: 4200, daysAgo: 22 },
-      { handle: 'abhishekveeramalla', title: 'Kubernetes Cost Optimization Zero to Hero', url: 'https://youtube.com/watch?v=demo-av1', words: 6800, daysAgo: 12 },
-      { handle: 'abhishekveeramalla', title: 'DevOps Cost Management Complete Guide', url: 'https://youtube.com/watch?v=demo-av2', words: 7500, daysAgo: 28 },
-      { handle: 'technotim', title: 'Kubernetes Cost Tracking with Prometheus', url: 'https://youtube.com/watch?v=demo-tt1', words: 4100, daysAgo: 15 },
-      { handle: 'technotim', title: 'Self-Hosted FinOps Dashboard Tutorial', url: 'https://youtube.com/watch?v=demo-tt2', words: 3600, daysAgo: 40 },
-      { handle: 'bretfisher', title: 'Container Resource Management Best Practices', url: 'https://youtube.com/watch?v=demo-bf1', words: 5100, daysAgo: 18 },
-      { handle: 'bretfisher', title: 'K8s Cost Pitfalls Every Team Makes', url: 'https://youtube.com/watch?v=demo-bf2', words: 3900, daysAgo: 32 },
-      { handle: 'marceldempers', title: 'Azure AKS Cost Optimization Tips', url: 'https://youtube.com/watch?v=demo-md1', words: 4300, daysAgo: 14 },
-      { handle: 'marceldempers', title: 'Kubernetes Spot Instances Deep Dive', url: 'https://youtube.com/watch?v=demo-md2', words: 3700, daysAgo: 38 },
-      { handle: 'rawkodeacademy', title: 'CNCF FinOps Tools Landscape 2024', url: 'https://youtube.com/watch?v=demo-ra1', words: 4800, daysAgo: 9 },
-      { handle: 'rawkodeacademy', title: 'Platform Engineering & Cost Control', url: 'https://youtube.com/watch?v=demo-ra2', words: 3500, daysAgo: 25 },
-      { handle: 'cloudwithraj', title: 'Kubernetes Cost Optimization That You Do NOT Know', url: 'https://youtube.com/watch?v=demo-cr1', words: 4600, daysAgo: 7 },
-      { handle: 'cloudwithraj', title: 'AWS EKS Cost Savings: Real Numbers', url: 'https://youtube.com/watch?v=demo-cr2', words: 3800, daysAgo: 30 },
+    const CONTENT: { handle: string; title: string; url: string; words: number; daysAgo: number }[] = [
+      { handle: 'fireship', title: 'AI is Killing the Testing Industry', url: 'https://youtube.com/watch?v=demo-fs1', words: 1200, daysAgo: 5 },
+      { handle: 'fireship', title: 'E2E Testing in 100 Seconds', url: 'https://youtube.com/watch?v=demo-fs2', words: 800, daysAgo: 30 },
+      { handle: 't3dotgg', title: 'I Replaced My Entire Test Suite with AI', url: 'https://youtube.com/watch?v=demo-t31', words: 4800, daysAgo: 8 },
+      { handle: 't3dotgg', title: 'The Testing Problem Nobody Talks About', url: 'https://youtube.com/watch?v=demo-t32', words: 5200, daysAgo: 22 },
+      { handle: 'theprimeagen', title: 'AI Testing Tools: Overhyped or Underrated?', url: 'https://youtube.com/watch?v=demo-tp1', words: 6500, daysAgo: 10 },
+      { handle: 'theprimeagen', title: 'Why Your E2E Tests Are Garbage', url: 'https://youtube.com/watch?v=demo-tp2', words: 5800, daysAgo: 25 },
+      { handle: 'traversymedia', title: 'Automated Testing Crash Course 2024', url: 'https://youtube.com/watch?v=demo-tm1', words: 8200, daysAgo: 12 },
+      { handle: 'traversymedia', title: 'AI Developer Tools That Actually Work', url: 'https://youtube.com/watch?v=demo-tm2', words: 6100, daysAgo: 35 },
+      { handle: 'jherr', title: 'Testing React Apps with AI — Is It Ready?', url: 'https://youtube.com/watch?v=demo-jh1', words: 5500, daysAgo: 7 },
+      { handle: 'jherr', title: 'The Future of Frontend Testing', url: 'https://youtube.com/watch?v=demo-jh2', words: 4800, daysAgo: 18 },
+      { handle: 'jamesqquick', title: 'I Tested AI Testing Tools So You Don\'t Have To', url: 'https://youtube.com/watch?v=demo-jq1', words: 5000, daysAgo: 9 },
+      { handle: 'jamesqquick', title: 'Stop Writing Tests Manually', url: 'https://youtube.com/watch?v=demo-jq2', words: 4200, daysAgo: 28 },
+      { handle: 'continuousdelivery', title: 'The Science of Effective Testing', url: 'https://youtube.com/watch?v=demo-df1', words: 7200, daysAgo: 6 },
+      { handle: 'continuousdelivery', title: 'AI in Software Testing: What Actually Works', url: 'https://youtube.com/watch?v=demo-df2', words: 6800, daysAgo: 15 },
+      { handle: 'inthecodeapp', title: 'E2E Testing Without the Pain', url: 'https://youtube.com/watch?v=demo-ic1', words: 4600, daysAgo: 11 },
+      { handle: 'inthecodeapp', title: 'Modern Testing Stack for Web Apps', url: 'https://youtube.com/watch?v=demo-ic2', words: 3800, daysAgo: 32 },
     ]
-    const contentIds: Record<string, string> = {} // url → id
-    for (const ci of contentDefs) {
+
+    const contentIds: Record<string, string> = {}
+    for (const ci of CONTENT) {
       const creatorId = creatorIds[ci.handle]
       if (!creatorId) continue
       const existCI = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
@@ -158,172 +162,284 @@ export async function POST() {
         await dbQuery(
           `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, ingestion_method, ingestion_status, created_at, updated_at)
            VALUES ($1,'youtube','youtube_video',$2,$3, now() - interval '${ci.daysAgo} days', now(),'English','[demo transcript]',$4,'demo','complete',now(),now())`,
-          [creatorId, ci.title, ci.url, ci.words]
-        )
+          [creatorId, ci.title, ci.url, ci.words])
       }
       const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
       if (row.data[0]?.id) contentIds[ci.url] = row.data[0].id
     }
 
-    // ── Campaign Creators (all scored) ────────────────────────────
-    const ccIds: Record<string, string> = {} // handle → cc.id
-    for (const cr of creatorDefs) {
-      const creatorId = creatorIds[cr.handle]
+    // ── Campaign Creators + Evaluations + Evidence ────────────────
+    // Each creator: cc link → evaluation → evidence snippets → content angles
+
+    type CreatorData = {
+      handle: string
+      overall: number; tech: number; aud: number; qual: number; perf: number; brand: number
+      cov: string; nmr: boolean; nmrReason?: string
+      strengths: string[]; weaknesses: string[]; rationale: string
+      snippets: { contentUrl: string; dim: string; quote: string; why: string; ts?: number }[]
+      angles: { title: string; format: string; persona: string; points: string[] }[]
+    }
+
+    const DATA: CreatorData[] = [
+      {
+        handle: 'fireship', overall: 92, tech: 88, aud: 95, qual: 94, perf: 96, brand: 88, cov: 'strong', nmr: false,
+        strengths: [
+          '4.1M subscribers — massive developer reach across all seniority levels',
+          'Short-form format (5-12 min) drives extremely high completion rates',
+          'Trusted voice for developer tool recommendations — sponsorships feel authentic',
+        ],
+        weaknesses: [
+          'Short format limits deep product walkthroughs',
+          'Audience breadth means lower % of target persona vs niche channels',
+        ],
+        rationale: 'Jeff Delaney\'s Fireship is the highest-reach developer channel available. His "AI is Killing the Testing Industry" video demonstrates perfect topical alignment and his audience of 4.1M developers includes a massive segment of our target personas. His authentic, fast-paced style makes sponsored integrations feel like genuine recommendations.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-fs1', dim: 'technical_relevance', ts: 85,
+            quote: 'The days of writing manual E2E test scripts are numbered. AI can now observe your app, understand the user flows, and generate tests that actually catch real bugs.',
+            why: 'Directly validates QA.tech\'s core value proposition to a massive audience' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-fs1', dim: 'brand_fit', ts: 210,
+            quote: 'The real game-changer isn\'t AI writing tests — it\'s AI maintaining them. Self-healing selectors mean your CI pipeline doesn\'t break every time someone changes a button class.',
+            why: 'Highlights QA.tech\'s self-healing feature as the key differentiator, framed in a pain point developers viscerally understand' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-fs2', dim: 'audience_alignment',
+            quote: 'Every developer knows they should test more. The problem isn\'t motivation — it\'s that writing E2E tests is soul-crushing work.',
+            why: 'Frames the exact emotional pain point that drives QA.tech adoption' },
+        ],
+        angles: [
+          { title: 'QA.tech in 100 Seconds', format: 'short_explainer', persona: 'Senior full-stack developer', points: ['AI test generation demo from natural language', 'Self-healing selector showcase', 'GitHub Actions integration in 30 seconds'] },
+          { title: 'I Replaced Playwright with AI Testing', format: 'challenge_video', persona: 'Engineering manager', points: ['Side-by-side: manual vs AI-generated tests', 'Time comparison: 3 hours → 5 minutes', 'Coverage comparison on real app'] },
+        ],
+      },
+      {
+        handle: 't3dotgg', overall: 90, tech: 92, aud: 90, qual: 88, perf: 88, brand: 92, cov: 'strong', nmr: false,
+        strengths: [
+          'Deep technical credibility — builds production apps and reviews tools honestly',
+          '890K subscribers of highly engaged senior developers and tech leads',
+          'Already created content about AI replacing test suites — perfect topical fit',
+        ],
+        weaknesses: [
+          'Known for strong opinions — will not promote something he doesn\'t believe in',
+          'TypeScript/Next.js focused — may not reach backend-heavy audiences',
+        ],
+        rationale: 'Theo\'s "I Replaced My Entire Test Suite with AI" is the exact content we need. His audience of senior TypeScript/React developers maps perfectly to QA.tech\'s ideal customer. His honest, opinionated style means an endorsement from him carries enormous weight — but he\'ll need to genuinely like the product.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-t31', dim: 'technical_relevance', ts: 340,
+            quote: 'I threw out 400 Playwright tests and replaced them with AI-generated ones. The crazy part? The AI tests caught two bugs our manual tests missed for months.',
+            why: 'Real-world validation of AI testing superiority with specific, credible numbers' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-t31', dim: 'content_quality', ts: 720,
+            quote: 'The before and after is ridiculous. We went from a 45-minute CI pipeline to 12 minutes, and our test coverage actually went UP.',
+            why: 'Quantified results that directly map to QA.tech\'s value proposition — faster CI + better coverage' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-t32', dim: 'audience_alignment', ts: 180,
+            quote: 'Here\'s what nobody talks about: the maintenance cost. You write 200 E2E tests, ship a redesign, and suddenly half of them are broken. That\'s not a testing problem — it\'s a tooling problem.',
+            why: 'Articulates the self-healing selectors value prop as a tooling insight, not a sales pitch' },
+        ],
+        angles: [
+          { title: 'From 400 Flaky Tests to Zero Maintenance', format: 'case_study', persona: 'Senior full-stack developer', points: ['Live migration from Playwright to AI-generated tests', 'Real metrics: CI time, coverage, flake rate', 'Developer experience improvement'] },
+          { title: 'The AI Testing Stack I Actually Use in Production', format: 'recommendation', persona: 'CTO evaluating AI developer tools', points: ['Integration with T3 stack (Next.js, tRPC)', 'Honest comparison vs Playwright/Cypress', 'When AI testing works vs when it doesn\'t'] },
+        ],
+      },
+      {
+        handle: 'theprimeagen', overall: 85, tech: 82, aud: 88, qual: 86, perf: 90, brand: 78, cov: 'strong', nmr: false,
+        strengths: [
+          '1.2M subscribers of opinionated, senior engineers who influence tool adoption',
+          'High-energy presentation style drives massive engagement and shareability',
+          'Known for honest takes — an endorsement is extremely valuable precisely because he\'s critical',
+        ],
+        weaknesses: [
+          'Very opinionated — could go negative if product doesn\'t impress him',
+          'Backend/systems focus — E2E web testing is adjacent, not core to his content',
+          'Entertainment-first format may not suit detailed product walkthrough',
+        ],
+        rationale: 'Prime\'s "AI Testing Tools: Overhyped or Underrated?" shows genuine curiosity about the space. His massive senior developer audience overlaps strongly with engineering leads evaluating QA tooling. An endorsement from Prime would drive significant attention, but the product must genuinely impress him — he will not pull punches.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-tp1', dim: 'audience_alignment', ts: 445,
+            quote: 'Look, I\'m a testing skeptic. Most testing tools just create more work. But if an AI can actually watch me use the app and generate tests that catch real regressions? That\'s a different conversation.',
+            why: 'Skeptic-to-believer narrative from a trusted voice — the most powerful form of endorsement' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-tp2', dim: 'technical_relevance', ts: 280,
+            quote: 'Your E2E tests are garbage because you\'re testing implementation details, not user behavior. AI doesn\'t make that mistake because it doesn\'t know your code — it only knows what the user sees.',
+            why: 'Technical insight that positions AI testing as architecturally superior, not just more convenient' },
+        ],
+        angles: [
+          { title: 'Prime Tries AI Testing (Live Reaction)', format: 'reaction_video', persona: 'Senior full-stack developer', points: ['Live first-time reaction to AI test generation', 'Honest critique of generated tests vs hand-written', 'Would he actually use this in production?'] },
+        ],
+      },
+      {
+        handle: 'traversymedia', overall: 84, tech: 78, aud: 86, qual: 82, perf: 92, brand: 84, cov: 'strong', nmr: false,
+        strengths: [
+          '2.26M subscribers — second-largest reach in our candidate pool',
+          'Tutorial-first format is perfect for product walkthroughs and integrations',
+          'Audience of mid-level developers actively learning new tools — high adoption intent',
+        ],
+        weaknesses: [
+          'Audience skews mid-level — less influence on engineering leadership decisions',
+          'Crash course format may oversimplify QA.tech\'s differentiators',
+        ],
+        rationale: 'Brad Traversy\'s "Automated Testing Crash Course 2024" and AI developer tools content show strong topical alignment. His tutorial format is ideal for showing QA.tech\'s workflow from signup to first AI-generated test. The 2.26M subscriber base of actively-learning developers represents a huge adoption funnel.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-tm1', dim: 'content_quality', ts: 560,
+            quote: 'Testing is the one area where every developer knows they should do more but nobody wants to. If a tool can generate 80% of your tests automatically, that changes the entire equation.',
+            why: 'Frames AI testing as the solution to a universal developer guilt — powerful motivator' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-tm2', dim: 'brand_fit', ts: 320,
+            quote: 'I\'ve tried a lot of "AI developer tools" this year. Most are glorified autocomplete. The ones that actually work are solving specific, painful problems — not trying to replace you.',
+            why: 'Sets up QA.tech\'s positioning as a specific pain-point solver, not generic AI hype' },
+        ],
+        angles: [
+          { title: 'QA.tech Crash Course — AI Testing in 30 Minutes', format: 'tutorial', persona: 'Senior full-stack developer', points: ['Setup to first test in 5 minutes', 'Natural language test authoring demo', 'CI/CD integration walkthrough'] },
+        ],
+      },
+      {
+        handle: 'jherr', overall: 89, tech: 94, aud: 86, qual: 90, perf: 82, brand: 90, cov: 'strong', nmr: false,
+        strengths: [
+          'Deep React/frontend expertise — QA.tech\'s primary target framework ecosystem',
+          'Technical depth earns trust from senior engineers and architects',
+          'Already exploring AI testing for React — natural content fit',
+        ],
+        weaknesses: [
+          'Smaller audience (365K) limits raw reach',
+          'Highly technical style may not appeal to non-technical decision makers',
+        ],
+        rationale: 'Jack Herrington\'s "Testing React Apps with AI — Is It Ready?" is a direct content match. His audience of senior React developers and architects is the highest-quality segment for QA.tech. His deep technical approach means a positive review carries enormous credibility within the React ecosystem.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-jh1', dim: 'technical_relevance', ts: 420,
+            quote: 'I pointed the AI at my React app and said "test the checkout flow." It generated 12 test cases including edge cases I hadn\'t thought of — invalid coupon codes, expired sessions, race conditions on double-submit.',
+            why: 'Concrete, specific example of AI test generation quality that will impress technical evaluators' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-jh2', dim: 'content_quality', ts: 190,
+            quote: 'The future of frontend testing isn\'t writing better tests. It\'s having a system that understands your app well enough to test it for you — and smart enough to fix itself when you ship changes.',
+            why: 'Visionary framing that positions QA.tech as the future, not just another tool' },
+        ],
+        angles: [
+          { title: 'AI Testing Deep Dive: Can It Handle a Real React App?', format: 'deep_dive', persona: 'Senior full-stack developer', points: ['Complex React app with auth, forms, real-time features', 'AI-generated vs hand-written test comparison', 'Coverage analysis and blind spot identification'] },
+          { title: 'QA.tech + Next.js: Zero to Full Coverage', format: 'tutorial', persona: 'Engineering manager', points: ['Next.js App Router testing challenges', 'AI handling SSR, dynamic routes, API routes', 'Integration with Vercel deployment pipeline'] },
+        ],
+      },
+      {
+        handle: 'jamesqquick', overall: 82, tech: 80, aud: 84, qual: 82, perf: 80, brand: 85, cov: 'strong', nmr: false,
+        strengths: [
+          'Authentic "I tried it so you don\'t have to" format drives high trust',
+          'Already reviewed AI testing tools — established content niche',
+          'Strong community engagement — comments drive secondary conversations',
+        ],
+        weaknesses: [
+          'Smaller audience (218K) means limited reach per video',
+          'Generalist web dev focus — not exclusively testing-focused',
+        ],
+        rationale: 'James\'s "I Tested AI Testing Tools So You Don\'t Have To" is the exact content format QA.tech needs. His honest review style and engaged community make him ideal for a product that wants to build trust through transparency rather than hype.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-jq1', dim: 'brand_fit', ts: 380,
+            quote: 'Most AI testing tools I\'ve tried are basically demo-ware — they work great on a todo app but fall apart on anything real. The bar for "actually useful" is higher than people think.',
+            why: 'Sets a high bar that QA.tech can clear — implicit endorsement if QA.tech passes his test' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-jq2', dim: 'audience_alignment', ts: 145,
+            quote: 'I spent 3 days last month updating Cypress tests that broke because we changed the nav. Three. Days. There has to be a better way.',
+            why: 'Visceral pain point story that every developer relates to — perfect setup for QA.tech\'s self-healing pitch' },
+        ],
+        angles: [
+          { title: 'Honest Review: Can AI Replace Your Test Suite?', format: 'review', persona: 'Senior full-stack developer', points: ['Real app test generation vs manual baseline', 'Maintenance time comparison over 2 weeks', 'Honest pros and cons breakdown'] },
+        ],
+      },
+      {
+        handle: 'continuousdelivery', overall: 88, tech: 95, aud: 82, qual: 92, perf: 75, brand: 90, cov: 'strong', nmr: false,
+        strengths: [
+          'Dave Farley is THE authority on software testing and continuous delivery',
+          'His endorsement carries weight with CTOs and VP Engineering',
+          'Science-based approach to testing aligns with QA.tech\'s data-driven positioning',
+        ],
+        weaknesses: [
+          'Smaller audience (195K) and more academic tone',
+          'Audience skews senior/principal — less direct user adoption influence',
+          'Longer format (20-40 min) has lower casual viewership',
+        ],
+        rationale: 'Dave Farley literally wrote the book on Continuous Delivery. His "AI in Software Testing: What Actually Works" shows he\'s actively evaluating AI testing tools with scientific rigor. An endorsement from Dave would give QA.tech unmatched credibility with engineering leadership — the decision-makers who approve tool budgets.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-df1', dim: 'technical_relevance', ts: 680,
+            quote: 'Effective testing is about fast feedback loops and high confidence. If AI can generate tests that provide both — genuine fast feedback on real user behavior — then it\'s not replacing testers, it\'s amplifying engineering teams.',
+            why: 'Frames AI testing in rigorous engineering terms that CTOs and VPs will cite in procurement decisions' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-df2', dim: 'content_quality', ts: 340,
+            quote: 'I was skeptical until I saw the self-healing capability. When your tests adapt to UI changes automatically, you eliminate the single biggest source of test maintenance cost. The ROI math changes completely.',
+            why: 'Skeptic-to-convert narrative from the industry\'s most respected testing authority' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-df2', dim: 'brand_fit', ts: 890,
+            quote: 'The teams getting value from AI testing are the ones who treat it as an engineering discipline, not a magic wand. The tool generates tests — you still need to understand what good testing looks like.',
+            why: 'Nuanced take that positions QA.tech as a serious engineering tool, not AI hype' },
+        ],
+        angles: [
+          { title: 'The Science Behind AI Test Generation', format: 'deep_dive', persona: 'CTO evaluating AI developer tools', points: ['How AI understands user flows vs implementation details', 'Statistical confidence in AI-generated test coverage', 'When AI testing improves engineering outcomes and when it doesn\'t'] },
+        ],
+      },
+      {
+        handle: 'inthecodeapp', overall: 76, tech: 80, aud: 72, qual: 78, perf: 68, brand: 80, cov: 'partial', nmr: true,
+        nmrReason: 'Smaller channel (42K subs) limits reach. Strong E2E testing content but verify engagement rates and audience geography before committing budget.',
+        strengths: [
+          'E2E testing is core content focus — not a side topic',
+          'Practical, hands-on style with real project examples',
+          'Growing audience in the testing tools niche',
+        ],
+        weaknesses: [
+          'Small audience (42K) — limited raw reach for campaign budget',
+          'Less brand recognition than larger creators',
+          'Inconsistent publishing schedule',
+        ],
+        rationale: 'InTheCodeApp\'s dedicated focus on E2E testing makes them a strong niche fit, but the 42K subscriber base limits campaign ROI. Consider for a community-focused campaign or as a secondary placement alongside a higher-reach creator.',
+        snippets: [
+          { contentUrl: 'https://youtube.com/watch?v=demo-ic1', dim: 'technical_relevance', ts: 240,
+            quote: 'E2E testing doesn\'t have to be painful. The trick is choosing tools that understand your app structure instead of fighting against it.',
+            why: 'Positions the right mindset for QA.tech adoption — tooling over process' },
+          { contentUrl: 'https://youtube.com/watch?v=demo-ic2', dim: 'audience_alignment', ts: 180,
+            quote: 'If you\'re building a modern web app in 2024 and you\'re still writing Selenium tests, we need to talk.',
+            why: 'Directly addresses migration from legacy tools — a key QA.tech onboarding path' },
+        ],
+        angles: [
+          { title: 'Migrating from Selenium to AI-Powered Testing', format: 'tutorial', persona: 'Senior full-stack developer', points: ['Step-by-step migration from legacy test suite', 'Handling edge cases in migration', 'Before/after maintenance cost comparison'] },
+        ],
+      },
+    ]
+
+    for (const d of DATA) {
+      const creatorId = creatorIds[d.handle]
       if (!creatorId) continue
+
+      // Campaign creator link
       const existCC = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaign_creators')} WHERE campaign_id=$1 AND creator_id=$2 LIMIT 1`, [campaignId, creatorId])
       if (existCC.data.length === 0) {
         await dbQuery(
           `INSERT INTO ${t('campaign_creators')} (campaign_id, creator_id, added_by_user_id, source, pipeline_stage, scoring_status, created_at, updated_at)
-           VALUES ($1,$2,$3,'db_match','scored','scored', now(), now())`,
-          [campaignId, creatorId, userId]
-        )
+           VALUES ($1,$2,$3,'db_match','scored','scored', now() - interval '2 hours', now())`,
+          [campaignId, creatorId, userId])
       }
-      const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaign_creators')} WHERE campaign_id=$1 AND creator_id=$2 LIMIT 1`, [campaignId, creatorId])
-      if (row.data[0]?.id) ccIds[cr.handle] = row.data[0].id
-    }
-
-    // ── Evaluations ───────────────────────────────────────────────
-    type EvalDef = { handle: string; overall: number; tech: number; aud: number; qual: number; perf: number; brand: number; cov: string; nmr: boolean; nmrReason?: string; strengths: string[]; weaknesses: string[]; rationale: string }
-    const evals: EvalDef[] = [
-      { handle: 'devopstoolkit', overall: 91, tech: 95, aud: 88, qual: 92, perf: 85, brand: 93, cov: 'strong', nmr: false,
-        strengths: ['Deep Kubernetes cost optimization expertise with hands-on tool comparisons', 'Regular publishing cadence (2-3x/week) maintains audience engagement', 'Authentic voice — community trusts tool recommendations over vendor marketing'],
-        weaknesses: ['Audience skews very senior — may miss mid-level practitioners', 'European timezone limits live engagement with US audience'],
-        rationale: 'Viktor Farcic is a top-tier match. His recent Kubecost review and OpenCost comparison directly address the FinOps space. Three videos in 5 weeks on cost optimization, with an audience of senior DevOps engineers — the exact persona this campaign targets.' },
-      { handle: 'antonputra', overall: 87, tech: 90, aud: 84, qual: 88, perf: 82, brand: 86, cov: 'strong', nmr: false,
-        strengths: ['Cost-comparison format perfectly matches product positioning needs', 'Data-driven approach with real infrastructure benchmarks', 'Growing rapidly with infrastructure-focused audience'],
-        weaknesses: ['Smaller audience than some competitors', 'Video style can be dry — less entertainment value'],
-        rationale: 'Anton\'s EKS vs GKE cost comparison and Grafana cost dashboard videos demonstrate exactly the format needed for a FinOps campaign. His data-driven, benchmark-heavy style lends credibility.' },
-      { handle: 'abhishekveeramalla', overall: 86, tech: 82, aud: 90, qual: 84, perf: 92, brand: 82, cov: 'strong', nmr: false,
-        strengths: ['Massive engaged audience (595K subs) with high view counts', 'Comprehensive tutorial format covers full cost optimization workflow', 'Zero-to-hero style makes complex FinOps topics accessible'],
-        weaknesses: ['Audience skews beginner-to-intermediate', 'India-based — verify geo alignment with campaign targets'],
-        rationale: 'Abhishek\'s K8s Cost Optimization Zero to Hero is a perfect fit. 595K subscribers and consistently high engagement. His tutorial-first approach would work well for product integration content.' },
-      { handle: 'technotim', overall: 79, tech: 75, aud: 82, qual: 80, perf: 85, brand: 72, cov: 'partial', nmr: false,
-        strengths: ['Homelab-to-enterprise crossover audience with purchasing influence', 'Prometheus + Grafana content directly aligns with integration story', 'Highly trusted in the self-hosted infrastructure community'],
-        weaknesses: ['Homelab focus may not translate to enterprise purchasing decisions', 'Cost content is secondary to his infrastructure tutorials'],
-        rationale: 'Tim\'s Prometheus cost tracking video shows relevant expertise, but his primary focus is homelab infrastructure. The enterprise cost optimization angle is secondary to his core content.' },
-      { handle: 'bretfisher', overall: 83, tech: 88, aud: 80, qual: 85, perf: 78, brand: 84, cov: 'strong', nmr: false,
-        strengths: ['Docker Captain with deep container expertise — high credibility', 'Container resource management content directly relevant', 'Experienced with sponsored content — professional delivery'],
-        weaknesses: ['Slower publishing cadence than peers', 'Docker-centric audience may need K8s angle reinforcement'],
-        rationale: 'Bret\'s resource management best practices and cost pitfalls videos directly address FinOps concerns. His Docker Captain status and professional approach make him ideal for sponsored integrations.' },
-      { handle: 'marceldempers', overall: 76, tech: 80, aud: 74, qual: 78, perf: 72, brand: 74, cov: 'partial', nmr: true, nmrReason: 'Only 2 of 15 recent videos touch cost optimization directly. Verify depth of FinOps coverage and willingness to create dedicated cost content before engagement.',
-        strengths: ['Practical hands-on style with real K8s cluster demos', 'Azure AKS expertise covers multi-cloud angle', 'Consistent quality across 400+ videos'],
-        weaknesses: ['Cost content is a small fraction of overall output', 'Smaller reach compared to top-tier DevOps creators', 'Australia timezone limits live US/EU engagement'],
-        rationale: 'Marcel covers AKS cost optimization and spot instances, but cost content is not his primary focus. His practical demo style would work well for product walkthroughs if he\'s willing to dedicate videos to FinOps.' },
-      { handle: 'rawkodeacademy', overall: 74, tech: 82, aud: 68, qual: 80, perf: 62, brand: 78, cov: 'partial', nmr: true, nmrReason: 'Small but highly engaged audience (28K subs). Strong CNCF connections could amplify reach beyond subscriber count. Evaluate ROI given smaller direct reach.',
-        strengths: ['Strong CNCF community connections — conference speaker and organizer', 'CNCF FinOps tools landscape video shows direct topical expertise', 'Platform engineering angle aligns with emerging buyer persona'],
-        weaknesses: ['Smaller audience limits direct reach', 'Publishing schedule inconsistent', 'Revenue ROI harder to justify with 28K subs'],
-        rationale: 'David\'s CNCF connections and FinOps landscape coverage make him valuable for community credibility, but the 28K subscriber base means reach is limited. Best suited for community-focused campaigns rather than broad awareness.' },
-      { handle: 'cloudwithraj', overall: 81, tech: 84, aud: 78, qual: 80, perf: 80, brand: 82, cov: 'strong', nmr: false,
-        strengths: ['Direct K8s cost optimization content with practical AWS examples', 'Strong title/thumbnail game drives high CTR', 'Growing audience with cloud-native engineering focus'],
-        weaknesses: ['Relatively new channel — track record still developing', 'AWS-centric may need multi-cloud broadening'],
-        rationale: 'Raj\'s "Cost Optimization That You Do NOT Know" video directly targets our keyword space. His AWS EKS cost savings content with real numbers aligns perfectly with the data-driven positioning this campaign needs.' },
-    ]
-
-    const evalIds: Record<string, string> = {} // handle → evaluation.id
-    for (const ev of evals) {
-      const ccId = ccIds[ev.handle]
+      const ccRow = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaign_creators')} WHERE campaign_id=$1 AND creator_id=$2 LIMIT 1`, [campaignId, creatorId])
+      const ccId = ccRow.data[0]?.id
       if (!ccId) continue
+
+      // Evaluation
       const existEval = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id=$1 LIMIT 1`, [ccId])
       if (existEval.data.length === 0) {
         await dbQuery(
           `INSERT INTO ${t('creator_evaluations')} (campaign_creator_id, model_provider, model_name, evaluated_at, evidence_coverage, needs_manual_review, needs_manual_review_reason,
             overall_score, score_technical_relevance, score_audience_alignment, score_content_quality, score_channel_performance, score_brand_fit,
             strengths_json, weaknesses_json, rationale_md, created_at, updated_at)
-           VALUES ($1,'anthropic','claude-sonnet-4-5-20250514', now() - interval '1 hour', $2, $3, $4,
+           VALUES ($1,'anthropic','claude-sonnet-4-5-20250514', now() - interval '90 minutes', $2, $3, $4,
             $5,$6,$7,$8,$9,$10, $11::jsonb, $12::jsonb, $13, now(), now())`,
-          [ccId, ev.cov, ev.nmr, ev.nmrReason || null, ev.overall, ev.tech, ev.aud, ev.qual, ev.perf, ev.brand,
-           JSON.stringify(ev.strengths), JSON.stringify(ev.weaknesses), ev.rationale]
-        )
+          [ccId, d.cov, d.nmr, d.nmrReason || null, d.overall, d.tech, d.aud, d.qual, d.perf, d.brand,
+           JSON.stringify(d.strengths), JSON.stringify(d.weaknesses), d.rationale])
       }
-      const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id=$1 LIMIT 1`, [ccId])
-      if (row.data[0]?.id) evalIds[ev.handle] = row.data[0].id
-    }
-
-    // ── Evidence Snippets ─────────────────────────────────────────
-    type SnipDef = { handle: string; contentUrl: string; quote: string; dimension: string; why: string; ts?: number }
-    const snippets: SnipDef[] = [
-      { handle: 'devopstoolkit', contentUrl: 'https://youtube.com/watch?v=demo-dt1', dimension: 'technical_relevance', ts: 245,
-        quote: 'The biggest mistake teams make with Kubernetes cost optimization is not setting resource requests and limits. Without them, you\'re flying blind on actual cluster utilization.',
-        why: 'Demonstrates deep understanding of the core FinOps challenge this campaign addresses' },
-      { handle: 'devopstoolkit', contentUrl: 'https://youtube.com/watch?v=demo-dt2', dimension: 'brand_fit', ts: 180,
-        quote: 'After six months with Kubecost, here\'s what I actually think. The namespace-level cost allocation is where it shines — but there are gaps.',
-        why: 'Shows willingness to give honest tool reviews, which builds audience trust for sponsored content' },
-      { handle: 'devopstoolkit', contentUrl: 'https://youtube.com/watch?v=demo-dt3', dimension: 'content_quality', ts: 420,
-        quote: 'Let me show you real numbers from our production cluster. This isn\'t a toy demo — these are 200 nodes running actual workloads.',
-        why: 'Uses real production data, not synthetic demos — exactly the credibility this campaign needs' },
-      { handle: 'antonputra', contentUrl: 'https://youtube.com/watch?v=demo-ap1', dimension: 'technical_relevance', ts: 310,
-        quote: 'When you compare the actual compute cost per pod across EKS, GKE, and AKS, the numbers tell a very different story than the marketing pages.',
-        why: 'Cost-comparison expertise directly aligns with product positioning strategy' },
-      { handle: 'antonputra', contentUrl: 'https://youtube.com/watch?v=demo-ap2', dimension: 'audience_alignment', ts: 150,
-        quote: 'I built this Grafana dashboard specifically for FinOps teams who need to show cost breakdown by namespace and team.',
-        why: 'Targets the exact FinOps persona this campaign is designed for' },
-      { handle: 'abhishekveeramalla', contentUrl: 'https://youtube.com/watch?v=demo-av1', dimension: 'audience_alignment', ts: 520,
-        quote: 'If you\'re a DevOps engineer and your manager asks why the cloud bill went up 40% last month, this video will save your career.',
-        why: 'Frames cost optimization as career-relevant, not just technical — drives engagement' },
-      { handle: 'abhishekveeramalla', contentUrl: 'https://youtube.com/watch?v=demo-av2', dimension: 'channel_performance',
-        quote: 'This complete guide has everything from setting up Prometheus metrics to building executive cost dashboards.',
-        why: 'Comprehensive tutorial format demonstrates ability to integrate product mentions naturally' },
-      { handle: 'technotim', contentUrl: 'https://youtube.com/watch?v=demo-tt1', dimension: 'technical_relevance', ts: 380,
-        quote: 'Prometheus can track your Kubernetes costs in real-time. Let me show you the exact PromQL queries I use.',
-        why: 'Prometheus integration expertise directly relevant to product\'s monitoring stack integration' },
-      { handle: 'bretfisher', contentUrl: 'https://youtube.com/watch?v=demo-bf1', dimension: 'content_quality', ts: 290,
-        quote: 'Most teams set CPU requests once and never touch them again. Here\'s how to build a right-sizing review into your sprint process.',
-        why: 'Practical, actionable advice format that works well for product integration content' },
-      { handle: 'bretfisher', contentUrl: 'https://youtube.com/watch?v=demo-bf2', dimension: 'brand_fit', ts: 445,
-        quote: 'I\'ve seen teams waste $50K a month because they didn\'t understand the difference between requests and limits.',
-        why: 'Quantifies the cost problem in dollar terms — exactly the messaging this campaign needs' },
-      { handle: 'marceldempers', contentUrl: 'https://youtube.com/watch?v=demo-md1', dimension: 'technical_relevance', ts: 200,
-        quote: 'Azure AKS has some hidden cost optimizations most people don\'t know about. Let me walk you through the advisor recommendations.',
-        why: 'Multi-cloud cost expertise adds breadth to the campaign\'s platform coverage' },
-      { handle: 'rawkodeacademy', contentUrl: 'https://youtube.com/watch?v=demo-ra1', dimension: 'brand_fit', ts: 340,
-        quote: 'The CNCF FinOps landscape is exploding. Here are the tools that actually matter in 2024 and why.',
-        why: 'CNCF landscape authority could position the product within the official ecosystem narrative' },
-      { handle: 'cloudwithraj', contentUrl: 'https://youtube.com/watch?v=demo-cr1', dimension: 'technical_relevance', ts: 180,
-        quote: 'Most people focus on compute costs, but did you know that cross-AZ data transfer can account for 30% of your EKS bill?',
-        why: 'Highlights non-obvious cost drivers that the product addresses — great for awareness content' },
-      { handle: 'cloudwithraj', contentUrl: 'https://youtube.com/watch?v=demo-cr2', dimension: 'audience_alignment',
-        quote: 'I saved my company $12,000 a month with these three changes. Real numbers, real clusters, no BS.',
-        why: 'Data-driven ROI messaging matches the campaign\'s proof-point positioning strategy' },
-    ]
-
-    for (const sn of snippets) {
-      const evalId = evalIds[sn.handle]
-      const ciId = contentIds[sn.contentUrl]
-      if (!evalId || !ciId) continue
-      await dbQuery(
-        `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, now(), now())`,
-        [evalId, ciId, sn.quote, sn.dimension, sn.why, sn.ts || null]
-      )
-    }
-
-    // ── Content Angles ────────────────────────────────────────────
-    type AngleDef = { handle: string; title: string; format: string; persona: string; points: string[] }
-    const angles: AngleDef[] = [
-      { handle: 'devopstoolkit', title: 'K8s Cost Showdown: Your Tool vs Open-Source Alternatives', format: 'comparison_video', persona: 'DevOps team lead evaluating cost management tooling',
-        points: ['Head-to-head feature comparison with Kubecost/OpenCost', 'Real cluster cost data walkthrough', 'Integration with existing Prometheus/Grafana stack'] },
-      { handle: 'devopstoolkit', title: 'The Hidden Costs of Kubernetes Nobody Talks About', format: 'deep_dive', persona: 'Platform engineer managing K8s clusters',
-        points: ['Cross-AZ data transfer costs', 'Idle resource waste quantification', 'Automated right-sizing demo'] },
-      { handle: 'antonputra', title: 'Multi-Cloud K8s Cost Dashboard Build', format: 'tutorial', persona: 'FinOps lead responsible for cloud cost reporting',
-        points: ['Grafana dashboard from scratch', 'EKS + GKE + AKS unified view', 'Alerting on cost anomalies'] },
-      { handle: 'abhishekveeramalla', title: 'K8s Cost Optimization: Complete Zero to Hero', format: 'tutorial_series', persona: 'DevOps team lead evaluating cost management tooling',
-        points: ['Resource requests/limits fundamentals', 'Namespace cost allocation setup', 'Executive cost reporting dashboard'] },
-      { handle: 'technotim', title: 'Self-Hosted FinOps: Track Every Dollar', format: 'tutorial', persona: 'Platform engineer managing K8s clusters',
-        points: ['Prometheus cost metrics collection', 'Grafana dashboard templates', 'Alert on spend anomalies'] },
-      { handle: 'bretfisher', title: 'Container Cost Mistakes That Cost $50K/Month', format: 'listicle', persona: 'DevOps team lead evaluating cost management tooling',
-        points: ['Top 5 resource configuration mistakes', 'Right-sizing workflow for sprint teams', 'Before/after cost savings proof points'] },
-      { handle: 'cloudwithraj', title: 'Real AWS EKS Cost Savings: Before & After', format: 'case_study', persona: 'FinOps lead responsible for cloud cost reporting',
-        points: ['Real cluster cost data comparison', 'Step-by-step optimization walkthrough', 'Monthly savings quantification'] },
-    ]
-
-    for (const angle of angles) {
-      const evalId = evalIds[angle.handle]
+      const evalRow = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id=$1 LIMIT 1`, [ccId])
+      const evalId = evalRow.data[0]?.id
       if (!evalId) continue
-      await dbQuery(
-        `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, now(), now())`,
-        [evalId, angle.title, angle.format, angle.persona, JSON.stringify(angle.points)]
-      )
+
+      // Evidence snippets
+      for (const sn of d.snippets) {
+        const ciId = contentIds[sn.contentUrl]
+        if (!ciId) continue
+        await dbQuery(
+          `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now(), now())`,
+          [evalId, ciId, sn.quote, sn.dim, sn.why, sn.ts || null])
+      }
+
+      // Content angles
+      for (const angle of d.angles) {
+        await dbQuery(
+          `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5::jsonb, now(), now())`,
+          [evalId, angle.title, angle.format, angle.persona, JSON.stringify(angle.points)])
+      }
     }
 
     return NextResponse.json({ campaign_id: campaignId })
