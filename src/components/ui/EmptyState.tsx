@@ -1,3 +1,5 @@
+import React from 'react'
+
 interface EmptyStateAction {
   label: string
   onClick: () => void
@@ -5,7 +7,7 @@ interface EmptyStateAction {
 }
 
 interface EmptyStateProps {
-  icon?: string
+  icon?: string | React.ElementType
   title: string
   description?: string
   action?: EmptyStateAction
@@ -13,9 +15,17 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, description, action, compact }: EmptyStateProps) {
+  const IconComponent = typeof icon === 'function' ? (icon as React.ElementType) : null;
+  const iconStr = typeof icon === 'string' ? icon : null;
   return (
     <div className={`text-center ${compact ? 'py-8' : 'py-16'}`}>
-      {icon && <div className="text-4xl mb-3">{icon}</div>}
+      {IconComponent ? (
+        <div className="flex justify-center mb-3">
+          <IconComponent size={36} className="text-slate-600" />
+        </div>
+      ) : iconStr ? (
+        <div className="text-4xl mb-3">{iconStr}</div>
+      ) : null}
       <div className="text-slate-500 font-medium text-sm">{title}</div>
       {description && <p className="text-slate-400 text-xs mt-1">{description}</p>}
       {action && (

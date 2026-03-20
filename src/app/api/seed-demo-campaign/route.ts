@@ -111,131 +111,105 @@ export async function GET() {
     }
 
     // ── Creator definitions ───────────────────────────────────────
+    interface ContentItem { title: string; url: string }
     interface CreatorDef {
       name: string; handle: string; platform: string; url: string;
       subscriber_count: number | null; content_type: string;
-      titles: string[]; slugPrefix: string;
+      videos: ContentItem[];
     }
 
     const creators: CreatorDef[] = [
       {
         name: 'Kevin Powell', handle: 'kevinpowell', platform: 'youtube',
         url: 'https://youtube.com/@KevinPowell', subscriber_count: 1000000,
-        content_type: 'youtube_video', slugPrefix: 'kp',
-        titles: [
-          'Container Queries Will Change How You Build Components',
-          'The Only CSS Reset You Need in 2024',
-          'Modern CSS Layout Techniques Every Developer Should Know',
-          'Custom Properties Are More Powerful Than You Think',
-          'Stop Using Pixels — Modern CSS Sizing Explained',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'A couple of great anchor positioning use cases', url: 'https://www.youtube.com/watch?v=lXS2P3xtAUY' },
+          { title: 'Simplifying CSS animations', url: 'https://www.youtube.com/watch?v=CAK5kTApkMU' },
+          { title: 'How I made the slide in nav on my website', url: 'https://www.youtube.com/watch?v=6LJuWf4ySCI' },
         ],
       },
       {
         name: 'Gary Simon', handle: 'designcourse', platform: 'youtube',
         url: 'https://youtube.com/@DesignCourse', subscriber_count: 1000000,
-        content_type: 'youtube_video', slugPrefix: 'dc',
-        titles: [
-          'Design System Masterclass: From Figma to Production',
-          'Build a Complete UI Kit in Figma — Full Course',
-          'The State of UI/UX Design in 2024',
-          'Responsive Design Without Media Queries',
-          'From Design to Code: The Modern Workflow',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'Use Claude Code DESIGNER Skill to 10x UI Designs', url: 'https://www.youtube.com/watch?v=Em9EzurouOU' },
+          { title: 'Insane Claude Agent SDK Demo - See it to believe it', url: 'https://www.youtube.com/watch?v=dzvwAnwDUZo' },
+          { title: "Generative SVG's with Animation with HeroUI & Gemini", url: 'https://www.youtube.com/watch?v=UWseAJ5Vb58' },
         ],
       },
       {
         name: 'Hyperplexed', handle: 'hyperplexed', platform: 'youtube',
         url: 'https://youtube.com/@Hyperplexed', subscriber_count: 656000,
-        content_type: 'youtube_video', slugPrefix: 'hp',
-        titles: [
-          'I Rebuilt Stripe\'s Website Animations from Scratch',
-          'Creative CSS Hover Effects You Need to Try',
-          'Making Websites Feel Alive with Micro-Interactions',
-          'The Most Satisfying CSS Gradients on the Internet',
-          'I Cloned Apple\'s Design System in Pure CSS',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'Click a Button, Destroy My Site', url: 'https://www.youtube.com/watch?v=dRsuD_ygvOc' },
+          { title: 'GPT vs Gemini - Award Winning Site in One Prompt?', url: 'https://www.youtube.com/watch?v=htYXzucT9ho' },
+          { title: "It's literally a clock made of tiny clocks", url: 'https://www.youtube.com/watch?v=VUSCH7nQGIM' },
         ],
       },
       {
         name: 'Juxtopposed', handle: 'juxtopposed', platform: 'youtube',
         url: 'https://youtube.com/@juxtopposed', subscriber_count: 437000,
-        content_type: 'youtube_video', slugPrefix: 'jx',
-        titles: [
-          'I Redesigned Figma\'s UI from Scratch',
-          'Making Beautiful Dark Themes — A Complete Guide',
-          'The Psychology of UI Color Palettes',
-          'I Built a Design System in 48 Hours',
-          'Why Every Design Looks the Same (And How to Fix It)',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'How Websites Learned to Fit Everywhere', url: 'https://www.youtube.com/watch?v=ckEdTprbQas' },
+          { title: 'I Designed Your Goofiest UI Ideas', url: 'https://www.youtube.com/watch?v=0N87f5wfxr0' },
         ],
       },
       {
         name: 'Jesse Showalter', handle: 'jesseshowalter', platform: 'youtube',
         url: 'https://youtube.com/@JesseShowalter', subscriber_count: 440000,
-        content_type: 'youtube_video', slugPrefix: 'js',
-        titles: [
-          'Complete Figma Design System Tutorial 2024',
-          'UI Design Process: From Brief to Handoff',
-          'Figma Variables & Design Tokens — Complete Guide',
-          'Portfolio Design That Gets You Hired',
-          'The Tools Every UI Designer Needs in 2024',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'Building AI with AI', url: 'https://www.youtube.com/watch?v=FYfOd-XgXo4' },
+          { title: 'LottieFiles State Machines: Interactive motion design is here', url: 'https://www.youtube.com/watch?v=d5ngkWU2TY8' },
+          { title: 'Figma Make', url: 'https://www.youtube.com/watch?v=yRBu2jU2d1w' },
         ],
       },
       {
         name: 'Sam Selikoff', handle: 'samselikoff', platform: 'youtube',
         url: 'https://youtube.com/@samselikoff', subscriber_count: 66000,
-        content_type: 'youtube_video', slugPrefix: 'ss',
-        titles: [
-          'Rebuilding Linear\'s UI with React and Framer Motion',
-          'Animated Tabs Component with Tailwind and React',
-          'Building a Design System with Radix and Tailwind',
-          'Responsive Framer Motion Animations',
-          'The Future of React Component Architecture',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'Distinguishing between human and programmatic scrolling', url: 'https://www.youtube.com/watch?v=3saFasHrnEg' },
+          { title: 'Building an Elastic Slider with Framer Motion and Radix', url: 'https://www.youtube.com/watch?v=k9onbcqxDwU' },
+          { title: '6 New Tailwind Techniques in 8 minutes', url: 'https://www.youtube.com/watch?v=5hF0IVQIBN8' },
         ],
       },
       {
         name: 'Coder Coder', handle: 'thecodercoder', platform: 'youtube',
         url: 'https://youtube.com/@thecodercoder', subscriber_count: 400000,
-        content_type: 'youtube_video', slugPrefix: 'cc',
-        titles: [
-          'Modern CSS Features That Replace JavaScript',
-          'Building Accessible Components from Scratch',
-          'CSS Container Queries — A Practical Guide',
-          'From Sass to Modern CSS — Migration Guide',
-          'Responsive Typography with CSS Clamp',
+        content_type: 'youtube_video',
+        videos: [
+          { title: 'Simple design tips for developers', url: 'https://www.youtube.com/watch?v=fjrNeojb7to' },
+          { title: 'My favorite resources and tools for coding', url: 'https://www.youtube.com/watch?v=dfczbF47Vqg' },
         ],
       },
       {
-        name: 'Ahmad Shadeed', handle: 'shadeed', platform: 'devto',
-        url: 'https://dev.to/shadeed', subscriber_count: null,
-        content_type: 'article', slugPrefix: 'as',
-        titles: [
-          'Defensive CSS: Writing Resilient Stylesheets',
-          'A Complete Guide to CSS Grid Areas',
-          'The Art of CSS Layout Debugging',
-          'Implementing Design Systems with Modern CSS',
-          'Visual Guide to CSS Logical Properties',
+        name: 'Souptik Debnath', handle: 'souptikdn', platform: 'devto',
+        url: 'https://dev.to/souptikdn', subscriber_count: null,
+        content_type: 'article',
+        videos: [
+          { title: 'UI Design Trends In 2025', url: 'https://dev.to/souptikdn/ui-design-trends-in-2025-252g' },
+          { title: '09 Essential Tools To Freelance Like A Pro In 2025', url: 'https://dev.to/souptikdn/09-essential-tools-to-freelance-like-a-pro-in-2025-1i3g' },
         ],
       },
       {
-        name: 'Stephanie Eckles', handle: '5t3ph', platform: 'devto',
-        url: 'https://dev.to/5t3ph', subscriber_count: null,
-        content_type: 'article', slugPrefix: 'se',
-        titles: [
-          'Modern CSS Solutions for Old Problems',
-          'Building a Design Token Pipeline',
-          'SmolCSS: Minimal Snippets for Modern Layouts',
-          'Accessible Color Systems with CSS Custom Properties',
-          'Enterprise Design Systems: Lessons from the Trenches',
+        name: 'Devin Rosario', handle: 'devin-rosario', platform: 'devto',
+        url: 'https://dev.to/devin-rosario', subscriber_count: null,
+        content_type: 'article',
+        videos: [
+          { title: 'Moving From Strategy to Design: 2025 Review and 2026 Roadmap', url: 'https://dev.to/devin-rosario/moving-from-strategy-to-design-2025-review-and-2026-roadmap-3cge' },
         ],
       },
       {
-        name: 'Emma Bostian', handle: 'emmabostian', platform: 'devto',
-        url: 'https://dev.to/emmabostian', subscriber_count: null,
-        content_type: 'article', slugPrefix: 'eb',
-        titles: [
-          'Design Systems at Spotify: What We Learned',
-          'CSS Foundations Every Developer Should Master',
-          'The Design-Engineering Spectrum',
-          'Building Inclusive Component Libraries',
-          'From Designer to Design Engineer: A Career Guide',
+        name: 'Ade Web Developer', handle: 'adewebdeveloper', platform: 'devto',
+        url: 'https://dev.to/adewebdeveloper', subscriber_count: null,
+        content_type: 'article',
+        videos: [
+          { title: 'I spent 2 years as a UI/UX designer before switching to code.', url: 'https://dev.to/adewebdeveloper/i-spent-2-years-as-a-uiux-designer-before-switching-to-code-1kkl' },
         ],
       },
     ]
@@ -264,28 +238,24 @@ export async function GET() {
       }
     }
 
-    // ── Content items (5 per creator = 50) ────────────────────────
+    // ── Content items ─────────────────────────────────────────────
     for (const cr of creators) {
       const creatorId = creatorIdMap[cr.handle]
       if (!creatorId) continue
 
-      for (let i = 0; i < cr.titles.length; i++) {
-        const num = i + 1
-        const url = cr.platform === 'youtube'
-          ? `https://youtube.com/watch?v=demo-${cr.slugPrefix}${num}`
-          : `https://dev.to/${cr.handle}/demo-${cr.slugPrefix}${num}`
+      for (const video of cr.videos) {
         const wordCount = 3000 + Math.floor(Math.random() * 5000)
         const daysAgo = 5 + Math.floor(Math.random() * 40)
 
         const existCI = await dbQuery<{ id: string }>(
-          `SELECT id FROM ${t('content_items')} WHERE url = $1 LIMIT 1`, [url]
+          `SELECT id FROM ${t('content_items')} WHERE url = $1 LIMIT 1`, [video.url]
         )
         if (existCI.data.length > 0) continue
 
         await dbQuery(
           `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, ingestion_method, ingestion_status, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, now() - interval '${daysAgo} days', now(), 'English', '[transcript placeholder]', $6, 'seed', 'complete', now(), now())`,
-          [creatorId, cr.platform, cr.content_type, cr.titles[i], url, wordCount]
+          [creatorId, cr.platform, cr.content_type, video.title, video.url, wordCount]
         )
       }
     }
@@ -404,29 +374,29 @@ export async function GET() {
           { title: 'The Design-to-Code Gap Is Finally Closing', format: 'opinion_video', persona: 'Frontend lead standardizing a design system across multiple products', key_points: ['Survey the current landscape of design-to-code tools', 'Demonstrate where Pixelcraft fits vs hand-coded approaches', 'Show real before/after comparisons of manual vs automated component creation'] },
         ],
       },
-      // ── Ahmad Shadeed ───────────────────────────────────────────
+      // ── Souptik Debnath ─────────────────────────────────────────
       {
-        handle: 'shadeed',
-        overall: 89, technical: 92, audience: 84, quality: 94, performance: 78, brandFit: 90,
-        coverage: 'strong', nmr: false, nmrReason: null,
+        handle: 'souptikdn',
+        overall: 74, technical: 68, audience: 78, quality: 72, performance: 76, brandFit: 76,
+        coverage: 'partial', nmr: false, nmrReason: null,
         strengths: [
-          'Recognized as a leading CSS architecture authority — his "Defensive CSS" series is widely cited in design system documentation across the industry',
-          'Exceptional visual explanations of layout and component patterns that make complex CSS concepts accessible without dumbing them down',
-          'Strong focus on real-world production CSS patterns that directly map to design system implementation challenges',
+          'Trend-aware content on UI design keeps his audience informed on emerging tools — Pixelcraft fits naturally into a "tools to watch" framing',
+          'Freelancer-focused angle is underserved in design tooling — positions Pixelcraft for an audience that moves fast and adopts new workflows quickly',
+          'Cross-published on Medium and Dev.to, suggesting a broader distribution reach than platform follower counts indicate',
         ],
         weaknesses: [
-          'Written content only — no video presence — which limits format flexibility for campaign activations',
-          'Audience is more CSS-specialist than general frontend developer, potentially narrowing reach for a design-to-code tool',
+          'Content is trend-survey style rather than technical deep-dives — may not drive the kind of intent that converts to tool evaluation',
+          'Limited article volume makes it hard to assess consistent topical depth on design systems specifically',
         ],
-        rationale: 'Ahmad\'s Defensive CSS methodology and his deep visual guides to layout patterns make him a natural authority for design system implementation content. His audience trusts his CSS recommendations implicitly, and his focus on resilient, production-ready patterns aligns with Pixelcraft\'s emphasis on generating robust components. A sponsored article series on design system CSS architecture would feel authentic to his existing body of work.',
+        rationale: 'Souptik writes at the intersection of UI trends and practical tooling — a natural fit for introducing Pixelcraft as part of the modern design stack. His freelancer-focused readership is motivated to find tools that compress workflow time, which is exactly Pixelcraft\'s promise. Coverage is partial because his content is survey-level rather than implementation-deep, but his audience is receptive to tool discovery.',
         evidence: [
-          { quote: 'A resilient design system anticipates the unexpected. What happens when the label is 40 characters? When the container is 200px wide? Defensive CSS is the foundation every component library needs.', dimension: 'technical_relevance', why_it_matters: 'His defensive CSS philosophy aligns with Pixelcraft\'s accessibility and resilience features in generated components', timestamp: null },
-          { quote: 'I spent three days debugging a layout issue that came down to one missing logical property. This is why I believe visual debugging tools for CSS are not optional — they\'re essential for any team working at scale.', dimension: 'brand_fit', why_it_matters: 'Demonstrates the real cost of manual CSS work that Pixelcraft\'s automated generation eliminates', timestamp: null },
-          { quote: 'CSS Grid areas give you a vocabulary to describe your layout intent. When designers and developers share that vocabulary, the handoff becomes a conversation instead of a translation exercise.', dimension: 'audience_alignment', why_it_matters: 'Frames the designer-developer communication gap in terms his audience deeply understands', timestamp: null },
+          { quote: 'The tools that win in 2025 are the ones that reduce friction between design and delivery. UI trends mean nothing if your workflow is still stuck in a handoff bottleneck.', dimension: 'brand_fit', why_it_matters: 'Directly identifies the handoff friction that Pixelcraft eliminates', timestamp: null },
+          { quote: 'As a freelancer, every hour spent translating Figma designs to code manually is an hour you\'re not billing for. The right tool stack is the difference between a sustainable practice and burning out.', dimension: 'audience_alignment', why_it_matters: 'His audience is motivated by workflow efficiency — exactly the value Pixelcraft offers', timestamp: null },
+          { quote: 'UI design in 2025 is inseparable from component thinking. If you\'re still designing screens without a system, you\'re creating extra work for yourself and the developers you hand off to.', dimension: 'technical_relevance', why_it_matters: 'Frames component-based design as essential — priming readers to evaluate design system tooling', timestamp: null },
         ],
         angles: [
-          { title: 'Defensive CSS for Design Systems: A Visual Guide', format: 'sponsored_article', persona: 'Design engineer building component libraries at a SaaS company', key_points: ['Apply defensive CSS principles to design system components', 'Show how Pixelcraft\'s generated components handle edge cases automatically', 'Visual comparison of manually coded vs auto-generated resilient components'] },
-          { title: 'From Figma Constraints to CSS Logical Properties', format: 'tutorial_article', persona: 'Product designer who codes and wants seamless Figma-to-React workflows', key_points: ['Map Figma auto-layout and constraints to CSS logical properties', 'Demonstrate how Pixelcraft preserves layout intent during code generation', 'Guide for designers who want to understand the CSS their designs produce'] },
+          { title: 'The Freelancer\'s Design-to-Code Stack in 2025', format: 'sponsored_article', persona: 'Product designer who codes and wants seamless Figma-to-React workflows', key_points: ['Survey the essential tools for freelancers who design and build', 'Position Pixelcraft as the missing bridge between Figma and deliverable components', 'Show how automated export reduces hours spent on handoff per project'] },
+          { title: 'UI Trends That Actually Ship: From Figma to Production', format: 'tutorial_article', persona: 'Design engineer building component libraries at a SaaS company', key_points: ['Connect 2025 UI trends to practical implementation challenges', 'Demonstrate how Pixelcraft generates trend-aligned components from Figma', 'Show how design token systems make trend adoption consistent across a codebase'] },
         ],
       },
       // ── Hyperplexed ─────────────────────────────────────────────
@@ -479,29 +449,29 @@ export async function GET() {
           { title: 'Design System Theming: From Figma Variables to Live Code', format: 'tutorial_video', persona: 'Design engineer building component libraries at a SaaS company', key_points: ['Set up a complete Figma variable system for light and dark themes', 'Show Pixelcraft extracting and mapping tokens to CSS custom properties', 'Build a live theme switcher that respects all design decisions'] },
         ],
       },
-      // ── Stephanie Eckles ────────────────────────────────────────
+      // ── Devin Rosario ────────────────────────────────────────────
       {
-        handle: '5t3ph',
-        overall: 86, technical: 90, audience: 80, quality: 92, performance: 72, brandFit: 88,
-        coverage: 'strong', nmr: false, nmrReason: null,
+        handle: 'devin-rosario',
+        overall: 71, technical: 65, audience: 74, quality: 76, performance: 62, brandFit: 78,
+        coverage: 'partial', nmr: true, nmrReason: 'Single article available — insufficient content volume to assess consistent topical focus. Monitor for new publications before engaging.',
         strengths: [
-          'Enterprise design system experience — her "Lessons from the Trenches" content speaks from real production experience that senior decision-makers respect',
-          'Created SmolCSS and Modern CSS Solutions — established authority on the exact CSS patterns design systems consume',
-          'Strong focus on design token pipelines and accessible color systems — directly maps to Pixelcraft\'s token extraction and WCAG features',
+          'Career-transition narrative (strategy → design) speaks directly to the cross-functional persona Pixelcraft targets — designers who think like product people',
+          'Reflective, roadmap-style content signals strategic thinking that resonates with design leads evaluating long-term tooling investments',
+          'Authentic voice and personal journey framing builds audience trust — sponsored content would need to match this tone carefully',
         ],
         weaknesses: [
-          'Lower performance metrics compared to video creators — written content has inherently less viral reach on social platforms',
-          'Niche audience — highly relevant but numerically smaller than YouTube-based creators on this list',
+          'Very limited publishing volume — one article makes it impossible to assess consistency or audience loyalty',
+          'No technical CSS or component library content — brand fit depends entirely on the design-engineering crossover angle',
         ],
-        rationale: 'Stephanie is one of the few creators who combines enterprise design system experience with hands-on CSS expertise. Her design token pipeline content directly describes the workflow Pixelcraft automates. Her accessibility-first approach to color systems aligns perfectly with Pixelcraft\'s WCAG compliance checking. She would be particularly effective at reaching the enterprise frontend lead persona who needs to justify design system tooling investments.',
+        rationale: 'Devin\'s "from strategy to design" positioning makes her an interesting voice for Pixelcraft\'s cross-functional audience, but the very limited content volume is a significant concern. Her single article demonstrates strong writing quality and a reflective, strategic perspective. However, there\'s not enough signal to evaluate topical consistency or audience engagement. NMR flagged due to insufficient data — revisit once more content is available.',
         evidence: [
-          { quote: 'Building a design token pipeline is the most impactful thing you can do for your design system. Tokens are the single source of truth that connects every layer — from Figma to CSS to documentation. Without them, you\'re just shipping disconnected components.', dimension: 'technical_relevance', why_it_matters: 'Describes exactly the token pipeline that Pixelcraft automates — her audience already understands the value', timestamp: null },
-          { quote: 'I\'ve seen three enterprise design systems fail because they treated accessibility as a checkbox instead of a foundation. WCAG compliance has to be baked into your tokens and components from day one.', dimension: 'brand_fit', why_it_matters: 'Validates Pixelcraft\'s approach of building WCAG checking into the component generation pipeline', timestamp: null },
-          { quote: 'Modern CSS has given us everything we need to build resilient, accessible component libraries without heavy JavaScript. Custom properties, container queries, :has() — these are design system primitives now.', dimension: 'audience_alignment', why_it_matters: 'Her audience thinks in terms of CSS primitives for design systems, making them natural evaluators of Pixelcraft\'s CSS output quality', timestamp: null },
+          { quote: 'Moving from strategy to design wasn\'t a pivot — it was a convergence. The skills transfer almost completely; the tools are the only thing that changes. And most design tools still don\'t speak the language of strategy.', dimension: 'audience_alignment', why_it_matters: 'Her strategy-to-design journey mirrors the cross-functional persona Pixelcraft targets — readers who think in systems', timestamp: null },
+          { quote: 'In 2026, I want to close the gap between what I can envision as a designer and what I can actually ship. That means learning the tools that let me go from design to working product without a separate engineering handoff.', dimension: 'brand_fit', why_it_matters: 'Directly articulates the design-to-code independence that Pixelcraft enables', timestamp: null },
+          { quote: 'The best designers I know in 2025 are the ones who understand constraints — technical, business, and user. Designing without that context is just making pretty pictures.', dimension: 'technical_relevance', why_it_matters: 'Her audience values pragmatic, constraint-aware design — aligned with Pixelcraft\'s practical component output focus', timestamp: null },
         ],
         angles: [
-          { title: 'The Enterprise Design Token Pipeline: From Figma to Production', format: 'sponsored_article', persona: 'Frontend lead standardizing a design system across multiple products', key_points: ['Map the typical enterprise design token workflow and its pain points', 'Show how Pixelcraft automates token extraction from Figma variables', 'Compare manual pipeline setup vs Pixelcraft-automated flow for a real token system'] },
-          { title: 'Accessible Color Systems: Automated WCAG Compliance for Design Systems', format: 'tutorial_article', persona: 'Design engineer building component libraries at a SaaS company', key_points: ['Build an accessible color token system using CSS custom properties', 'Demonstrate Pixelcraft\'s automatic WCAG 2.1 AA compliance checking', 'Show how automated checking catches contrast failures that manual review misses'] },
+          { title: 'From Design Strategy to Shipped Product: Closing the Gap', format: 'sponsored_article', persona: 'Product designer who codes and wants seamless Figma-to-React workflows', key_points: ['Frame the journey from strategic design thinking to implementation', 'Show how Pixelcraft removes the handoff friction that slows design-to-production', 'Personal narrative: what changes when a designer can ship their own components'] },
+          { title: '2026 Design Toolkit: The Tools That Let Designers Ship', format: 'opinion_article', persona: 'Frontend lead standardizing a design system across multiple products', key_points: ['Review the tools that are collapsing the design-to-code boundary', 'Position Pixelcraft as the core bridge in a modern design engineering workflow', 'Roadmap: where design tooling is heading and what to adopt now'] },
         ],
       },
       // ── Jesse Showalter ─────────────────────────────────────────
@@ -554,29 +524,29 @@ export async function GET() {
           { title: 'Migrating Your Component Library to Modern CSS with Pixelcraft', format: 'tutorial_video', persona: 'Frontend lead standardizing a design system across multiple products', key_points: ['Start with a Sass-based component library and identify migration opportunities', 'Use Pixelcraft to generate modern CSS components from Figma designs', 'Compare the Sass-era workflow with the Pixelcraft-automated approach'] },
         ],
       },
-      // ── Emma Bostian ────────────────────────────────────────────
+      // ── Ade Web Developer ────────────────────────────────────────
       {
-        handle: 'emmabostian',
-        overall: 82, technical: 78, audience: 80, quality: 80, performance: 76, brandFit: 88,
-        coverage: 'partial', nmr: true, nmrReason: 'Has shifted focus to management content recently. Verify current design systems content output before engagement.',
+        handle: 'adewebdeveloper',
+        overall: 69, technical: 64, audience: 72, quality: 70, performance: 60, brandFit: 72,
+        coverage: 'partial', nmr: true, nmrReason: 'Single article available and limited publishing history. Audience size and engagement data unavailable. Monitor before committing budget.',
         strengths: [
-          'Real enterprise design system experience at Spotify — her "Design Systems at Spotify: What We Learned" provides credibility that pure content creators lack',
-          'Strong personal brand with cross-platform reach — Dev.to, Twitter, conferences — amplification beyond any single article',
-          'Uniquely positioned at the design-engineering spectrum intersection, which is Pixelcraft\'s exact value proposition',
+          'Designer-to-developer career story resonates strongly with Pixelcraft\'s core persona — someone who has lived the design-code gap firsthand',
+          'The "I switched from design to code" narrative is a high-engagement format that naturally surfaces tool discovery moments',
+          'Authentic perspective from someone who understands both sides of the design-engineering handoff',
         ],
         weaknesses: [
-          'Recent content has shifted toward engineering management and career guidance — may not currently be producing design systems technical content',
-          'Writing frequency on Dev.to has decreased — last technical article was several weeks ago — unclear if she\'s still active in this space',
+          'Very limited content volume — single article makes audience size and retention impossible to assess',
+          'No technical implementation content — unclear whether audience engages with tool-level recommendations vs career storytelling',
         ],
-        rationale: 'Emma\'s Spotify design system experience and her "Design-Engineering Spectrum" positioning make her a high-credibility voice for Pixelcraft. Her enterprise background adds weight that pure content creators lack. However, her recent shift toward management content raises questions about current relevance. The NMR flag is set because her last several posts lean career/management rather than technical design systems — verify she\'s still actively producing content in this space before engaging.',
+        rationale: 'Ade\'s background as a UI/UX designer who transitioned to code puts him at the exact intersection Pixelcraft addresses. His lived experience of the design-to-code gap gives any tool recommendation credibility that pure developers lack. However, the limited publishing volume means there\'s not enough audience signal to commit meaningful budget. The NMR flag reflects the data gap — his story is compelling but the reach is unverified.',
         evidence: [
-          { quote: 'At Spotify, we learned that a design system is only as good as the workflow around it. The components were beautiful, but the handoff process was still broken. Designers would update tokens in Figma, and engineers wouldn\'t know about it for weeks.', dimension: 'brand_fit', why_it_matters: 'Describes the exact enterprise handoff pain that Pixelcraft solves — and from a credible enterprise source', timestamp: null },
-          { quote: 'The design-engineering spectrum isn\'t about choosing a side. It\'s about having tools that let you operate fluidly across the whole range. The best design engineers I know think in both Figma and code simultaneously.', dimension: 'audience_alignment', why_it_matters: 'Her framing of the design engineer role validates the cross-functional persona Pixelcraft targets', timestamp: null },
-          { quote: 'Building inclusive component libraries means thinking about accessibility from the token level up. Color contrast ratios, focus indicators, screen reader announcements — these can\'t be afterthoughts bolted onto finished components.', dimension: 'technical_relevance', why_it_matters: 'Her accessibility-first approach to component libraries aligns with Pixelcraft\'s WCAG compliance feature', timestamp: null },
+          { quote: 'Spending two years as a UI/UX designer before switching to code was the best thing I could have done. I now understand exactly why developers push back on certain designs — and why so many handoffs fail.', dimension: 'audience_alignment', why_it_matters: 'His bicultural designer-developer perspective speaks directly to the audience Pixelcraft targets', timestamp: null },
+          { quote: 'The hardest part of switching to code wasn\'t learning JavaScript — it was realising that most tools are built for either designers or developers, not both. That gap is where projects break down.', dimension: 'brand_fit', why_it_matters: 'Directly identifies the tool gap that Pixelcraft fills between design and engineering', timestamp: null },
+          { quote: 'If I\'d had tools that let me take my Figma designs straight to working components when I started, the transition from design to engineering would have been half as painful.', dimension: 'technical_relevance', why_it_matters: 'Retrospective validation of the exact workflow Pixelcraft enables — powerful as a testimonial framing', timestamp: null },
         ],
         angles: [
-          { title: 'Enterprise Design Systems: What I Learned at Spotify', format: 'sponsored_article', persona: 'Frontend lead standardizing a design system across multiple products', key_points: ['Share lessons from scaling Spotify\'s design system across multiple product teams', 'Show how Pixelcraft addresses the handoff failures she experienced at Spotify', 'Framework for evaluating design-to-code automation tools at enterprise scale'] },
-          { title: 'The Design Engineer\'s Toolkit: Bridging Figma and React', format: 'tutorial_article', persona: 'Product designer who codes and wants seamless Figma-to-React workflows', key_points: ['Define the design engineer role and the tools that enable it', 'Walk through a Pixelcraft workflow from a design engineer\'s perspective', 'Show how inclusive components are generated with accessibility baked in'] },
+          { title: 'What 2 Years as a Designer Taught Me About Building Better Components', format: 'sponsored_article', persona: 'Product designer who codes and wants seamless Figma-to-React workflows', key_points: ['Lessons from both sides of the design-code divide', 'Tools that make the transition from designer to design engineer easier', 'How Pixelcraft removes the friction he experienced switching from Figma to code'] },
+          { title: 'The Designer Who Codes: Why Your Tool Stack Matters', format: 'opinion_article', persona: 'Design engineer building component libraries at a SaaS company', key_points: ['Why designers who code need different tools than pure developers', 'Evaluate Pixelcraft from the perspective of someone who has done both jobs', 'What a design-to-code tool should actually feel like for a former designer'] },
         ],
       },
     ]

@@ -15,7 +15,11 @@
       "WebFetch(domain:support.gumshoe.ai)",
       "WebFetch(domain:omaha-seo.com)",
       "WebSearch",
-      "WebFetch(domain:app.gumshoe.ai)"
+      "WebFetch(domain:app.gumshoe.ai)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:medium.com)",
+      "Bash(npx tsx:*)",
+      "WebFetch(domain:www.youtube.com)"
     ]
   }
 }

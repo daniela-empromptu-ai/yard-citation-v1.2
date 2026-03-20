@@ -95,19 +95,19 @@ export default function CampaignWorkspace({
   const tabProps = { campaign, topics, searchTerms: liveSearchTerms, campaignCreators, activityLog };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-[#2d3748]">
       {/* Campaign header */}
-      <div className="px-6 pt-5 pb-0 bg-[#1e293b] border-b border-[#2d3748]">
-        <div className="flex items-start justify-between mb-4">
+      <div className="px-8 pt-6 pb-0 bg-[#1e293b]">
+        <div className="flex items-start justify-between mb-5">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Link href="/campaigns" className="text-xs text-slate-500 hover:text-slate-300">Campaigns</Link>
+            <div className="flex items-center gap-2 mb-2">
+              <Link href="/campaigns" className="text-xs text-slate-400 hover:text-white transition-colors">Campaigns</Link>
               <span className="text-xs text-slate-600">/</span>
-              <span className="text-xs text-slate-400">{campaign.client_name}</span>
+              <span className="text-xs text-slate-300">{campaign.client_name}</span>
             </div>
-            <h1 className="text-xl font-semibold text-slate-100">{campaign.name}</h1>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-500 border-slate-600/50'}`}>
+            <h1 className="text-2xl font-bold text-white tracking-tight">{campaign.name}</h1>
+            <div className="flex items-center gap-2.5 mt-2">
+              <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-400 border-slate-600/50'}`}>
                 {campaign.status}
               </span>
               {pipelineRunning && (
@@ -116,25 +116,25 @@ export default function CampaignWorkspace({
                 </span>
               )}
               {campaign.geo_targets && (
-                <span className="text-xs text-slate-500">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
+                <span className="text-xs text-slate-400">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>Owner: {campaign.owner_name}</span>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span>Owner: <span className="text-slate-200">{campaign.owner_name}</span></span>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-0 overflow-x-auto">
+        <div className="flex items-center gap-0 overflow-x-auto border-b border-[#2d3748]">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); router.replace(`/campaigns/${campaign.id}/${tab.id}`, { scroll: false }); }}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              className={`px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                  ? 'border-blue-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
               }`}
             >
               {tab.label}
@@ -149,8 +149,8 @@ export default function CampaignWorkspace({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
+      <div className="flex-1 overflow-y-auto bg-[#111827]">
+        <div className="p-6 pt-5">
           {activeTab === 'setup' && <SetupTab {...tabProps} />}
           {activeTab === 'search-terms' && (
             <SearchTermsTab

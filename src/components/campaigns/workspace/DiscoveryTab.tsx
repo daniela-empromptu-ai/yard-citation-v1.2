@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
+import { ChevronDown, ChevronUp, CheckCircle2, Loader2, ArrowRight, Search, Newspaper, FlaskConical, Sparkles, Trophy } from 'lucide-react';
 
 interface PipelineJob {
   id: string; status: string; error_message: string | null;
@@ -21,11 +21,11 @@ interface Props {
 }
 
 const DISCOVERY_STEPS = [
-  { icon: '🔍', label: 'Searching YouTube', detail: 'Discovering relevant creators and channels across YouTube...', color: '#ef4444' },
-  { icon: '📰', label: 'Scanning Medium & Dev.to', detail: 'Finding expert voices, technical writers, and thought leaders...', color: '#22c55e' },
-  { icon: '🔬', label: 'Pre-qualifying Creators', detail: 'Fetching content, pulling transcripts, checking topic relevancy...', color: '#3b82f6' },
-  { icon: '⭐', label: 'Evaluating Quality', detail: 'Analyzing creator quality, audience fit, and brand alignment...', color: '#f59e0b' },
-  { icon: '🏆', label: 'Scoring & Ranking', detail: 'Building your curated list of best creator matches...', color: '#a855f7' },
+  { icon: Search,        label: 'Searching YouTube',       detail: 'Discovering relevant creators and channels across YouTube...', color: '#ef4444' },
+  { icon: Newspaper,     label: 'Scanning Medium & Dev.to', detail: 'Finding expert voices, technical writers, and thought leaders...', color: '#22c55e' },
+  { icon: FlaskConical,  label: 'Pre-qualifying Creators', detail: 'Fetching content, pulling transcripts, checking topic relevancy...', color: '#3b82f6' },
+  { icon: Sparkles,      label: 'Evaluating Quality',      detail: 'Analyzing creator quality, audience fit, and brand alignment...', color: '#f59e0b' },
+  { icon: Trophy,        label: 'Scoring & Ranking',       detail: 'Building your curated list of best creator matches...', color: '#a855f7' },
 ];
 
 function stageToStep(stage: string): number {
@@ -78,15 +78,6 @@ export default function DiscoveryTab({ campaign, pipelineJob: initialJob, onComp
     return () => clearInterval(timer);
   }, [isRunning, job?.started_at]);
 
-  // Auto-navigate on completion
-  useEffect(() => {
-    if (isCompleted) {
-      const timeout = setTimeout(() => {
-        onComplete?.();
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [isCompleted, onComplete]);
 
   const formatElapsed = (s: number) => {
     const m = Math.floor(s / 60);
@@ -138,7 +129,7 @@ export default function DiscoveryTab({ campaign, pipelineJob: initialJob, onComp
               }}
             >
               <div className="flex items-center gap-4">
-                <span className="text-2xl">{step.icon}</span>
+                <step.icon size={22} style={{ color: isDone || isCompleted ? '#22c55e' : isActive ? step.color : '#475569' }} className="shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-semibold ${isDone || isCompleted ? 'text-green-400' : isActive ? 'text-slate-100' : 'text-slate-500'}`}>

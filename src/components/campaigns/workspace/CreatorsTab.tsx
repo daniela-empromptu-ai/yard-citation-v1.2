@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { CoverageTag, PlatformBadge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
-import { Modal } from '@/components/ui/Modal';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge, { DIMENSION_COLOR_HEX } from '@/components/ui/ScoreGauge';
 import { useRole } from '@/components/layout/Shell';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink } from 'lucide-react';
 
 // ─── Helpers ───
 
@@ -72,75 +71,86 @@ interface Props {
   [key: string]: unknown;
 }
 
-// ─── Platform Colors ───
+// ─── Platform Avatar Colors ───
 
-const PLATFORM_AVATAR: Record<string, { bg: string; text: string; ring: string }> = {
-  youtube:    { bg: 'rgba(239,68,68,0.12)', text: '#f87171', ring: 'rgba(239,68,68,0.35)' },
+const PLATFORM_COLORS: Record<string, { bg: string; text: string; ring: string }> = {
+  youtube:    { bg: 'rgba(239,68,68,0.12)',  text: '#f87171', ring: 'rgba(239,68,68,0.35)' },
   medium:     { bg: 'rgba(34,197,94,0.12)',  text: '#4ade80', ring: 'rgba(34,197,94,0.35)' },
   devto:      { bg: 'rgba(59,130,246,0.12)', text: '#60a5fa', ring: 'rgba(59,130,246,0.35)' },
   linkedin:   { bg: 'rgba(56,189,248,0.12)', text: '#38bdf8', ring: 'rgba(56,189,248,0.35)' },
-  github:     { bg: 'rgba(226,232,240,0.10)', text: '#94a3b8', ring: 'rgba(148,163,184,0.30)' },
+  github:     { bg: 'rgba(226,232,240,0.10)',text: '#94a3b8', ring: 'rgba(148,163,184,0.30)' },
   newsletter: { bg: 'rgba(168,85,247,0.12)', text: '#c084fc', ring: 'rgba(168,85,247,0.35)' },
-  podcast:    { bg: 'rgba(244,114,182,0.12)', text: '#f472b6', ring: 'rgba(244,114,182,0.35)' },
-  blog:       { bg: 'rgba(251,191,36,0.12)',  text: '#fbbf24', ring: 'rgba(251,191,36,0.35)' },
+  podcast:    { bg: 'rgba(244,114,182,0.12)',text: '#f472b6', ring: 'rgba(244,114,182,0.35)' },
+  blog:       { bg: 'rgba(251,191,36,0.12)', text: '#fbbf24', ring: 'rgba(251,191,36,0.35)' },
 };
-const DEFAULT_AVATAR = { bg: 'rgba(148,163,184,0.10)', text: '#94a3b8', ring: 'rgba(148,163,184,0.30)' };
+const DEFAULT_PLATFORM = { bg: 'rgba(148,163,184,0.10)', text: '#94a3b8', ring: 'rgba(148,163,184,0.30)' };
+
+// ─── Platform Logo ───
+
+function PlatformLogo({ platform, color }: { platform: string; color: string }) {
+  if (platform === 'youtube') {
+    return <Youtube size={26} color={color} strokeWidth={1.5} />;
+  }
+  const abbrev: Record<string, string> = {
+    medium: 'M', devto: 'D', linkedin: 'in', github: 'GH',
+    newsletter: 'NL', podcast: '◎', blog: 'B',
+  };
+  return (
+    <span style={{ color, fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
+      {abbrev[platform] ?? platform.charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 // ─── Creator Card ───
 
 function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void }) {
-  const initial = cc.creator_name.charAt(0).toUpperCase();
-  const avatar = PLATFORM_AVATAR[cc.creator_platform] || DEFAULT_AVATAR;
+  const palette = PLATFORM_COLORS[cc.creator_platform] ?? DEFAULT_PLATFORM;
   const isScored = cc.overall_score != null;
   const handle = cc.creator_handle
     ? (cc.creator_platform === 'youtube' || cc.creator_platform === 'medium'
-      ? `@${cc.creator_handle.replace(/^@/, '')}`
-      : cc.creator_handle)
+        ? `@${cc.creator_handle.replace(/^@/, '')}`
+        : cc.creator_handle)
     : null;
 
   return (
     <div
       onClick={onClick}
-      className="creator-card cursor-pointer rounded-xl bg-[#1e293b] border border-[#2d3748] p-4 group"
+      className="creator-card cursor-pointer rounded-2xl border p-5 group transition-all bg-[#1e293b] border-[#2d3748] hover:border-[#3d4f68] hover:bg-[#243048]"
     >
-      <div className="flex items-center gap-3.5">
-        {/* Avatar */}
-        <div className="relative shrink-0">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold"
-            style={{
-              background: avatar.bg,
-              color: avatar.text,
-              boxShadow: `0 0 0 2.5px ${avatar.ring}`,
-            }}
-          >
-            {initial}
-          </div>
-          {isScored && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-[#1e293b]" />
-          )}
+      {/* Platform logo avatar */}
+      <div className="flex items-center justify-between mb-4">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+          style={{
+            background: palette.bg,
+            boxShadow: `0 0 0 2px ${palette.ring}`,
+          }}
+        >
+          <PlatformLogo platform={cc.creator_platform} color={palette.text} />
         </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm text-slate-100 truncate group-hover:text-blue-400 transition-colors">
-            {cc.creator_name}
-          </div>
-          {handle && (
-            <div className="text-xs text-slate-500 truncate">{handle}</div>
-          )}
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <PlatformBadge platform={cc.creator_platform} />
-            {isScored && (
-              <span className="text-[10px] text-slate-500">Evaluated</span>
-            )}
-          </div>
-        </div>
-
-        {/* Chevron hint */}
         {isScored && (
-          <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-400 shrink-0 transition-colors" />
+          <div className="text-right">
+            <div className="text-2xl font-bold text-slate-100">{cc.overall_score}</div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">score</div>
+          </div>
         )}
+      </div>
+
+      {/* Creator info */}
+      <div className="min-w-0">
+        <div className="font-semibold text-sm leading-snug truncate transition-colors text-slate-100 group-hover:text-blue-400">
+          {cc.creator_name}
+        </div>
+        {handle && (
+          <div className="text-xs text-slate-500 truncate mt-0.5">{handle}</div>
+        )}
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <PlatformBadge platform={cc.creator_platform} />
+          {isScored && (
+            <span className="text-[10px] text-slate-500">Evaluated</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -149,72 +159,143 @@ function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void
 // ─── Dimension Config ───
 
 const DIMS = [
-  { key: 'technical_relevance', label: 'Technical', weight: 30 },
-  { key: 'audience_alignment', label: 'Audience', weight: 25 },
-  { key: 'content_quality', label: 'Quality', weight: 20 },
-  { key: 'channel_performance', label: 'Channel', weight: 15 },
-  { key: 'brand_fit', label: 'Brand Fit', weight: 10 },
+  { key: 'technical_relevance', label: 'Technical',  weight: 30 },
+  { key: 'audience_alignment',  label: 'Audience',   weight: 25 },
+  { key: 'content_quality',     label: 'Quality',    weight: 20 },
+  { key: 'channel_performance', label: 'Channel',    weight: 15 },
+  { key: 'brand_fit',           label: 'Brand Fit',  weight: 10 },
 ] as const;
 
-// ─── Drawer Content ───
+// ─── Detail Panel ───
 
-function DrawerContent({ evaluation, evidence, contentItems, angles }: {
-  evaluation: Evaluation;
+function DetailPanel({
+  cc, evaluation, evidence, contentItems, angles, loading,
+}: {
+  cc: CampaignCreator;
+  evaluation: Evaluation | null;
   evidence: EvidenceSnippet[];
   contentItems: ContentItem[];
   angles: ContentAngle[];
+  loading: boolean;
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false);
+  const palette = PLATFORM_COLORS[cc.creator_platform] ?? DEFAULT_PLATFORM;
+  const handle = cc.creator_handle
+    ? `@${cc.creator_handle.replace(/^@/, '')}`
+    : null;
+
   const featuredEvidence = evidence.slice(0, 3);
   const remainingEvidence = evidence.slice(3);
 
-  return (
-    <div className="space-y-0">
-      {/* Section A: Hero Score */}
-      <div className="drawer-hero px-6 py-6 -mx-5 -mt-5 mb-5 rounded-t-xl flex flex-col items-center gap-3">
-        <ScoreGauge score={evaluation.overall_score} size="lg" />
-        <div className="flex items-center gap-3">
-          <CoverageTag coverage={evaluation.evidence_coverage || 'none'} />
-          {evaluation.evaluated_at && (
-            <span className="text-[11px] text-slate-500">
-              Evaluated {formatDate(evaluation.evaluated_at)}
-            </span>
-          )}
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-500">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500/40 border-t-blue-500 rounded-full animate-spin" />
+          <span className="text-sm">Loading evaluation…</span>
         </div>
-        {evaluation.needs_manual_review && (
-          <div className="w-full bg-orange-900/20 border border-orange-700/40 rounded-md p-3 mt-2">
-            <p className="text-xs font-semibold text-orange-400">{'\u26A0'} Needs Manual Review</p>
-            <p className="text-xs text-orange-300 mt-0.5">{evaluation.needs_manual_review_reason}</p>
+      </div>
+    );
+  }
+
+  if (!evaluation) {
+    return (
+      <div className="flex items-center justify-center h-48 text-slate-500">
+        <p className="text-sm">{cc.overall_score === null ? 'Not scored yet.' : 'No evaluation found.'}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Creator identity */}
+      <div className="flex items-center gap-4">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ background: palette.bg, boxShadow: `0 0 0 2px ${palette.ring}` }}
+        >
+          <PlatformLogo platform={cc.creator_platform} color={palette.text} />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-slate-100 leading-snug">{cc.creator_name}</h2>
+          {handle && <p className="text-sm text-slate-500 mt-0.5">{handle}</p>}
+          <div className="flex items-center gap-2 mt-2">
+            <PlatformBadge platform={cc.creator_platform} />
+            <CoverageTag coverage={evaluation.evidence_coverage || 'none'} />
+            {evaluation.evaluated_at && (
+              <span className="text-xs text-slate-500">Evaluated {formatDate(evaluation.evaluated_at)}</span>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Section B: Dimension Gauges */}
-      <div className="px-1 mb-5">
-        <div className="grid grid-cols-5 gap-3">
+      {/* Manual review warning */}
+      {evaluation.needs_manual_review && (
+        <div className="bg-orange-900/20 border border-orange-700/40 rounded-xl p-4">
+          <p className="text-sm font-semibold text-orange-400">⚠ Needs Manual Review</p>
+          <p className="text-sm text-orange-300 mt-1">{evaluation.needs_manual_review_reason}</p>
+        </div>
+      )}
+
+      {/* Overall score */}
+      <div className="flex flex-col items-center gap-4 py-4">
+        <ScoreGauge score={evaluation.overall_score} size="xl" />
+      </div>
+
+      {/* Dimension scores */}
+      <div>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Score Breakdown</h3>
+        <div className="grid grid-cols-5 gap-4">
           {DIMS.map(d => {
             const score = (evaluation as unknown as Record<string, number>)[`score_${d.key}`] ?? 0;
             return (
-              <ScoreGauge
-                key={d.key}
-                score={score}
-                size="md"
-                label={d.label}
-                weight={d.weight}
-                color={DIMENSION_COLOR_HEX[d.key]}
-              />
+              <div key={d.key} className="flex flex-col items-center gap-2">
+                <ScoreGauge
+                  score={score}
+                  size="md"
+                  label={d.label}
+                  weight={d.weight}
+                  color={DIMENSION_COLOR_HEX[d.key]}
+                />
+              </div>
             );
           })}
         </div>
       </div>
 
-      {/* Section C: Featured Evidence */}
+      {/* Strengths & Weaknesses */}
+      <div className="grid grid-cols-2 gap-6">
+        <div className="bg-[#111827] rounded-xl p-4">
+          <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-3">Strengths</h3>
+          <ul className="space-y-2">
+            {parseJsonArray(evaluation.strengths_json).map((s, i) => (
+              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                <span className="text-green-400 flex-shrink-0 mt-0.5 text-base leading-none">✓</span>
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-[#111827] rounded-xl p-4">
+          <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Weaknesses</h3>
+          <ul className="space-y-2">
+            {parseJsonArray(evaluation.weaknesses_json).map((w, i) => (
+              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                <span className="text-red-400 flex-shrink-0 mt-0.5 text-base leading-none">×</span>
+                {w}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Evidence */}
       {evidence.length > 0 && (
-        <div className="mb-5">
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
-            Key Evidence ({evidence.length})
-          </h4>
-          <div className="space-y-1">
+        <div>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
+            Key Evidence <span className="text-slate-600 font-normal">({evidence.length})</span>
+          </h3>
+          <div className="space-y-2">
             {featuredEvidence.map((ev, i) => (
               <EvidenceCard
                 key={i}
@@ -253,10 +334,10 @@ function DrawerContent({ evaluation, evidence, contentItems, angles }: {
               ) : (
                 <button
                   onClick={() => setShowAllEvidence(true)}
-                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 font-medium"
+                  className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 mt-3 font-medium"
                 >
-                  <ChevronDown size={14} />
-                  Show {remainingEvidence.length} more...
+                  <ChevronDown size={15} />
+                  Show {remainingEvidence.length} more
                 </button>
               )}
             </>
@@ -264,51 +345,28 @@ function DrawerContent({ evaluation, evidence, contentItems, angles }: {
         </div>
       )}
 
-      {/* Section D: Strengths & Weaknesses */}
-      <div className="grid grid-cols-2 gap-4 mb-5">
-        <div>
-          <h4 className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-2">Strengths</h4>
-          <ul className="space-y-1">
-            {(parseJsonArray(evaluation.strengths_json)).map((s: string, i: number) => (
-              <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
-                <span className="text-green-400 flex-shrink-0 mt-0.5">{'\u2713'}</span>{s}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">Weaknesses</h4>
-          <ul className="space-y-1">
-            {(parseJsonArray(evaluation.weaknesses_json)).map((w: string, i: number) => (
-              <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
-                <span className="text-red-400 flex-shrink-0 mt-0.5">{'\u00D7'}</span>{w}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
       {/* Content Evaluated */}
       {contentItems.length > 0 && (
-        <div className="mb-5">
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-            Content Evaluated ({contentItems.length})
-          </h4>
-          <div className="space-y-1.5">
+        <div>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Content Evaluated <span className="text-slate-600 font-normal">({contentItems.length})</span>
+          </h3>
+          <div className="space-y-2">
             {contentItems.map(ci => (
-              <div key={ci.id} className="bg-[#111827] rounded-md p-2 flex items-center gap-2 text-xs">
+              <div key={ci.id} className="bg-[#111827] rounded-xl p-3 flex items-center gap-3">
                 <span className="badge bg-slate-800/50 text-slate-400 border-slate-600/50 text-[10px] shrink-0">{ci.platform}</span>
                 <a
                   href={ci.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline truncate"
+                  className="text-sm text-blue-400 hover:underline truncate flex-1"
                   title={ci.title}
                 >
                   {ci.title}
                 </a>
+                <ExternalLink size={12} className="text-slate-600 shrink-0" />
                 {ci.published_at && (
-                  <span className="text-slate-500 shrink-0">{formatDate(ci.published_at)}</span>
+                  <span className="text-xs text-slate-500 shrink-0">{formatDate(ci.published_at)}</span>
                 )}
               </div>
             ))}
@@ -319,18 +377,18 @@ function DrawerContent({ evaluation, evidence, contentItems, angles }: {
       {/* Content Angles */}
       {angles.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Content Angles</h4>
-          <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Content Angles</h3>
+          <div className="space-y-3">
             {angles.map((angle, i) => (
-              <div key={i} className="bg-[#111827] rounded-md p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-slate-200">{angle.title}</span>
+              <div key={i} className="bg-[#111827] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-slate-200">{angle.title}</span>
                   <span className="badge bg-teal-900/30 text-teal-400 border-teal-700/50 text-xs">{angle.format}</span>
                   {angle.persona && <span className="badge bg-purple-900/30 text-purple-400 border-purple-700/50 text-xs">{angle.persona}</span>}
                 </div>
-                <ul className="space-y-0.5">
-                  {parseJsonArray(angle.key_points_json).map((kp: string, j: number) => (
-                    <li key={j} className="text-xs text-slate-400">{'\u00B7'} {kp}</li>
+                <ul className="space-y-1">
+                  {parseJsonArray(angle.key_points_json).map((kp, j) => (
+                    <li key={j} className="text-sm text-slate-400">· {kp}</li>
                   ))}
                 </ul>
               </div>
@@ -345,7 +403,6 @@ function DrawerContent({ evaluation, evidence, contentItems, angles }: {
 // ─── Main Component ───
 
 export default function CreatorsTab({ campaign, campaignCreators }: Props) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedCc, setSelectedCc] = useState<CampaignCreator | null>(null);
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evidence, setEvidence] = useState<EvidenceSnippet[]>([]);
@@ -360,17 +417,18 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const { addToast } = useToast();
   const { userId } = useRole();
 
-  // Show scored creators only (the results the client cares about)
   const filteredCreators = (campaignCreators as CampaignCreator[]).filter(cc =>
     cc.pipeline_stage !== 'excluded' && cc.overall_score != null
   );
   const creatorsTotalPages = Math.max(1, Math.ceil(filteredCreators.length / CREATORS_PAGE_SIZE));
   const pagedCreators = filteredCreators.slice((creatorsPage - 1) * CREATORS_PAGE_SIZE, creatorsPage * CREATORS_PAGE_SIZE);
 
-
   const loadEvaluation = async (cc: CampaignCreator) => {
     setSelectedCc(cc);
-    setDrawerOpen(true);
+    setEvaluation(null);
+    setEvidence([]);
+    setAngles([]);
+    setContentItems([]);
     setLoadingEval(true);
     try {
       const res = await fetch(`/api/evaluations/${cc.id}`);
@@ -406,9 +464,36 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     }
   };
 
+  // ── Detail view (full-page) ──
+  if (selectedCc) {
+    return (
+      <div>
+        {/* Back nav */}
+        <button
+          onClick={() => setSelectedCc(null)}
+          className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 mb-6 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to creators
+        </button>
+
+        <div className="max-w-2xl mx-auto">
+          <DetailPanel
+            cc={selectedCc}
+            evaluation={evaluation}
+            evidence={evidence}
+            contentItems={contentItems}
+            angles={angles}
+            loading={loadingEval}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Grid view ──
   return (
-    <div className="space-y-4">
-      {/* Creator Cards */}
+    <div className="space-y-5">
       {pagedCreators.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -419,21 +504,19 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
         </div>
       ) : (
         <>
-          {/* Flashy header */}
-          <div className="text-center pb-2">
-            <h2 className="text-lg font-semibold text-slate-100">
-              {filteredCreators.length} curated creator{filteredCreators.length !== 1 ? 's' : ''} for {campaign.client_name || 'your brand'}
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Hand-picked and evaluated to help grow your brand's reach. Click any creator for details.
-            </p>
-          </div>
-
-          {/* Subtle toolbar */}
-          <div className="flex items-center justify-end">
+          {/* Header */}
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-100">
+                {filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''} for {campaign.client_name || 'your brand'}
+              </h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Click any creator to view their evaluation and content angles.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <input
-                className="input-field w-56 text-xs"
+                className="input-field w-52 text-xs"
                 value={addUrl}
                 onChange={e => setAddUrl(e.target.value)}
                 placeholder="Add creator by URL…"
@@ -445,15 +528,20 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
+          {/* Creator grid — always 3 columns */}
+          <div className="grid grid-cols-3 gap-4">
             {pagedCreators.map(cc => (
-              <CreatorCard key={cc.id} cc={cc} onClick={() => loadEvaluation(cc)} />
+              <CreatorCard
+                key={cc.id}
+                cc={cc}
+                onClick={() => loadEvaluation(cc)}
+              />
             ))}
           </div>
 
           {/* Pagination */}
           {creatorsTotalPages > 1 && (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-slate-500">Page {creatorsPage} of {creatorsTotalPages}</span>
               <div className="flex items-center gap-1">
                 <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 text-slate-500 hover:bg-[#263044] rounded disabled:opacity-30">
@@ -467,26 +555,6 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
           )}
         </>
       )}
-
-      {/* Evaluation Modal */}
-      <Modal open={drawerOpen} onClose={() => setDrawerOpen(false)} title={selectedCc?.creator_name || ''} size="xl">
-        {loadingEval ? (
-          <div className="flex items-center justify-center h-32 text-slate-500">
-            <div className="animate-spin text-2xl">{'\u27F3'}</div>
-          </div>
-        ) : !evaluation ? (
-          <div className="p-4 text-center text-slate-500">
-            <p className="text-sm">{selectedCc?.overall_score === null ? 'Not scored yet.' : 'No evaluation found.'}</p>
-          </div>
-        ) : (
-          <DrawerContent
-            evaluation={evaluation}
-            evidence={evidence}
-            contentItems={contentItems}
-            angles={angles}
-          />
-        )}
-      </Modal>
     </div>
   );
 }

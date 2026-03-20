@@ -24,7 +24,7 @@ function getScoreHex(score: number): string {
 
 interface ScoreGaugeProps {
   score: number | null
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   label?: string
   weight?: number
   color?: string
@@ -35,9 +35,10 @@ const SIZE_CONFIG = {
   sm: { px: 40, stroke: 3, fontSize: 13, subSize: 0, radius: 16 },
   md: { px: 80, stroke: 4, fontSize: 22, subSize: 10, radius: 34 },
   lg: { px: 120, stroke: 6, fontSize: 34, subSize: 12, radius: 52 },
+  xl: { px: 180, stroke: 8, fontSize: 52, subSize: 16, radius: 78 },
 }
 
-export function ScoreGauge({ score: scoreProp, size = 'sm', label, weight, color, showLabel = true }: ScoreGaugeProps) {
+export function ScoreGauge({ score: scoreProp, size = 'sm', label, weight, color, showLabel = true }: ScoreGaugeProps & { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
   const score = scoreProp ?? 0
   const cfg = SIZE_CONFIG[size]
   const center = cfg.px / 2
@@ -81,7 +82,7 @@ export function ScoreGauge({ score: scoreProp, size = 'sm', label, weight, color
         {/* Score text */}
         <text
           x={center}
-          y={size === 'lg' ? center - 4 : center}
+          y={size === 'lg' || size === 'xl' ? center - 6 : center}
           textAnchor="middle"
           dominantBaseline="central"
           fill="#e2e8f0"
@@ -91,11 +92,11 @@ export function ScoreGauge({ score: scoreProp, size = 'sm', label, weight, color
         >
           {score}
         </text>
-        {/* "/ 100" sub text for lg */}
-        {size === 'lg' && (
+        {/* "/ 100" sub text for lg/xl */}
+        {(size === 'lg' || size === 'xl') && (
           <text
             x={center}
-            y={center + 18}
+            y={center + (size === 'xl' ? 26 : 18)}
             textAnchor="middle"
             dominantBaseline="central"
             fill="#64748b"

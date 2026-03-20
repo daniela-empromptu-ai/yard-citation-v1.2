@@ -23,21 +23,21 @@ export function StatCard({ label, value, color, icon: Icon, urgent }: StatCardPr
 
   if (Icon) {
     return (
-      <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-4 flex items-start gap-3">
-        <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', color.startsWith('bg-') ? color : `bg-${color}-500`)}>
+      <div className="h-full bg-[#1e293b] border border-[#2d3748] rounded-xl p-5 flex items-start gap-3">
+        <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', color.startsWith('bg-') ? color : `bg-${color}-500`)}>
           <Icon size={18} className="text-white" />
         </div>
         <div>
-          <div className="text-2xl font-bold text-slate-100">{value}</div>
-          <div className="text-xs text-slate-400">{label}</div>
+          <div className="text-3xl font-bold text-white">{value}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{label}</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className={clsx('card p-4', urgent && Number(value) > 0 && 'border-orange-700/50 bg-orange-900/20')}>
-      <div className={clsx('text-2xl font-bold w-10 h-10 rounded-lg flex items-center justify-center text-sm mb-2', colorClasses)}>
+    <div className={clsx('h-full card p-5', urgent && Number(value) > 0 && 'border-orange-700/50 bg-orange-900/20')}>
+      <div className={clsx('text-2xl font-bold w-10 h-10 rounded-xl flex items-center justify-center text-sm mb-2.5', colorClasses)}>
         {value}
       </div>
       <div className="text-xs text-slate-400 font-medium">{label}</div>

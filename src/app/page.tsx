@@ -50,10 +50,10 @@ export default function DashboardPage() {
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-xl font-bold text-slate-100">Dashboard</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Campaign scoring and creator discovery at a glance</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard</h1>
+          <p className="text-sm text-slate-400 mt-1">Campaign scoring and creator discovery at a glance</p>
         </div>
         <button onClick={load} className="flex items-center gap-1.5 px-3 h-8 border border-[#2d3748] rounded-lg text-xs text-slate-400 hover:bg-[#263044]">
           <RefreshCw size={12} /> Refresh
@@ -61,7 +61,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-8 items-stretch">
         <StatCard label="Active campaigns" value={stats.active_campaigns || 0} icon={Megaphone} color="bg-purple-500" />
         <StatCard label="Creator database" value={stats.total_creators || 0} icon={Database} color="bg-blue-500" />
         <StatCard label="Scored this week" value={stats.scored_this_week || 0} icon={BarChart3} color="bg-green-500" />

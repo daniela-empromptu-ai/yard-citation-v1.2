@@ -65,15 +65,10 @@ export function EvidenceCard({
         {(tsStart !== null && tsStart !== undefined) && (
           <div className="flex items-center gap-1.5 text-[11px] text-blue-400 mb-1.5 pl-4">
             <Clock size={11} />
-            <a
-              href={`${url}?t=${tsStart}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline font-medium"
-            >
+            <span className="font-medium">
               [{formatTime(tsStart)}
               {tsEnd ? ` → ${formatTime(tsEnd)}` : ''}]
-            </a>
+            </span>
           </div>
         )}
 
@@ -125,15 +120,10 @@ export function EvidenceCard({
       {(tsStart !== null && tsStart !== undefined) && (
         <div className="flex items-center gap-1.5 text-[11px] text-blue-400 mb-1.5">
           <Clock size={11} />
-          <a
-            href={`${url}?t=${tsStart}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline font-medium"
-          >
+          <span className="font-medium">
             [{formatTime(tsStart)}
             {tsEnd ? ` → ${formatTime(tsEnd)}` : ''}]
-          </a>
+          </span>
         </div>
       )}
 

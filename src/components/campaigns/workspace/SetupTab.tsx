@@ -47,9 +47,9 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-3 gap-5 items-stretch">
         {/* Campaign Summary */}
-        <div className="card p-4">
+        <div className="card p-4 flex flex-col">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Campaign Summary</h3>
           <dl className="space-y-2 text-xs">
             <div className="flex justify-between">
@@ -98,7 +98,7 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
         </div>
 
         {/* Next Actions + Recent Activity */}
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Next Actions</h3>
             {nextActions.length === 0 ? (
@@ -115,7 +115,7 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
             )}
           </div>
 
-          <div className="card p-4">
+          <div className="card p-4 flex-1 flex flex-col">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Recent Activity</h3>
             {activityLog.length === 0 ? (
               <p className="text-xs text-slate-500 italic">No activity yet.</p>
@@ -134,15 +134,15 @@ export default function SetupTab({ campaign, topics, campaignCreators, activityL
         </div>
 
         {/* Creative Brief */}
-        <div className="space-y-5">
-          <div className="card overflow-hidden">
+        <div className="flex flex-col gap-5">
+          <div className="card overflow-hidden flex flex-col flex-1">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#2d3748] bg-[#111827]">
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Creative Brief</h3>
               <button onClick={() => setShowMd(!showMd)} className="btn-ghost text-xs">
                 {showMd ? 'Raw' : 'Formatted'}
               </button>
             </div>
-            <div className="p-4 max-h-72 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-4">
               {showMd ? (
                 <div className="prose prose-sm prose-invert max-w-none">
                   <ReactMarkdown>{campaign.creative_brief || '_No brief provided_'}</ReactMarkdown>
