@@ -15,7 +15,7 @@ interface SearchTerm {
 }
 
 interface Props {
-  campaign: { id: string; creative_brief: string; product_category: string; stage: string; personas: string[] };
+  campaign: { id: string; name?: string; creative_brief: string; product_category: string; stage: string; personas: string[] };
   topics: { topic: string; approved: boolean }[];
   searchTerms: SearchTerm[];
   pipelineRan?: boolean;
@@ -160,7 +160,9 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
   const handleGenerateEngagement = async () => {
     setStarting(true);
     try {
-      const res = await fetch('/api/campaigns/search-terms/approve-all', {
+      const isDemo = campaign.name?.startsWith('[DEMO]') || false;
+      const endpoint = isDemo ? '/api/demo/fake-pipeline' : '/api/campaigns/search-terms/approve-all';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaign_id: campaign.id, user_id: userId }),
