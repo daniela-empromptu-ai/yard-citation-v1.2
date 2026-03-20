@@ -53,13 +53,23 @@ export async function POST() {
       if (!clientId) return NextResponse.json({ error: 'No clients found' }, { status: 500 })
     }
 
-    // ── Idempotency ───────────────────────────────────────────────
+    // ── Idempotency: only reuse if campaign has scored creators ──
     const existCamp = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaigns')} WHERE name LIKE '[DEMO]%' LIMIT 1`, [])
     if (existCamp.data[0]?.id) {
-      return NextResponse.json({ campaign_id: existCamp.data[0].id })
+      const ccCount = await dbQuery<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${t('campaign_creators')} cc
+         JOIN ${t('creator_evaluations')} e ON e.campaign_creator_id = cc.id
+         WHERE cc.campaign_id = $1`, [existCamp.data[0].id])
+      if (parseInt(ccCount.data[0]?.count || '0') > 0) {
+        return NextResponse.json({ campaign_id: existCamp.data[0].id })
+      }
+      // Incomplete seed — delete and re-create
+      console.log('[demo/setup] Found incomplete demo campaign, deleting and re-seeding...')
+      await DELETE()
     }
 
     // ── Campaign ──────────────────────────────────────────────────
+    console.log('[demo/setup] Creating campaign...')
     const campaignId = uuidv4()
     await dbQuery(
       `INSERT INTO ${t('campaigns')} (id, name, client_id, owner_user_id, status, stage, geo_targets, language, product_category, creative_brief, personas, created_at, updated_at)
@@ -69,6 +79,8 @@ export async function POST() {
          now() - interval '3 days', now())`,
       [campaignId, '[DEMO] QA.tech — AI Testing for Modern Teams', clientId, userId]
     )
+
+    console.log('[demo/setup] Campaign created:', campaignId)
 
     // ── Completed pipeline job ────────────────────────────────────
     const jobId = uuidv4()
@@ -108,6 +120,8 @@ export async function POST() {
         [campaignId, terms[i][0], terms[i][1], terms[i][2], i, userId])
     }
 
+    console.log('[demo/setup] Terms + topics seeded')
+
     // ── Creators ──────────────────────────────────────────────────
     const CREATORS = [
       { name: 'Fireship', handle: 'fireship', subs: 4120000 },
@@ -132,6 +146,8 @@ export async function POST() {
       const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('creators')} WHERE handle=$1 AND platform='youtube' LIMIT 1`, [cr.handle])
       if (row.data[0]?.id) creatorIds[cr.handle] = row.data[0].id
     }
+
+    console.log('[demo/setup] Creators upserted:', Object.keys(creatorIds).length)
 
     // ── Content Items ─────────────────────────────────────────────
     const CONTENT: { handle: string; title: string; url: string; words: number; daysAgo: number }[] = [
@@ -167,6 +183,8 @@ export async function POST() {
       const row = await dbQuery<{ id: string }>(`SELECT id FROM ${t('content_items')} WHERE url=$1 LIMIT 1`, [ci.url])
       if (row.data[0]?.id) contentIds[ci.url] = row.data[0].id
     }
+
+    console.log('[demo/setup] Content items seeded:', Object.keys(contentIds).length)
 
     // ── Campaign Creators + Evaluations + Evidence ────────────────
     // Each creator: cc link → evaluation → evidence snippets → content angles
@@ -442,9 +460,10 @@ export async function POST() {
       }
     }
 
+    console.log('[demo/setup] Complete! Campaign:', campaignId)
     return NextResponse.json({ campaign_id: campaignId })
   } catch (e) {
-    console.error('[demo/setup]', e)
+    console.error('[demo/setup] ERROR:', e)
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
