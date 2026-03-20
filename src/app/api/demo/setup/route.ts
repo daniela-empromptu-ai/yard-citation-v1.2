@@ -5,6 +5,31 @@ import { v4 as uuidv4 } from 'uuid'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+export async function DELETE() {
+  try {
+    const camps = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaigns')} WHERE name LIKE '[DEMO]%'`, [])
+    for (const camp of camps.data) {
+      const ccs = await dbQuery<{ id: string }>(`SELECT id FROM ${t('campaign_creators')} WHERE campaign_id = $1`, [camp.id])
+      for (const cc of ccs.data) {
+        await dbQuery(`DELETE FROM ${t('evidence_snippets')} WHERE evaluation_id IN (SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id = $1)`, [cc.id])
+        await dbQuery(`DELETE FROM ${t('content_angles')} WHERE evaluation_id IN (SELECT id FROM ${t('creator_evaluations')} WHERE campaign_creator_id = $1)`, [cc.id])
+        await dbQuery(`DELETE FROM ${t('creator_evaluations')} WHERE campaign_creator_id = $1`, [cc.id])
+      }
+      await dbQuery(`DELETE FROM ${t('campaign_creators')} WHERE campaign_id = $1`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('job_events')} WHERE job_id IN (SELECT id FROM ${t('jobs')} WHERE campaign_id = $1)`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('jobs')} WHERE campaign_id = $1`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('activity_log')} WHERE campaign_id = $1`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('campaign_search_terms')} WHERE campaign_id = $1`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('campaign_topics')} WHERE campaign_id = $1`, [camp.id])
+      await dbQuery(`DELETE FROM ${t('campaigns')} WHERE id = $1`, [camp.id])
+    }
+    return NextResponse.json({ ok: true, deleted: camps.data.length })
+  } catch (e) {
+    console.error('[demo/setup DELETE]', e)
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
+
 export async function POST() {
   try {
     // ── Prerequisites ─────────────────────────────────────────────
