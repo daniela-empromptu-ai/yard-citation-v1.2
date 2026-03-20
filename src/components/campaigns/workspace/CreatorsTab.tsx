@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/Toast';
 import { CoverageTag, PlatformBadge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge, { DIMENSION_COLOR_HEX } from '@/components/ui/ScoreGauge';
-import { useRole } from '@/components/layout/Shell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink } from 'lucide-react';
 
@@ -409,13 +407,9 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [angles, setAngles] = useState<ContentAngle[]>([]);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [loadingEval, setLoadingEval] = useState(false);
-  const [addUrl, setAddUrl] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
   const [creatorsPage, setCreatorsPage] = useState(1);
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
-  const { addToast } = useToast();
-  const { userId } = useRole();
 
   const filteredCreators = (campaignCreators as CampaignCreator[]).filter(cc =>
     cc.pipeline_stage !== 'excluded' && cc.overall_score != null
@@ -442,29 +436,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     }
   };
 
-  const handleAddCreatorUrl = async () => {
-    if (!addUrl.trim()) return;
-    setAddLoading(true);
-    try {
-      const res = await fetch('/api/campaigns/creators/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaign_id: campaign.id, creator_url: addUrl, user_id: userId }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        addToast('success', 'Creator added to campaign');
-        setAddUrl('');
-        router.refresh();
-      } else {
-        addToast('error', data.error || 'Failed to add creator');
-      }
-    } finally {
-      setAddLoading(false);
-    }
-  };
-
-  // ── Detail view (full-page) ──
+// ── Detail view (full-page) ──
   if (selectedCc) {
     return (
       <div>
@@ -513,18 +485,6 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
               <p className="text-sm text-slate-500 mt-0.5">
                 Click any creator to view their evaluation and content angles.
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                className="input-field w-52 text-xs"
-                value={addUrl}
-                onChange={e => setAddUrl(e.target.value)}
-                placeholder="Add creator by URL…"
-                onKeyDown={e => { if (e.key === 'Enter') handleAddCreatorUrl(); }}
-              />
-              <button onClick={handleAddCreatorUrl} disabled={addLoading} className="btn-secondary text-xs">
-                {addLoading ? '…' : 'Add'}
-              </button>
             </div>
           </div>
 
