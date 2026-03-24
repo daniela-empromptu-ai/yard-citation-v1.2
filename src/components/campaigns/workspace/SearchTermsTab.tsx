@@ -146,6 +146,27 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
           if (arr?.length > 0) {
             setTerms(arr);
             onTermsUpdated?.(arr);
+            // If we got fewer than expected, poll briefly to catch late-arriving terms
+            if (arr.length < 12) {
+              let pollAttempts = 0;
+              const pollInterval = setInterval(async () => {
+                pollAttempts++;
+                try {
+                  const r = await fetch(`/api/campaigns/${campaign.id}/search-terms`);
+                  if (r.ok) {
+                    const d = await r.json();
+                    const latest = Array.isArray(d) ? d : d.terms;
+                    if (latest?.length > arr.length) {
+                      setTerms(latest);
+                      onTermsUpdated?.(latest);
+                    }
+                    if ((latest?.length ?? 0) >= 12 || pollAttempts >= 6) {
+                      clearInterval(pollInterval);
+                    }
+                  }
+                } catch { clearInterval(pollInterval); }
+              }, 2000);
+            }
           }
         }
       } else {
