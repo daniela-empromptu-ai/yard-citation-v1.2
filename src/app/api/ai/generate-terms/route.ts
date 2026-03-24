@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { aiGenerateSearchTerms } from '@/lib/ai-actions'
-import { dbQuery } from '@/lib/db'
+import { dbQuery, dbInsertMany } from '@/lib/db'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,20 +9,23 @@ export async function POST(req: NextRequest) {
     const terms = await aiGenerateSearchTerms(brief, topics, personas, product_category)
 
     if (campaign_id && terms.length > 0) {
-      // Clear existing unapproved terms then insert
       await dbQuery(
         `DELETE FROM campaign_search_terms WHERE campaign_id = $1 AND approved = false`,
         [campaign_id]
       )
-      for (let i = 0; i < terms.length; i++) {
-        const t = terms[i]
-        await dbQuery(
-          `INSERT INTO campaign_search_terms (id, campaign_id, term, category_tag, why_it_helps, order_index, approved, created_at, updated_at)
-           VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,false,now(),now())
-           ON CONFLICT DO NOTHING`,
-          [campaign_id, t.term, t.category_tag, t.why_it_helps, i + 1]
-        )
-      }
+      const now = new Date().toISOString()
+      await dbInsertMany(
+        'campaign_search_terms',
+        ['id', 'campaign_id', 'term', 'category_tag', 'why_it_helps', 'order_index', 'approved', 'created_at', 'updated_at'],
+        terms.map((t, i) => [uuidv4(), campaign_id, t.term, t.category_tag, t.why_it_helps, i + 1, false, now, now]),
+        'DO NOTHING'
+      )
+      // Return saved rows with IDs so client doesn't need a second fetch
+      const saved = await dbQuery(
+        `SELECT * FROM campaign_search_terms WHERE campaign_id = $1 ORDER BY order_index`,
+        [campaign_id]
+      )
+      return NextResponse.json(saved.data)
     }
     return NextResponse.json(terms)
   } catch (e) {

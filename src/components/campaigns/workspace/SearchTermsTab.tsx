@@ -138,37 +138,9 @@ export default function SearchTermsTab({ campaign, topics, searchTerms: initialT
       const data = await res.json();
       const newTerms = Array.isArray(data) ? data : data.terms;
       if (newTerms && newTerms.length > 0) {
+        setTerms(newTerms);
+        onTermsUpdated?.(newTerms);
         addToast('success', `Generated ${newTerms.length} search terms`);
-        const refreshRes = await fetch(`/api/campaigns/${campaign.id}/search-terms`);
-        if (refreshRes.ok) {
-          const freshTerms = await refreshRes.json();
-          const arr = Array.isArray(freshTerms) ? freshTerms : freshTerms.terms;
-          if (arr?.length > 0) {
-            setTerms(arr);
-            onTermsUpdated?.(arr);
-            // If we got fewer than expected, poll briefly to catch late-arriving terms
-            if (arr.length < 12) {
-              let pollAttempts = 0;
-              const pollInterval = setInterval(async () => {
-                pollAttempts++;
-                try {
-                  const r = await fetch(`/api/campaigns/${campaign.id}/search-terms`);
-                  if (r.ok) {
-                    const d = await r.json();
-                    const latest = Array.isArray(d) ? d : d.terms;
-                    if (latest?.length > arr.length) {
-                      setTerms(latest);
-                      onTermsUpdated?.(latest);
-                    }
-                    if ((latest?.length ?? 0) >= 12 || pollAttempts >= 6) {
-                      clearInterval(pollInterval);
-                    }
-                  }
-                } catch { clearInterval(pollInterval); }
-              }, 2000);
-            }
-          }
-        }
       } else {
         addToast('error', data.error || 'Generation failed');
       }
