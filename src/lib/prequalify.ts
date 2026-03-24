@@ -620,6 +620,17 @@ export async function persistResults(
        WHERE campaign_id=$1 AND creator_id IN (${placeholders})`,
       [campaignId, now, ...excludedIds]
     )
+    // Mark pipeline-excluded creators as excluded globally — but only if they have no
+    // existing relationship (relationship_status = 'none'), so we don't accidentally
+    // hide a creator someone has already cultivated just because they missed one campaign.
+    const excPlaceholders = excludedIds.map((_, i) => `$${i + 2}`).join(', ')
+    await dbQuery(
+      `UPDATE ${t('creators')} SET excluded = true, exclusion_reason = 'Not selected during pre-qualification', updated_at = $1
+       WHERE id IN (${excPlaceholders})
+         AND (relationship_status IS NULL OR relationship_status = 'none')
+         AND excluded = false`,
+      [now, ...excludedIds]
+    )
   }
 
   // Log activity
