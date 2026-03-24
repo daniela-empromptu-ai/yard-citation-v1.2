@@ -500,122 +500,125 @@ export async function persistResults(
     nameToArticle.set(ar.creatorName.toLowerCase(), ar)
   }
 
-  // Selected creators: insert content + advance pipeline
+  // ── Resolve selected creator IDs (AI may garble UUIDs) ──
   for (const sel of selected) {
-    let tr = allTranscripts.find(t => t.creatorId === sel.creator_id)
-    if (!tr) {
-      // UUID garbled by AI — try positional match by checking all transcripts
-      // The AI often returns IDs that are close but not exact
+    if (!allTranscripts.some(tr => tr.creatorId === sel.creator_id)) {
       for (const candidate of allTranscripts) {
         if (sel.creator_id.includes(candidate.creatorName.toLowerCase()) ||
             candidate.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())) {
           console.log(`[prequalify] persistResults: matched "${sel.creator_id}" → ${candidate.creatorId} (${candidate.creatorName}) by name`)
           sel.creator_id = candidate.creatorId
-          tr = candidate
           break
         }
       }
-      if (!tr) {
-        console.log(`[prequalify] persistResults: no match for selected creator_id "${sel.creator_id}" — skipping`)
-        continue
-      }
+    }
+  }
+
+  // ── Batch insert all content items ──
+  // Columns: creator_id, campaign_id, platform, content_type, title, url, published_at,
+  //          fetched_at, language, raw_text, word_count, metadata_json,
+  //          ingestion_method, ingestion_status, created_at, updated_at
+  const contentRows: unknown[][] = []
+  const ingestedIds: string[] = []
+  const noContentUpdates: { creatorId: string; note: string }[] = []
+
+  for (const sel of selected) {
+    const tr = allTranscripts.find(tr => tr.creatorId === sel.creator_id)
+    if (!tr) {
+      console.log(`[prequalify] persistResults: no match for selected creator_id "${sel.creator_id}" — skipping`)
+      continue
     }
 
     const ar = articleMap.get(sel.creator_id) || nameToArticle.get(tr.creatorName.toLowerCase())
 
     if (ar && ar.status === 'success' && ar.articles.length > 0) {
-      // ── Article-based creator (Medium/Dev.to) ──
+      // Article-based creator (Medium/Dev.to)
+      const ingestionMethod = ar.platform === 'medium' ? 'medium_rss' : 'devto_api'
+      const contentType = ar.platform === 'medium' ? 'medium_article' : 'devto_article'
       for (const article of ar.articles) {
-        const ingestionMethod = ar.platform === 'medium' ? 'medium_rss' : 'devto_api'
-        const contentType = ar.platform === 'medium' ? 'medium_article' : 'devto_article'
-        await dbQuery(
-          `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9, $10::jsonb, $11, 'complete', $12, $12)
-           ON CONFLICT DO NOTHING`,
-          [
-            ar.creatorId,
-            campaignId,
-            ar.platform,
-            contentType,
-            article.title,
-            article.url,
-            article.publishedAt,
-            article.text,
-            article.wordCount,
-            JSON.stringify({
-              tags: article.tags,
-              prequalify_rank: sel.rank,
-              prequalify_score: sel.score,
-              prequalify_rationale: sel.rationale,
-              key_quote: sel.key_quote,
-            }),
-            ingestionMethod,
-            now,
-          ]
-        )
+        contentRows.push([
+          ar.creatorId, campaignId, ar.platform, contentType,
+          article.title, article.url, article.publishedAt,
+          now, null, // fetched_at=now (handled below), language=null
+          article.text, article.wordCount,
+          JSON.stringify({ tags: article.tags, prequalify_rank: sel.rank, prequalify_score: sel.score, prequalify_rationale: sel.rationale, key_quote: sel.key_quote }),
+          ingestionMethod, 'complete', now, now,
+        ])
       }
-
-      await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
-         WHERE campaign_id=$1 AND creator_id=$3`,
-        [campaignId, now, ar.creatorId]
-      )
+      ingestedIds.push(ar.creatorId)
     } else if (tr.transcript && tr.video) {
-      // ── YouTube creator ──
-      await dbQuery(
-        `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
-         VALUES ($1, $2, 'youtube', 'youtube_video', $3, $4, $5, now(), $6, $7, $8, $9::jsonb, 'prequalification', 'complete', $10, $10)
-         ON CONFLICT DO NOTHING`,
-        [
-          tr.creatorId,
-          campaignId,
-          tr.video.title,
-          tr.video.url,
-          tr.video.publishedAt,
-          tr.transcript.language,
-          tr.transcript.fullText,
-          tr.transcript.fullText.split(/\s+/).length,
-          JSON.stringify({
-            video_id: tr.video.videoId,
-            all_video_ids: (tr.videos || [tr.video]).map(v => v.videoId),
-            all_video_titles: (tr.videos || [tr.video]).map(v => v.title),
-            prequalify_rank: sel.rank,
-            prequalify_score: sel.score,
-            prequalify_rationale: sel.rationale,
-            key_quote: sel.key_quote,
-            transcript_segments: tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text })),
-          }),
-          now,
-        ]
-      )
-
-      await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
-         WHERE campaign_id=$1 AND creator_id=$3`,
-        [campaignId, now, tr.creatorId]
-      )
+      // YouTube creator
+      contentRows.push([
+        tr.creatorId, campaignId, 'youtube', 'youtube_video',
+        tr.video.title, tr.video.url, tr.video.publishedAt,
+        now, tr.transcript.language,
+        tr.transcript.fullText, tr.transcript.fullText.split(/\s+/).length,
+        JSON.stringify({
+          video_id: tr.video.videoId,
+          all_video_ids: (tr.videos || [tr.video]).map(v => v.videoId),
+          all_video_titles: (tr.videos || [tr.video]).map(v => v.title),
+          prequalify_rank: sel.rank, prequalify_score: sel.score,
+          prequalify_rationale: sel.rationale, key_quote: sel.key_quote,
+          transcript_segments: tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text })),
+        }),
+        'prequalification', 'complete', now, now,
+      ])
+      ingestedIds.push(tr.creatorId)
     } else {
-      // No content available — keep as discovered so scoring skips them
       console.log(`[prequalify] ${tr.creatorName}: selected but no content (status: ${tr.status}), keeping as discovered`)
-      await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET notes=$2, updated_at=$3
-         WHERE campaign_id=$1 AND creator_id=$4`,
-        [campaignId, `Selected by AI but no content available (${tr.status})`, now, tr.creatorId]
-      )
+      noContentUpdates.push({ creatorId: tr.creatorId, note: `Selected by AI but no content available (${tr.status})` })
     }
+  }
+
+  // One batch INSERT for all content items
+  if (contentRows.length > 0) {
+    // Build multi-row INSERT manually to include fetched_at=now() inline
+    const valueClauses: string[] = []
+    const params: unknown[] = []
+    let paramIdx = 1
+    for (const row of contentRows) {
+      // fetched_at is at index 7 — replace with now()
+      const colParams = row.map((v, i) => i === 7 ? 'now()' : `$${paramIdx++}`)
+      valueClauses.push(`(${colParams.join(', ')})`)
+      params.push(...row.filter((_, i) => i !== 7))
+    }
+    await dbQuery(
+      `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
+       VALUES ${valueClauses.join(', ')} ON CONFLICT DO NOTHING`,
+      params
+    )
+  }
+
+  // One UPDATE for all ingested creators
+  if (ingestedIds.length > 0) {
+    const placeholders = ingestedIds.map((_, i) => `$${i + 3}`).join(', ')
+    await dbQuery(
+      `UPDATE ${t('campaign_creators')} SET pipeline_stage='ingested', updated_at=$2
+       WHERE campaign_id=$1 AND creator_id IN (${placeholders})`,
+      [campaignId, now, ...ingestedIds]
+    )
+  }
+
+  // Individual updates for no-content selected creators (rare, at most a few)
+  for (const { creatorId, note } of noContentUpdates) {
+    await dbQuery(
+      `UPDATE ${t('campaign_creators')} SET notes=$2, updated_at=$3 WHERE campaign_id=$1 AND creator_id=$4`,
+      [campaignId, note, now, creatorId]
+    )
   }
 
   // Rebuild selectedIds after potential ID corrections
   const selectedIds = new Set(selected.map(s => s.creator_id))
 
-  // Excluded creators: mark as excluded
+  // One UPDATE for all excluded creators
   const excluded = allTranscripts.filter(tr => !selectedIds.has(tr.creatorId))
-  for (const ex of excluded) {
-    const stage1Reason = `Pre-qualification: not selected (status: ${ex.status})`
+  if (excluded.length > 0) {
+    const excludedIds = excluded.map(ex => ex.creatorId)
+    const placeholders = excludedIds.map((_, i) => `$${i + 3}`).join(', ')
     await dbQuery(
-      `UPDATE ${t('campaign_creators')} SET pipeline_stage='excluded', notes=$2, updated_at=$3
-       WHERE campaign_id=$1 AND creator_id=$4`,
-      [campaignId, stage1Reason, now, ex.creatorId]
+      `UPDATE ${t('campaign_creators')} SET pipeline_stage='excluded', notes='Pre-qualification: not selected', updated_at=$2
+       WHERE campaign_id=$1 AND creator_id IN (${placeholders})`,
+      [campaignId, now, ...excludedIds]
     )
   }
 
@@ -790,24 +793,28 @@ export async function runPrequalifyPipeline(
   // ── Dormancy check: exclude creators whose most recent content is 2+ years old ──
   // Use latestPublishDate (from RSS) if available — anchor video dates can be old but topically relevant
   const allResults: CreatorTranscriptResult[] = []
+  const dormantIds: string[] = []
   for (const cr of allResultsRaw) {
     const publishedAt = cr.latestPublishDate || cr.video?.publishedAt || null
     if (publishedAt && isDormant(publishedAt)) {
-      // We have a date and it's stale — mark as excluded
-      const now = new Date().toISOString()
-      await dbQuery(
-        `UPDATE ${t('creators')} SET excluded = true, exclusion_reason = $2, updated_at = $3 WHERE id = $1`,
-        [cr.creatorId, 'Dormant — no content in 2+ years', now]
-      )
-      await dbQuery(
-        `UPDATE ${t('campaign_creators')} SET pipeline_stage = 'excluded', notes = $2, updated_at = $3
-         WHERE campaign_id = $1 AND creator_id = $4`,
-        [campaignId, 'Excluded: dormant creator (no content in 2+ years)', now, cr.creatorId]
-      )
+      dormantIds.push(cr.creatorId)
       console.log(`[prequalify] ${cr.creatorName}: excluded (dormant — last RSS video ${publishedAt.slice(0, 10)})`)
       continue
     }
     allResults.push(cr)
+  }
+  if (dormantIds.length > 0) {
+    const now = new Date().toISOString()
+    const idPlaceholders = dormantIds.map((_, i) => `$${i + 1}`).join(', ')
+    await dbQuery(
+      `UPDATE ${t('creators')} SET excluded = true, exclusion_reason = $${dormantIds.length + 1}, updated_at = $${dormantIds.length + 2} WHERE id IN (${idPlaceholders})`,
+      [...dormantIds, 'Dormant — no content in 2+ years', now]
+    )
+    await dbQuery(
+      `UPDATE ${t('campaign_creators')} SET pipeline_stage = 'excluded', notes = $2, updated_at = $3
+       WHERE campaign_id = $1 AND creator_id IN (${dormantIds.map((_, i) => `$${i + 4}`).join(', ')})`,
+      [campaignId, 'Excluded: dormant creator (no content in 2+ years)', now, ...dormantIds]
+    )
   }
 
   const youtubeFound = youtubeResults.filter(r => r.status !== 'no_youtube').length

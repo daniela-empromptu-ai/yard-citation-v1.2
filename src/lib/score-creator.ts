@@ -5,7 +5,7 @@
  * consistent with the rest of the app.
  */
 
-import { dbQuery, t } from '@/lib/db'
+import { dbQuery, dbInsertMany, t } from '@/lib/db'
 import { aiScoreCreator } from '@/lib/ai-actions'
 
 function formatTimestamp(seconds: number): string {
@@ -123,16 +123,28 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
     return { ok: false, overall_score: computedScore, evidence_coverage: coverage, needs_manual_review: needsManualReview, error: 'Evaluation saved but ID not retrievable' }
   }
 
-  for (const es of (scoringResult.evidence_snippets || [])) {
-    await dbQuery(
-      `INSERT INTO ${t('evidence_snippets')} (evaluation_id, content_item_id, quote, dimension, why_it_matters, timestamp_start_seconds, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [evalId, es.content_item_id, es.quote, es.dimension, es.why_it_matters, es.timestamp_start_seconds || null, now]
+  const evidenceSnippets = scoringResult.evidence_snippets || []
+  if (evidenceSnippets.length > 0) {
+    await dbInsertMany(
+      t('evidence_snippets'),
+      ['evaluation_id', 'content_item_id', 'quote', 'dimension', 'why_it_matters', 'timestamp_start_seconds', 'created_at'],
+      evidenceSnippets.map(es => [evalId, es.content_item_id, es.quote, es.dimension, es.why_it_matters, es.timestamp_start_seconds || null, now]),
+      'DO NOTHING'
     )
   }
-  for (const angle of (scoringResult.content_angles || [])) {
+  const contentAngles = scoringResult.content_angles || []
+  if (contentAngles.length > 0) {
+    // content_angles has jsonb column — use manual multi-row insert to cast
+    const valueClauses: string[] = []
+    const params: unknown[] = []
+    let paramIdx = 1
+    for (const angle of contentAngles) {
+      valueClauses.push(`($${paramIdx++},$${paramIdx++},$${paramIdx++},$${paramIdx++},$${paramIdx++}::jsonb,$${paramIdx++})`)
+      params.push(evalId, angle.title, angle.format, angle.persona || null, JSON.stringify(angle.key_points || []), now)
+    }
     await dbQuery(
-      `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
-      [evalId, angle.title, angle.format, angle.persona || null, JSON.stringify(angle.key_points || []), now]
+      `INSERT INTO ${t('content_angles')} (evaluation_id, title, format, persona, key_points_json, created_at) VALUES ${valueClauses.join(', ')} ON CONFLICT DO NOTHING`,
+      params
     )
   }
   const newStage = needsManualReview ? 'needs_manual_review' : 'scored'

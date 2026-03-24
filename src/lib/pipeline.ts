@@ -75,28 +75,33 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
 
   let scored = 0
   const failed: string[] = []
-  for (const cc of ccRes.data) {
-    try {
-      await log(`Scoring ${cc.creator_name}...`)
-      const result = await scoreCreator(cc.id)
+  const SCORE_BATCH_SIZE = 3
 
-      if (result.ok) {
+  for (let i = 0; i < ccRes.data.length; i += SCORE_BATCH_SIZE) {
+    const batch = ccRes.data.slice(i, i + SCORE_BATCH_SIZE)
+    await log(`Scoring ${batch.map(c => c.creator_name).join(', ')}...`)
+    const batchResults = await Promise.allSettled(batch.map(cc => scoreCreator(cc.id)))
+
+    for (let j = 0; j < batch.length; j++) {
+      const cc = batch[j]
+      const result = batchResults[j]
+      if (result.status === 'rejected') {
+        failed.push(cc.creator_name)
+        console.error(`[pipeline] Scoring error for ${cc.creator_name}:`, result.reason)
+        try { await log(`Scoring error for ${cc.creator_name}: ${result.reason}`) } catch { /* ignore */ }
+      } else if (result.value.ok) {
         scored++
-        console.log(`[pipeline] Scored ${cc.creator_name}: ${result.overall_score}/100`)
-        await log(`Scored ${cc.creator_name}: ${result.overall_score}/100`, {
+        console.log(`[pipeline] Scored ${cc.creator_name}: ${result.value.overall_score}/100`)
+        await log(`Scored ${cc.creator_name}: ${result.value.overall_score}/100`, {
           creator: cc.creator_name,
-          score: result.overall_score,
-          coverage: result.evidence_coverage,
+          score: result.value.overall_score,
+          coverage: result.value.evidence_coverage,
         })
       } else {
         failed.push(cc.creator_name)
-        console.log(`[pipeline] Scoring failed for ${cc.creator_name}: ${result.error}`)
-        await log(`Scoring failed for ${cc.creator_name}: ${result.error}`)
+        console.log(`[pipeline] Scoring failed for ${cc.creator_name}: ${result.value.error}`)
+        await log(`Scoring failed for ${cc.creator_name}: ${result.value.error}`)
       }
-    } catch (e) {
-      failed.push(cc.creator_name)
-      console.error(`[pipeline] Scoring error for ${cc.creator_name}:`, (e as Error).message)
-      try { await log(`Scoring error for ${cc.creator_name}: ${(e as Error).message}`) } catch { /* ignore */ }
     }
   }
 

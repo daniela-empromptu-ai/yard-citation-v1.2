@@ -7,7 +7,7 @@
  * Phase C: LLM suggests new creators → verify → dedup → insert → link.
  */
 
-import { dbQuery, t, callAIApi } from '@/lib/db'
+import { dbQuery, dbInsertMany, t, callAIApi } from '@/lib/db'
 import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
@@ -137,6 +137,8 @@ export async function discoverByLLM(
   let deduped = 0
   let rejected = 0
   const now = new Date().toISOString()
+  // Collect category pairs from new creators — batched after all suggestions processed
+  const categoryPairs: { creatorId: string; catName: string }[] = []
 
   // Process suggestions in parallel batches with timeout (prevents pipeline hang)
   const VERIFY_BATCH_SIZE = 5
@@ -203,28 +205,9 @@ export async function discoverByLLM(
       [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
     )
 
-    // Auto-tag with suggested categories
+    // Collect category pairs for batch processing after all suggestions are done
     if (suggestion.suggested_categories?.length > 0) {
-      for (const catName of suggestion.suggested_categories) {
-        const catRes = await dbQuery<{ id: string }>(
-          `SELECT id FROM ${t('categories')} WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-          [catName]
-        )
-        let categoryId: string
-        if (catRes.data.length > 0) {
-          categoryId = catRes.data[0].id
-        } else {
-          categoryId = uuidv4()
-          await dbQuery(
-            `INSERT INTO ${t('categories')} (id, name, created_at) VALUES ($1, $2, now()) ON CONFLICT DO NOTHING`,
-            [categoryId, catName]
-          )
-        }
-        await dbQuery(
-          `INSERT INTO ${t('creator_categories')} (creator_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-          [creatorId, categoryId]
-        )
-      }
+      categoryPairs.push(...suggestion.suggested_categories.map(catName => ({ creatorId, catName })))
     }
 
     return {
@@ -263,7 +246,66 @@ export async function discoverByLLM(
     }
   }
 
+  // Batch-tag categories for all newly inserted creators
+  if (categoryPairs.length > 0) {
+    await batchTagCategories(categoryPairs)
+  }
+
   return { suggestions, newInserted, deduped, rejected }
+}
+
+// ─── Batch Category Tagging ───
+
+async function batchTagCategories(pairs: { creatorId: string; catName: string }[]): Promise<void> {
+  if (pairs.length === 0) return
+
+  const uniqueNames = Array.from(new Set(pairs.map(p => p.catName.toLowerCase())))
+
+  // Fetch all existing categories in one query
+  const placeholders = uniqueNames.map((_, i) => `LOWER($${i + 1})`).join(', ')
+  const existingRes = await dbQuery<{ id: string; name: string }>(
+    `SELECT id, name FROM ${t('categories')} WHERE LOWER(name) IN (${placeholders})`,
+    uniqueNames
+  )
+  const existingMap = new Map(existingRes.data.map(r => [r.name.toLowerCase(), r.id]))
+
+  // Insert missing categories
+  const missingNames = uniqueNames.filter(n => !existingMap.has(n))
+  if (missingNames.length > 0) {
+    const now = new Date().toISOString()
+    const newIds = missingNames.map(() => uuidv4())
+    await dbInsertMany(
+      t('categories'),
+      ['id', 'name', 'created_at'],
+      missingNames.map((name, i) => [newIds[i], name, now]),
+      'DO NOTHING'
+    )
+    // Fetch back inserted categories (ON CONFLICT may have deduped some)
+    const insertedRes = await dbQuery<{ id: string; name: string }>(
+      `SELECT id, name FROM ${t('categories')} WHERE LOWER(name) IN (${placeholders})`,
+      uniqueNames
+    )
+    for (const r of insertedRes.data) {
+      existingMap.set(r.name.toLowerCase(), r.id)
+    }
+  }
+
+  // Batch insert creator_categories mappings
+  const mappingRows = pairs
+    .map(p => {
+      const catId = existingMap.get(p.catName.toLowerCase())
+      return catId ? [p.creatorId, catId] : null
+    })
+    .filter((r): r is [string, string] => r !== null)
+
+  if (mappingRows.length > 0) {
+    await dbInsertMany(
+      t('creator_categories'),
+      ['creator_id', 'category_id'],
+      mappingRows,
+      'DO NOTHING'
+    )
+  }
 }
 
 // ─── Link Creators to Campaign ───
@@ -273,25 +315,23 @@ async function linkCreatorsToCampaign(
   userId: string,
   creators: MatchedCreator[]
 ): Promise<number> {
-  const now = new Date().toISOString()
-  let linked = 0
+  if (creators.length === 0) return 0
 
-  for (const creator of creators) {
-    // Store anchor videos as JSON in notes so prequalify can use them
+  const now = new Date().toISOString()
+  const rows = creators.map(creator => {
     const notes = creator.anchorVideos?.length
       ? JSON.stringify({ anchorVideos: creator.anchorVideos })
       : null
+    return [uuidv4(), campaignId, creator.id, userId, creator.source, 'discovered', 'not_scored', notes, now, now]
+  })
 
-    const res = await dbQuery(
-      `INSERT INTO ${t('campaign_creators')} (id, campaign_id, creator_id, added_by_user_id, source, pipeline_stage, scoring_status, notes, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'discovered', 'not_scored', $6, $7, $7)
-       ON CONFLICT DO NOTHING`,
-      [uuidv4(), campaignId, creator.id, userId, creator.source, notes, now]
-    )
-    if (res.affected_rows > 0) linked++
-  }
-
-  return linked
+  const res = await dbInsertMany(
+    t('campaign_creators'),
+    ['id', 'campaign_id', 'creator_id', 'added_by_user_id', 'source', 'pipeline_stage', 'scoring_status', 'notes', 'created_at', 'updated_at'],
+    rows,
+    'DO NOTHING'
+  )
+  return res.affected_rows
 }
 
 // ─── Phase B: YouTube Video-Based Discovery ───
@@ -349,57 +389,65 @@ async function discoverByYouTubeSearch(
     let newInserted = 0
     const now = new Date().toISOString()
 
-    for (const ch of filtered) {
-      const handle = ch.handle?.replace(/^@/, '') || null
+    // Batch lookup: collect handles and URLs, one query to find all existing creators
+    const channelsWithHandles = filtered.map(ch => ({
+      ch,
+      handle: ch.handle?.replace(/^@/, '') || null,
+    }))
 
-      // Check if already in DB
-      let existingId: string | null = null
-      if (handle) {
-        const existing = await dbQuery<{ id: string }>(
-          `SELECT id FROM ${t('creators')} WHERE platform = 'youtube' AND LOWER(handle) = LOWER($1) LIMIT 1`,
-          [handle]
-        )
-        if (existing.data.length > 0) existingId = existing.data[0].id
-      }
-      if (!existingId) {
-        const existing = await dbQuery<{ id: string }>(
-          `SELECT id FROM ${t('creators')} WHERE url = $1 LIMIT 1`,
-          [ch.url]
-        )
-        if (existing.data.length > 0) existingId = existing.data[0].id
-      }
+    const allHandles = channelsWithHandles.map(c => c.handle).filter((h): h is string => !!h)
+    const allUrls = channelsWithHandles.map(c => c.ch.url).filter(Boolean)
 
+    const existingMap = new Map<string, string>() // handle_lower or url → creator id
+    if (allHandles.length > 0 || allUrls.length > 0) {
+      const handlePlaceholders = allHandles.map((_, i) => `LOWER($${i + 1})`).join(', ')
+      const urlPlaceholders = allUrls.map((_, i) => `$${allHandles.length + i + 1}`).join(', ')
+      const conditions: string[] = []
+      if (allHandles.length > 0) conditions.push(`(platform = 'youtube' AND LOWER(handle) IN (${handlePlaceholders}))`)
+      if (allUrls.length > 0) conditions.push(`url IN (${urlPlaceholders})`)
+      const existingRes = await dbQuery<{ id: string; handle: string | null; url: string | null }>(
+        `SELECT id, handle, url FROM ${t('creators')} WHERE ${conditions.join(' OR ')}`,
+        [...allHandles, ...allUrls]
+      )
+      for (const row of existingRes.data) {
+        if (row.handle) existingMap.set(row.handle.toLowerCase(), row.id)
+        if (row.url) existingMap.set(row.url, row.id)
+      }
+    }
+
+    // Split into existing vs new
+    const toUpdate: { id: string; subscriberCount: number }[] = []
+    const toInsert: typeof channelsWithHandles = []
+
+    for (const { ch, handle } of channelsWithHandles) {
+      const existingId = (handle && existingMap.get(handle.toLowerCase())) || existingMap.get(ch.url) || null
       if (existingId) {
-        if (ch.subscriberCount) {
-          await dbQuery(
-            `UPDATE ${t('creators')} SET subscriber_count = $2, updated_at = $3 WHERE id = $1`,
-            [existingId, ch.subscriberCount, now]
-          )
-        }
-        creators.push({
-          id: existingId,
-          name: ch.channelTitle,
-          platform: 'youtube',
-          handle: handle ? `@${handle}` : null,
-          source: 'youtube_search',
-          anchorVideos: ch.anchorVideos,
-        })
+        if (ch.subscriberCount) toUpdate.push({ id: existingId, subscriberCount: ch.subscriberCount })
+        creators.push({ id: existingId, name: ch.channelTitle, platform: 'youtube', handle: handle ? `@${handle}` : null, source: 'youtube_search', anchorVideos: ch.anchorVideos })
       } else {
-        const creatorId = uuidv4()
-        await dbQuery(
-          `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, subscriber_count, discovered_via, created_at, updated_at)
-           VALUES ($1, $2, $2, 'youtube', $3, $4, $5, 'youtube_search', $6, $6)
-           ON CONFLICT DO NOTHING`,
-          [creatorId, ch.channelTitle, handle, ch.url, ch.subscriberCount, now]
-        )
-        creators.push({
-          id: creatorId,
-          name: ch.channelTitle,
-          platform: 'youtube',
-          handle: handle ? `@${handle}` : null,
-          source: 'youtube_search',
-          anchorVideos: ch.anchorVideos,
-        })
+        toInsert.push({ ch, handle })
+      }
+    }
+
+    // Batch update subscriber counts for existing creators
+    for (const { id, subscriberCount } of toUpdate) {
+      // Individual updates are unavoidable without CASE WHEN — keep parallel
+      await dbQuery(`UPDATE ${t('creators')} SET subscriber_count = $2, updated_at = $3 WHERE id = $1`, [id, subscriberCount, now])
+    }
+
+    // Batch insert new creators
+    if (toInsert.length > 0) {
+      const newRows = toInsert.map(({ ch, handle }) => [uuidv4(), ch.channelTitle, 'youtube', handle, ch.url, ch.subscriberCount, 'youtube_search', now, now])
+      await dbInsertMany(
+        t('creators'),
+        ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'subscriber_count', 'discovered_via', 'created_at', 'updated_at'],
+        newRows.map(r => [r[0], r[1], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]]),
+        'DO NOTHING'
+      )
+      for (let i = 0; i < toInsert.length; i++) {
+        const { ch, handle } = toInsert[i]
+        const creatorId = newRows[i][0] as string
+        creators.push({ id: creatorId, name: ch.channelTitle, platform: 'youtube', handle: handle ? `@${handle}` : null, source: 'youtube_search', anchorVideos: ch.anchorVideos })
         newInserted++
         console.log(`[discovery] YouTube Video Search: "${ch.channelTitle}" (${handle ? '@' + handle : 'no handle'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs) — videos: ${ch.anchorVideos.map(v => `"${v.title}"`).join(', ')}`)
       }
@@ -562,47 +610,51 @@ export async function runDiscovery(
       console.log(`[discovery] Gumshoe: found ${creatorUrls.length} creator URLs`)
 
       const now = new Date().toISOString()
-      for (const cu of creatorUrls) {
-        // Check if creator already exists
-        let existingId: string | null = null
-        const existing = await dbQuery<{ id: string }>(
-          `SELECT id FROM ${t('creators')} WHERE platform = $1 AND LOWER(handle) = LOWER($2) LIMIT 1`,
-          [cu.platform, cu.handle]
+
+      // Batch lookup: find all existing creators by platform+handle or URL in one query
+      const handles = creatorUrls.map(cu => cu.handle?.toLowerCase()).filter(Boolean) as string[]
+      const urls = creatorUrls.map(cu => cu.url).filter(Boolean) as string[]
+      const gumshoeExistingMap = new Map<string, string>() // "platform:handle_lower" or url → id
+
+      if (handles.length > 0 || urls.length > 0) {
+        const hPlaceholders = handles.map((_, i) => `LOWER($${i + 1})`).join(', ')
+        const uPlaceholders = urls.map((_, i) => `$${handles.length + i + 1}`).join(', ')
+        const conditions: string[] = []
+        if (handles.length > 0) conditions.push(`LOWER(handle) IN (${hPlaceholders})`)
+        if (urls.length > 0) conditions.push(`url IN (${uPlaceholders})`)
+        const existingRes = await dbQuery<{ id: string; platform: string; handle: string | null; url: string | null }>(
+          `SELECT id, platform, handle, url FROM ${t('creators')} WHERE ${conditions.join(' OR ')}`,
+          [...handles, ...urls]
         )
-        if (existing.data.length > 0) {
-          existingId = existing.data[0].id
+        for (const row of existingRes.data) {
+          if (row.handle) gumshoeExistingMap.set(`${row.platform}:${row.handle.toLowerCase()}`, row.id)
+          if (row.url) gumshoeExistingMap.set(row.url, row.id)
         }
+      }
 
-        if (!existingId) {
-          // Try by URL
-          const byUrl = await dbQuery<{ id: string }>(
-            `SELECT id FROM ${t('creators')} WHERE url = $1 LIMIT 1`,
-            [cu.url]
-          )
-          if (byUrl.data.length > 0) {
-            existingId = byUrl.data[0].id
-          }
+      // Assign IDs — insert new creators in batch
+      const toInsert: typeof creatorUrls = []
+      const insertedIds: string[] = []
+
+      for (const cu of creatorUrls) {
+        const existingId = gumshoeExistingMap.get(`${cu.platform}:${cu.handle?.toLowerCase()}`) || gumshoeExistingMap.get(cu.url) || null
+        if (existingId) {
+          gumshoeCreators.push({ id: existingId, name: cu.handle, platform: cu.platform, handle: cu.handle, source: 'gumshoe' })
+        } else {
+          const newId = uuidv4()
+          insertedIds.push(newId)
+          toInsert.push(cu)
+          gumshoeCreators.push({ id: newId, name: cu.handle, platform: cu.platform, handle: cu.handle, source: 'gumshoe' })
         }
+      }
 
-        if (!existingId) {
-          // Insert new creator
-          existingId = uuidv4()
-          const name = cu.handle // Will be enriched later
-          await dbQuery(
-            `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, created_at, updated_at)
-             VALUES ($1, $2, $2, $3, $4, $5, 'gumshoe', $6, $6)
-             ON CONFLICT DO NOTHING`,
-            [existingId, name, cu.platform, cu.handle, cu.url, now]
-          )
-        }
-
-        gumshoeCreators.push({
-          id: existingId,
-          name: cu.handle,
-          platform: cu.platform,
-          handle: cu.handle,
-          source: 'gumshoe',
-        })
+      if (toInsert.length > 0) {
+        await dbInsertMany(
+          t('creators'),
+          ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'discovered_via', 'created_at', 'updated_at'],
+          toInsert.map((cu, i) => [insertedIds[i], cu.handle, cu.handle, cu.platform, cu.handle, cu.url, 'gumshoe', now, now]),
+          'DO NOTHING'
+        )
       }
     } catch (e) {
       console.log(`[discovery] Gumshoe extraction failed, continuing: ${(e as Error).message}`)

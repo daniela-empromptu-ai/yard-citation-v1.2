@@ -59,6 +59,27 @@ export function pgArray(arr: string[]): string {
   return '{' + arr.map(v => '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"').join(',') + '}';
 }
 
+export async function dbInsertMany<T = Record<string, unknown>>(
+  table: string,
+  columns: string[],
+  rows: unknown[][],
+  onConflict = 'DO NOTHING'
+): Promise<QueryResult<T>> {
+  if (rows.length === 0) {
+    return { success: true, data: [], row_count: 0, affected_rows: 0, message: 'No rows' }
+  }
+  const valueClauses: string[] = []
+  const params: unknown[] = []
+  let paramIdx = 1
+  for (const row of rows) {
+    const placeholders = row.map(() => `$${paramIdx++}`)
+    valueClauses.push(`(${placeholders.join(', ')})`)
+    params.push(...row)
+  }
+  const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${valueClauses.join(', ')} ON CONFLICT ${onConflict}`
+  return dbQuery<T>(sql, params)
+}
+
 export async function callAIApi(endpoint: string, body: object): Promise<unknown> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
