@@ -4,8 +4,8 @@ import { getToken } from 'next-auth/jwt'
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Allow login page and NextAuth API routes through
-  if (pathname === '/login' || pathname.startsWith('/api/auth')) {
+  // Allow login page, NextAuth API routes, and schema init through
+  if (pathname === '/login' || pathname.startsWith('/api/auth') || pathname === '/api/db/init-schema') {
     return NextResponse.next()
   }
 
