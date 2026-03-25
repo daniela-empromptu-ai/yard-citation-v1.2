@@ -26,8 +26,8 @@ export async function initSchema(): Promise<void> {
   // Seed users with hashed passwords
   const { IDS } = await import('./seed-ids')
   const users = [
-    { id: IDS.USER_JACK,      name: 'Jack Scrivener',  email: 'jack@yard.live',     role: 'qualifier', password: 'yard-jack-2026!' },
-    { id: IDS.USER_KARL,      name: 'Karl McCarthy',   email: 'karl@yard.live',     role: 'admin',     password: 'yard-karl-2026!' },
+    { id: IDS.USER_JACK,      name: 'Jack Scrivener',  email: 'jack@yard.live',     role: 'qualifier', password: 'mefbI5-dogvov-riqpih' },
+    { id: IDS.USER_KARL,      name: 'Karl McCarthy',   email: 'karl@yard.live',     role: 'admin',     password: 'mefbI5-dogvov-riqpih' },
     { id: IDS.USER_EMPROMPTU, name: 'Empromptu Admin', email: 'admin@empromptu.ai', role: 'admin',     password: 'yard-admin-2026!' },
   ]
   for (const u of users) {
