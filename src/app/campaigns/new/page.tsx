@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronLeft, Plus, X, Sparkles, Loader2 } from 'lucide-react'
 import { showToast } from '@/components/ui/Toaster'
+import { useSession } from 'next-auth/react'
 
 const STEPS = ['Basics', 'Creative Brief', 'Personas & Topics']
 
 export default function NewCampaignPage() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [step, setStep] = useState(0)
   const [clients, setClients] = useState<Record<string, string>[]>([])
   const [loading, setLoading] = useState(false)
@@ -35,11 +37,13 @@ export default function NewCampaignPage() {
 
   useEffect(() => {
     fetch('/api/clients').then(r => r.json()).then(setClients).catch(() => setClients([]))
-    try {
-      const u = JSON.parse(localStorage.getItem('yard_current_user') || '{}')
-      if (u.id) setForm(f => ({ ...f, owner_user_id: u.id }))
-    } catch { /* ignore */ }
   }, [])
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      setForm(f => ({ ...f, owner_user_id: session.user.id }))
+    }
+  }, [session])
 
   const update = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 

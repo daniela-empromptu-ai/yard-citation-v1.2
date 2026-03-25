@@ -21,17 +21,12 @@ export async function seedDemoData(): Promise<{ inserted: number; errors: string
   // ---- USERS ----
   await run(
     `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-    [IDS.USER_JACK, 'Jack Scrivener', 'jack@yard.internal', 'qualifier', NOW, NOW],
+    [IDS.USER_JACK, 'Jack Scrivener', 'jack@yard.live', 'qualifier', NOW, NOW],
     'user_jack'
   )
   await run(
     `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-    [IDS.USER_ARYA, 'Arya', 'arya@yard.internal', 'outreach', NOW, NOW],
-    'user_arya'
-  )
-  await run(
-    `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-    [IDS.USER_KARL, 'Karl McCarthy', 'karl@yard.internal', 'admin', NOW, NOW],
+    [IDS.USER_KARL, 'Karl McCarthy', 'karl@yard.live', 'admin', NOW, NOW],
     'user_karl'
   )
 

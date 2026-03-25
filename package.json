@@ -15,12 +15,14 @@
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.0.1",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "json5": "^2.2.3",
     "lucide-react": "^0.395.0",
     "next": "14.2.5",
+    "next-auth": "^4.24.13",
     "postcss": "^8",
     "react": "^18",
     "react-chartjs-2": "^5.2.0",
@@ -32,5 +34,8 @@
     "uuid": "^10.0.0",
     "youtube-caption-extractor": "^1.9.1",
     "youtube-transcript": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6"
   }
 }

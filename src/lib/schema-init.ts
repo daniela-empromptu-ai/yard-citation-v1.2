@@ -1,5 +1,6 @@
 import { dbSchema, dbQuery } from './db'
 import { SCHEMA_DEF } from './schema-def'
+import { hashSync } from 'bcryptjs'
 
 export async function initSchema(): Promise<void> {
   // Migrate V1 creators: add name column and copy display_name before schema enforces NOT NULL
@@ -15,17 +16,27 @@ export async function initSchema(): Promise<void> {
 
   await dbSchema(SCHEMA_DEF)
 
-  // Ensure default users exist
+  // Add password_hash column if not exists (additive migration)
+  try {
+    await dbQuery(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash text`, [])
+  } catch {
+    // ignore
+  }
+
+  // Seed users with hashed passwords
   const { IDS } = await import('./seed-ids')
   const users = [
-    { id: IDS.USER_JACK, name: 'Jack Scrivener', email: 'jack@yard.internal', role: 'qualifier' },
-    { id: IDS.USER_ARYA, name: 'Arya', email: 'arya@yard.internal', role: 'outreach' },
-    { id: IDS.USER_KARL, name: 'Karl McCarthy', email: 'karl@yard.internal', role: 'admin' },
+    { id: IDS.USER_JACK,      name: 'Jack Scrivener',  email: 'jack@yard.live',     role: 'qualifier', password: 'yard-jack-2026!' },
+    { id: IDS.USER_KARL,      name: 'Karl McCarthy',   email: 'karl@yard.live',     role: 'admin',     password: 'yard-karl-2026!' },
+    { id: IDS.USER_EMPROMPTU, name: 'Empromptu Admin', email: 'admin@empromptu.ai', role: 'admin',     password: 'yard-admin-2026!' },
   ]
   for (const u of users) {
+    const hash = hashSync(u.password, 10)
     await dbQuery(
-      `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,now(),now()) ON CONFLICT (email) DO NOTHING`,
-      [u.id, u.name, u.email, u.role]
+      `INSERT INTO app_users (id, name, email, role, password_hash, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,now(),now())
+       ON CONFLICT (email) DO UPDATE SET password_hash = $5, name = $2, role = $4, updated_at = now()`,
+      [u.id, u.name, u.email, u.role, hash]
     )
   }
 

@@ -13,6 +13,7 @@ export const SCHEMA_DEF = {
         { name: 'name', type: 'text', nullable: false },
         { name: 'email', type: 'text', nullable: false },
         { name: 'role', type: 'text', nullable: false },
+        { name: 'password_hash', type: 'text', nullable: true },
         { name: 'created_at', type: 'timestamptz', nullable: false, default: 'now()' },
         { name: 'updated_at', type: 'timestamptz', nullable: false, default: 'now()' },
       ],

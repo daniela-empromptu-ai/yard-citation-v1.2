@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-export function middleware(req: NextRequest) {
-  const user = process.env.BASIC_AUTH_USER
-  const pass = process.env.BASIC_AUTH_PASSWORD
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
 
-  if (!user || !pass) return NextResponse.next()
-
-  const authHeader = req.headers.get('authorization')
-  if (authHeader) {
-    const encoded = authHeader.split(' ')[1]
-    const decoded = atob(encoded)
-    const [incomingUser, incomingPass] = decoded.split(':')
-    if (incomingUser === user && incomingPass === pass) {
-      return NextResponse.next()
-    }
+  // Allow login page and NextAuth API routes through
+  if (pathname === '/login' || pathname.startsWith('/api/auth')) {
+    return NextResponse.next()
   }
 
-  return new NextResponse('Unauthorized', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Yard"' },
-  })
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token) {
+    const loginUrl = new URL('/login', req.url)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }

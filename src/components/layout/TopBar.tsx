@@ -1,15 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, ChevronDown } from 'lucide-react'
-
-const USERS = [
-  { id: 'a1000000-0000-0000-0000-000000000001', name: 'Jack Scrivener', email: 'jack@yard.internal', role: 'qualifier' as const },
-  { id: 'a1000000-0000-0000-0000-000000000002', name: 'Arya', email: 'arya@yard.internal', role: 'outreach' as const },
-  { id: 'a1000000-0000-0000-0000-000000000003', name: 'Karl McCarthy', email: 'karl@yard.internal', role: 'admin' as const },
-  { id: 'a1000000-0000-0000-0000-000000000004', name: 'Empromptu', email: 'admin@empromptu.internal', role: 'admin' as const },
-]
+import { Search, Plus } from 'lucide-react'
+import { useSession, signOut } from 'next-auth/react'
 
 const ROLE_COLORS: Record<string, string> = {
   qualifier: 'bg-purple-900/30 text-purple-400',
@@ -19,23 +13,10 @@ const ROLE_COLORS: Record<string, string> = {
 
 export function TopBar() {
   const router = useRouter()
-  const [currentUser, setCurrentUser] = useState(USERS[0])
-  const [showUserMenu, setShowUserMenu] = useState(false)
+  const { data: session } = useSession()
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('yard_current_user')
-      if (saved) setCurrentUser(JSON.parse(saved))
-    } catch { /* ignore */ }
-  }, [])
-
-  const switchUser = (user: typeof USERS[0]) => {
-    setCurrentUser(user)
-    localStorage.setItem('yard_current_user', JSON.stringify(user))
-    setShowUserMenu(false)
-    window.dispatchEvent(new Event('yard_user_changed'))
-  }
+  const user = session?.user
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,54 +53,31 @@ export function TopBar() {
 
       {/* Badge */}
       <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-800/50 text-slate-500 rounded border border-slate-600/50 tracking-widest uppercase">
-        Internal V0
+        Beta
       </span>
 
-      {/* Role/User switcher */}
-      <div className="relative">
-        <button
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className="flex items-center gap-2 px-3 h-8 border border-[#2d3748] rounded-lg hover:bg-[#263044]"
-        >
-          <div className="w-6 h-6 rounded-full bg-blue-900/40 flex items-center justify-center text-blue-400 text-[10px] font-bold">
-            {currentUser.name.charAt(0)}
-          </div>
-          <span className="text-xs font-medium text-slate-300">{currentUser.name}</span>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${ROLE_COLORS[currentUser.role]}`}>
-            {currentUser.role}
-          </span>
-          <ChevronDown size={12} className="text-slate-500" />
-        </button>
-
-        {showUserMenu && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-            <div className="absolute right-0 top-full mt-1 w-64 bg-[#1e293b] border border-[#2d3748] rounded-lg shadow-lg z-50">
-              <div className="p-2 border-b border-[#2d3748]">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wide px-2">Switch User / Role</p>
-              </div>
-              {USERS.map(u => (
-                <button
-                  key={u.id}
-                  onClick={() => switchUser(u)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-[#263044] ${currentUser.id === u.id ? 'bg-blue-900/20' : ''}`}
-                >
-                  <div className="w-7 h-7 rounded-full bg-blue-900/40 flex items-center justify-center text-blue-400 text-xs font-bold">
-                    {u.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="font-medium text-slate-200">{u.name}</div>
-                    <div className="text-[11px] text-slate-500">{u.email}</div>
-                  </div>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${ROLE_COLORS[u.role]}`}>
-                    {u.role}
-                  </span>
-                </button>
-              ))}
+      {/* Current user + sign out */}
+      {user && (
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 h-8 border border-[#2d3748] rounded-lg">
+            <div className="w-6 h-6 rounded-full bg-blue-900/40 flex items-center justify-center text-blue-400 text-[10px] font-bold">
+              {user.name?.charAt(0)}
             </div>
-          </>
-        )}
-      </div>
+            <span className="text-xs font-medium text-slate-300">{user.name}</span>
+            {user.role && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${ROLE_COLORS[user.role] || 'bg-slate-800 text-slate-400'}`}>
+                {user.role}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </header>
   )
 }

@@ -81,7 +81,7 @@ export async function clearDemoData(): Promise<{ cleared: string[]; errors: stri
     {
       label: 'app_users',
       query: `DELETE FROM app_users WHERE id IN ($1, $2, $3)`,
-      params: [IDS.USER_JACK, IDS.USER_ARYA, IDS.USER_KARL],
+      params: [IDS.USER_JACK, IDS.USER_KARL, IDS.USER_EMPROMPTU],
     },
     {
       label: 'app_settings',
