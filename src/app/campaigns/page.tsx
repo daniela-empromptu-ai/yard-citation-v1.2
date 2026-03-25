@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { StageBadge } from '@/components/ui/Badge'
-import { Plus, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, RefreshCw, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Modal } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
@@ -13,8 +15,11 @@ export default function CampaignsPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const PAGE_SIZE = 20
   const router = useRouter()
+  const { addToast } = useToast()
 
   const load = () => {
     setLoading(true)
@@ -38,6 +43,26 @@ export default function CampaignsPage() {
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   useEffect(() => { setPage(1) }, [search])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/campaigns/${deleteTarget.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        setCampaigns(prev => prev.filter(c => c.id !== deleteTarget.id))
+        addToast('success', `Deleted "${deleteTarget.name}"`)
+      } else {
+        addToast('error', data.error || 'Failed to delete campaign')
+      }
+    } catch (e) {
+      addToast('error', (e as Error).message)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -97,6 +122,7 @@ export default function CampaignsPage() {
                   <th className="text-left">Creators</th>
                   <th className="text-left">Scored</th>
                   <th className="text-left">Updated</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -130,6 +156,15 @@ export default function CampaignsPage() {
                     <td className="text-slate-500 text-xs">
                       {c.updated_at ? new Date(String(c.updated_at)).toLocaleDateString() : '—'}
                     </td>
+                    <td>
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(c) }}
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        title="Delete campaign"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -152,6 +187,43 @@ export default function CampaignsPage() {
           </div>
         )}
       </>)}
+      {/* Delete confirmation modal */}
+      <Modal open={deleteTarget !== null} onClose={() => !deleting && setDeleteTarget(null)} title="Delete Campaign" size="sm">
+        {deleteTarget && (
+          <div className="space-y-4">
+            <div className="p-3 bg-red-900/20 border border-red-700/40 rounded-lg">
+              <p className="text-sm font-medium text-red-400">This is a destructive action that cannot be undone.</p>
+            </div>
+            <p className="text-sm text-slate-300">
+              Delete <strong className="text-slate-100">{String(deleteTarget.name)}</strong>? This will permanently remove:
+            </p>
+            <ul className="text-sm text-slate-400 space-y-1 ml-4 list-disc">
+              <li>All search terms, topics, and campaign settings</li>
+              <li>All creator evaluations and scores for this campaign</li>
+              <li>All activity history</li>
+            </ul>
+            <p className="text-xs text-slate-500">
+              Creators themselves will remain in your Creator Network.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-lg border border-[#2d3748] hover:bg-[#263044]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete Campaign'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

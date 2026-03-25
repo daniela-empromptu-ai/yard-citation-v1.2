@@ -51,17 +51,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const id = params.id
     // Delete in FK order: evaluation leaves → evaluations → campaign joins → campaign
-    const ccRows = await dbQuery<{ id: string }>('SELECT id FROM campaign_creators WHERE campaign_id = $1', [id])
-    for (const cc of ccRows.data) {
-      await dbQuery('DELETE FROM evidence_snippets WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id = $1)', [cc.id])
-      await dbQuery('DELETE FROM content_angles WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id = $1)', [cc.id])
-      await dbQuery('DELETE FROM creator_evaluations WHERE campaign_creator_id = $1', [cc.id])
-    }
+    // Batch via subqueries instead of N+1 loops
+    await dbQuery('DELETE FROM evidence_snippets WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id IN (SELECT id FROM campaign_creators WHERE campaign_id = $1))', [id])
+    await dbQuery('DELETE FROM content_angles WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id IN (SELECT id FROM campaign_creators WHERE campaign_id = $1))', [id])
+    await dbQuery('DELETE FROM creator_evaluations WHERE campaign_creator_id IN (SELECT id FROM campaign_creators WHERE campaign_id = $1)', [id])
     await dbQuery('DELETE FROM campaign_creators WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM content_items WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM campaign_search_terms WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM campaign_topics WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM activity_log WHERE campaign_id = $1', [id])
+    await dbQuery('DELETE FROM job_events WHERE job_id IN (SELECT id FROM jobs WHERE campaign_id = $1)', [id])
+    await dbQuery('DELETE FROM jobs WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM campaigns WHERE id = $1', [id])
     return NextResponse.json({ ok: true, deleted: id })
   } catch (e) {
