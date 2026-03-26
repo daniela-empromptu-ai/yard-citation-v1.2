@@ -378,8 +378,9 @@ async function discoverByYouTubeSearch(
     const llmResult = await llmChannelFilter(afterStatic.map(ch => ({
       channelTitle: ch.channelTitle,
       handle: ch.handle?.replace(/^@/, '') || null,
-      description: ch.description + '\nVideos: ' + ch.anchorVideos.map(v => v.title).join('; '),
+      description: ch.description,
       subscriberCount: ch.subscriberCount,
+      anchorVideos: ch.anchorVideos,
     })), topics)
 
     const filtered = afterStatic.filter(ch => !llmResult.rejected.has(ch.channelTitle))
@@ -477,6 +478,7 @@ export interface ChannelForQualityCheck {
   handle: string | null
   description: string
   subscriberCount: number | null
+  anchorVideos?: { title: string }[]
 }
 
 export interface LLMFilterResult {
@@ -510,7 +512,7 @@ Return JSON only:
 { "reject": [1-indexed numbers], "categories": { "index": ["Category"] } }
 Example: { "reject": [2, 5], "categories": { "1": ["DevOps"], "3": ["DevOps", "CI/CD"] } }`
 
-const FILTER_BATCH_SIZE = 30
+const FILTER_BATCH_SIZE = 15
 
 export async function llmChannelFilter(
   channels: ChannelForQualityCheck[],
@@ -536,9 +538,13 @@ export async function llmChannelFilter(
       const batch = channels.slice(batchStart, batchStart + FILTER_BATCH_SIZE)
       const batchIndex = Math.floor(batchStart / FILTER_BATCH_SIZE)
 
-      const channelsBlock = batch.map((ch, i) =>
-        `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${(ch.description || '').slice(0, 150)}`
-      ).join('\n')
+      const channelsBlock = batch.map((ch, i) => {
+        const desc = (ch.description || '').trim().slice(0, 400)
+        const videos = ch.anchorVideos?.length
+          ? `\n   Recent videos: ${ch.anchorVideos.slice(0, 3).map(v => `"${v.title}"`).join(', ')}`
+          : ''
+        return `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${desc}${videos}`
+      }).join('\n')
 
       const message = `TOPICS: ${campaignTopics.join(', ')}
 
@@ -643,8 +649,9 @@ export async function discoverCreatorsByCategories(
     afterStatic.map(ch => ({
       channelTitle: ch.channelTitle,
       handle: ch.handle?.replace(/^@/, '') || null,
-      description: ch.description + '\nVideos: ' + ch.anchorVideos.map(v => v.title).join('; '),
+      description: ch.description,
       subscriberCount: ch.subscriberCount,
+      anchorVideos: ch.anchorVideos,
     })),
     categoryNames
   )

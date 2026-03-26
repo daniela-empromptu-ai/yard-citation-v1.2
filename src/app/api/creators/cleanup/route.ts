@@ -5,18 +5,37 @@ export const dynamic = 'force-dynamic'
 
 /**
  * DELETE /api/creators/cleanup?source=campaign_discovery
- * Removes creators by discovered_via filter with full FK cascade.
- * Also removes any extra categories added during discovery.
+ * DELETE /api/creators/cleanup?filter=no_categories
+ * Removes creators by discovered_via filter or by missing categories, with full FK cascade.
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const source = new URL(req.url).searchParams.get('source') || 'campaign_discovery'
+    const url = new URL(req.url)
+    const source = url.searchParams.get('source')
+    const filter = url.searchParams.get('filter')
 
-    // Find creators matching the filter
-    const creatorRows = await dbQuery<{ id: string; name: string; platform: string }>(
-      `SELECT id, name, platform FROM creators WHERE discovered_via = $1`,
-      [source]
-    )
+    let creatorRows: { data: { id: string; name: string; platform: string }[] }
+
+    if (filter === 'all') {
+      creatorRows = await dbQuery<{ id: string; name: string; platform: string }>(
+        `SELECT id, name, platform FROM creators`,
+        []
+      )
+    } else if (filter === 'no_categories') {
+      creatorRows = await dbQuery<{ id: string; name: string; platform: string }>(
+        `SELECT c.id, c.name, c.platform FROM creators c
+         LEFT JOIN creator_categories cc ON cc.creator_id = c.id
+         WHERE cc.creator_id IS NULL`,
+        []
+      )
+    } else {
+      const src = source || 'campaign_discovery'
+      creatorRows = await dbQuery<{ id: string; name: string; platform: string }>(
+        `SELECT id, name, platform FROM creators WHERE discovered_via = $1`,
+        [src]
+      )
+    }
+
     const ids = creatorRows.data.map(r => r.id)
 
     if (ids.length === 0) {
