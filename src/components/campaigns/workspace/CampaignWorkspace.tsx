@@ -15,7 +15,7 @@ interface CampaignCreatorRow {
   pipeline_stage: string; scoring_status: string;
   overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
-  updated_at: string;
+  updated_at: string; client_feedback: string | null; client_rating: string | null;
 }
 
 interface ActivityRow {

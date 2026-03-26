@@ -38,7 +38,7 @@ interface CampaignCreator {
   pipeline_stage: string; scoring_status: string;
   overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
-  updated_at: string;
+  updated_at: string; client_feedback: string | null; client_rating: string | null;
 }
 
 interface Evaluation {
@@ -165,6 +165,71 @@ const DIMS = [
 ] as const;
 
 // ─── Detail Panel ───
+
+function FeedbackBox({ cc }: { cc: CampaignCreator }) {
+  const [rating, setRating] = useState<string | null>(cc.client_rating ?? null)
+  const [notes, setNotes] = useState(cc.client_feedback ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function save(newRating?: string | null, newNotes?: string) {
+    setSaving(true)
+    await fetch(`/api/campaign-creators/${cc.id}/feedback`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        feedback: (newNotes ?? notes) || null,
+        rating: newRating !== undefined ? newRating : rating,
+      }),
+    })
+    setSaving(false)
+  }
+
+  function toggleRating(val: 'good' | 'bad') {
+    const next = rating === val ? null : val
+    setRating(next)
+    save(next)
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rate Creator</h3>
+      <div className="flex gap-2">
+        <button
+          onClick={() => toggleRating('good')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
+            rating === 'good'
+              ? 'bg-green-600 border-green-500 text-white'
+              : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-green-600/50 hover:text-green-400'
+          }`}
+        >
+          👍 Good
+        </button>
+        <button
+          onClick={() => toggleRating('bad')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
+            rating === 'bad'
+              ? 'bg-red-600 border-red-500 text-white'
+              : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-red-600/50 hover:text-red-400'
+          }`}
+        >
+          👎 Bad
+        </button>
+      </div>
+      <div>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notes</h3>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={() => save()}
+          rows={3}
+          placeholder="Any concerns or context… (auto-saves)"
+          className="w-full bg-[#111827] border border-[#2d3748] rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-blue-500/50"
+        />
+      </div>
+      {saving && <p className="text-xs text-slate-500">Saving…</p>}
+    </div>
+  )
+}
 
 function DetailPanel({
   cc, evaluation, evidence, contentItems, angles, loading,
@@ -394,6 +459,9 @@ function DetailPanel({
           </div>
         </div>
       )}
+
+      {/* Client feedback */}
+      <FeedbackBox cc={cc} />
     </div>
   );
 }

@@ -37,10 +37,10 @@ export default async function CampaignPage({ params }: Props) {
       source: string | null; pipeline_stage: string; scoring_status: string;
       overall_score: number | null; evidence_coverage: string | null;
       needs_manual_review: boolean | null; evaluated_at: string | null;
-      updated_at: string;
+      updated_at: string; client_feedback: string | null; client_rating: string | null;
     }>(`
       SELECT
-        cc.id, cc.creator_id, cc.campaign_id, cc.source, cc.pipeline_stage, cc.scoring_status, cc.updated_at,
+        cc.id, cc.creator_id, cc.campaign_id, cc.source, cc.pipeline_stage, cc.scoring_status, cc.updated_at, cc.client_feedback, cc.client_rating,
         cr.name as creator_name, cr.platform as creator_platform, cr.handle as creator_handle,
         e.overall_score, e.evidence_coverage, e.needs_manual_review, e.evaluated_at
       FROM ${t('campaign_creators')} cc
