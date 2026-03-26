@@ -199,10 +199,10 @@ export async function discoverByLLM(
     // Verified — insert new creator
     const creatorId = uuidv4()
     await dbQuery(
-      `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, discovered_via, brand_owned, created_at, updated_at)
-       VALUES ($1, $2, $2, $3, $4, $5, 'campaign_discovery', false, $6, $6)
+      `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, subscriber_count, discovered_via, brand_owned, created_at, updated_at)
+       VALUES ($1, $2, $2, $3, $4, $5, $6, 'campaign_discovery', false, $7, $7)
        ON CONFLICT DO NOTHING`,
-      [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, now]
+      [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, verification.subscriberCount ?? null, now]
     )
 
     // Collect category pairs for batch processing after all suggestions are done
@@ -256,7 +256,7 @@ export async function discoverByLLM(
 
 // ─── Batch Category Tagging ───
 
-async function batchTagCategories(pairs: { creatorId: string; catName: string }[]): Promise<void> {
+export async function batchTagCategories(pairs: { creatorId: string; catName: string }[]): Promise<void> {
   if (pairs.length === 0) return
 
   const uniqueNames = Array.from(new Set(pairs.map(p => p.catName.toLowerCase())))
@@ -375,14 +375,14 @@ async function discoverByYouTubeSearch(
     })
 
     // Layer 2: LLM quality filter — now includes video titles for better signal
-    const llmRejects = await llmChannelFilter(afterStatic.map(ch => ({
+    const llmResult = await llmChannelFilter(afterStatic.map(ch => ({
       channelTitle: ch.channelTitle,
       handle: ch.handle?.replace(/^@/, '') || null,
       description: ch.description + '\nVideos: ' + ch.anchorVideos.map(v => v.title).join('; '),
       subscriberCount: ch.subscriberCount,
     })), topics)
 
-    const filtered = afterStatic.filter(ch => !llmRejects.has(ch.channelTitle))
+    const filtered = afterStatic.filter(ch => !llmResult.rejected.has(ch.channelTitle))
     console.log(`[discovery] YouTube Search: ${results.length} → ${afterStatic.length} (static) → ${filtered.length} (LLM quality) channels`)
 
     const creators: MatchedCreator[] = []
@@ -436,6 +436,7 @@ async function discoverByYouTubeSearch(
     }
 
     // Batch insert new creators
+    const ytCategoryPairs: { creatorId: string; catName: string }[] = []
     if (toInsert.length > 0) {
       const newRows = toInsert.map(({ ch, handle }) => [uuidv4(), ch.channelTitle, 'youtube', handle, ch.url, ch.subscriberCount, 'youtube_search', now, now])
       await dbInsertMany(
@@ -449,8 +450,17 @@ async function discoverByYouTubeSearch(
         const creatorId = newRows[i][0] as string
         creators.push({ id: creatorId, name: ch.channelTitle, platform: 'youtube', handle: handle ? `@${handle}` : null, source: 'youtube_search', anchorVideos: ch.anchorVideos })
         newInserted++
+        // Collect LLM-assigned categories for batch tagging
+        const cats = llmResult.categories.get(ch.channelTitle)
+        if (cats?.length) {
+          ytCategoryPairs.push(...cats.map(catName => ({ creatorId, catName })))
+        }
         console.log(`[discovery] YouTube Video Search: "${ch.channelTitle}" (${handle ? '@' + handle : 'no handle'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs) — videos: ${ch.anchorVideos.map(v => `"${v.title}"`).join(', ')}`)
       }
+    }
+
+    if (ytCategoryPairs.length > 0) {
+      await batchTagCategories(ytCategoryPairs)
     }
 
     return { creators, newInserted }
@@ -462,84 +472,247 @@ async function discoverByYouTubeSearch(
 
 // ─── LLM Channel Quality Filter ───
 
-interface ChannelForQualityCheck {
+export interface ChannelForQualityCheck {
   channelTitle: string
   handle: string | null
   description: string
   subscriberCount: number | null
 }
 
+export interface LLMFilterResult {
+  rejected: Set<string>
+  /** channelTitle → category names assigned by LLM */
+  categories: Map<string, string[]>
+}
+
 /**
  * Use LLM to filter channels — reject brands, tutorial mills, academies, and unrelated content.
+ * Also assigns categories to kept channels from the campaign topics list.
  * Campaign-aware: uses topics to judge relevance.
- * Returns the set of channel titles to REJECT.
  * Uses create-agent + chat for stronger model quality than apply_prompt_to_data.
  */
-async function llmChannelFilter(
+const QUALITY_FILTER_INSTRUCTIONS = `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior engineer would subscribe to for their own professional growth.
+
+TEST 1 — PERSON OR INSTITUTION?
+Is this a single person sharing their expertise, or an organization/company/product producing content?
+- REJECT: companies marketing their own product (GitHub, Docker, GitLab, HashiCorp, Datadog, Better Stack, Grafana), educational institutions (freeCodeCamp, Simplilearn, edureka, KodeKloud), bootcamps, conference channels, consulting firms
+- REJECT: the official channel of a tool or product itself — even if educational (e.g. the official GitHub channel, the official Kubernetes channel)
+- KEEP: individual practitioners, even if they have a recognizable brand name or sell courses (e.g. Fireship, Theo, ThePrimeagen, NetworkChuck, TechWorld with Nana)
+
+TEST 2 — PRACTITIONER OR TEACHER?
+Does this channel target working engineers solving real problems, or students learning from scratch?
+- REJECT: channels whose primary audience is beginners/students, structured curriculum channels
+- KEEP: opinionated takes, war stories, tool deep-dives, production experience — content a senior engineer watches for their own work
+
+CATEGORIES RULE: Every kept channel MUST be assigned at least one category from the provided topics list. No kept channel may be omitted.
+
+Return JSON only:
+{ "reject": [1-indexed numbers], "categories": { "index": ["Category"] } }
+Example: { "reject": [2, 5], "categories": { "1": ["DevOps"], "3": ["DevOps", "CI/CD"] } }`
+
+const FILTER_BATCH_SIZE = 30
+
+export async function llmChannelFilter(
   channels: ChannelForQualityCheck[],
   campaignTopics: string[]
-): Promise<Set<string>> {
-  if (channels.length === 0) return new Set()
+): Promise<LLMFilterResult> {
+  if (channels.length === 0) return { rejected: new Set(), categories: new Map() }
 
-  const channelsBlock = channels.map((ch, i) =>
-    `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${(ch.description || '').slice(0, 150)}`
-  ).join('\n')
+  console.log(`[llmChannelFilter] topics: ${campaignTopics.join(', ')} | channels: ${channels.length}`)
 
   try {
-    // Create agent (0 credits) — idempotent, overwrites if exists
+    // Create agent once — idempotent, 0 credits
     await callAIApi('/create-agent', {
       agent_name: 'yard_quality_filter',
-      instructions: `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior developer would subscribe to.
-
-REJECT these types:
-- B2B company/vendor channels — channels that exist to market a software product or service (e.g., Checkly, Datadog, HashiCorp). The test: is this a COMPANY selling software/infrastructure, or an INDIVIDUAL creator?
-- Tutorial mills and academies — channels that ONLY teach beginners step-by-step ("How to Install X", "X Tutorial for Beginners", "Learn X in 10 Minutes"). Names with "Academy", "Learn", "Tutorial", "Mentor" are strong signals.
-- Training/certification companies, bootcamp channels
-- Conference/event channels (e.g., NDC Conferences, GOTO, InfoQ)
-- Content unrelated to the campaign topics (e.g. gaming, cooking, lifestyle, entertainment)
-
-KEEP these types (do NOT reject):
-- Independent developers sharing production experience, war stories, tool reviews
-- Consultants/freelancers with hands-on expertise
-- Creator-led channels where the person IS the brand — even if the channel has a recognizable brand name, courses, memberships, or sponsors (e.g., Fireship, Theo, ThePrimeagen, Traversy Media)
-- Creators who mix tutorials with real-world insights (not pure tutorial mills)
-
-When asked to filter channels, return ONLY a JSON array of channel numbers to REJECT (1-indexed). If all should be kept, return [].`,
+      instructions: QUALITY_FILTER_INSTRUCTIONS,
     })
 
-    // Chat with agent (1 credit) — fresh session each time
-    const result = await callAIApi('/chat', {
-      agent_id: 'yard_quality_filter',
-      session_id: `filter-${Date.now()}`,
-      message: `CAMPAIGN TOPICS: ${campaignTopics.join(', ')}
+    const rejected = new Set<string>()
+    const categories = new Map<string, string[]>()
+    const ts = Date.now()
+
+    // Process in batches of FILTER_BATCH_SIZE to avoid payload size limits
+    for (let batchStart = 0; batchStart < channels.length; batchStart += FILTER_BATCH_SIZE) {
+      const batch = channels.slice(batchStart, batchStart + FILTER_BATCH_SIZE)
+      const batchIndex = Math.floor(batchStart / FILTER_BATCH_SIZE)
+
+      const channelsBlock = batch.map((ch, i) =>
+        `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${(ch.description || '').slice(0, 150)}`
+      ).join('\n')
+
+      const message = `TOPICS: ${campaignTopics.join(', ')}
 
 CHANNELS:
 ${channelsBlock}
 
-Return ONLY a JSON array of channel numbers to REJECT (1-indexed), no other text:
-[]`,
-    }) as { response: string }
+Return JSON only. Every kept channel must appear in categories.`
 
-    const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const rejectIndices = JSON.parse(cleaned) as number[]
+      const result = await callAIApi('/chat', {
+        agent_id: 'yard_quality_filter',
+        session_id: `filter-${ts}-batch-${batchIndex}`,
+        message,
+      }) as { response: string }
 
-    if (!Array.isArray(rejectIndices)) return new Set()
+      const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const parsed = JSON.parse(cleaned) as { reject?: number[]; categories?: Record<string, string[]> }
 
-    const rejectNames = new Set<string>()
-    for (const idx of rejectIndices) {
-      const ch = channels[idx - 1]
-      if (ch) {
-        rejectNames.add(ch.channelTitle)
-        console.log(`[discovery] LLM quality filter: "${ch.channelTitle}" → rejected`)
+      const rejectIndices = Array.isArray(parsed.reject) ? parsed.reject : []
+      const categoriesRaw = parsed.categories && typeof parsed.categories === 'object' ? parsed.categories : {}
+
+      for (const idx of rejectIndices) {
+        const ch = batch[idx - 1]
+        if (ch) {
+          rejected.add(ch.channelTitle)
+          console.log(`[discovery] LLM quality filter: "${ch.channelTitle}" → rejected`)
+        }
+      }
+
+      for (const [idxStr, cats] of Object.entries(categoriesRaw)) {
+        const ch = batch[parseInt(idxStr, 10) - 1]
+        if (ch && Array.isArray(cats) && cats.length > 0) {
+          categories.set(ch.channelTitle, cats)
+        }
       }
     }
 
-    console.log(`[discovery] LLM quality filter: ${rejectNames.size}/${channels.length} rejected`)
-    return rejectNames
+    console.log(`[discovery] LLM quality filter: ${rejected.size}/${channels.length} rejected, ${categories.size} categorised`)
+    return { rejected, categories }
   } catch (e) {
-    console.log(`[discovery] LLM quality filter failed, falling back to static filter: ${(e as Error).message}`)
-    return new Set()
+    console.log(`[discovery] LLM quality filter failed: ${(e as Error).message}`)
+    throw new Error('Quality filter failed — please try discovery again')
   }
+}
+
+// ─── Standalone Creator Discovery (no campaign) ───
+
+export interface StandaloneDiscoveryResult {
+  searched: number
+  filtered: number
+  new_inserted: number
+  already_existed: number
+}
+
+/**
+ * Discover YouTube creators by category, independent of any campaign.
+ * 1. Fetch category names from DB
+ * 2. LLM generates search terms from categories
+ * 3. YouTube Search API
+ * 4. Static + LLM quality filter (also assigns categories)
+ * 5. Dedup against existing creators
+ * 6. Insert new creators with subscriber counts + categories
+ */
+export async function discoverCreatorsByCategories(
+  categoryIds: string[]
+): Promise<StandaloneDiscoveryResult> {
+  const { aiGenerateSearchTermsFromCategories } = await import('@/lib/ai-actions')
+
+  // Step 1: Fetch category names — 1 DB call
+  const placeholders = categoryIds.map((_, i) => `$${i + 1}`).join(', ')
+  const catRes = await dbQuery<{ id: string; name: string }>(
+    `SELECT id, name FROM ${t('categories')} WHERE id IN (${placeholders})`,
+    categoryIds
+  )
+  const categoryNames = catRes.data.map(r => r.name)
+  if (categoryNames.length === 0) throw new Error('No matching categories found')
+
+  // Step 2: Generate search terms via LLM — 1 AI call
+  const searchTerms = await aiGenerateSearchTermsFromCategories(categoryNames)
+  if (searchTerms.length === 0) throw new Error('Failed to generate search terms from categories')
+
+  // Step 3: YouTube Search API — external, no credit cost
+  const apiKey = process.env.YOUTUBE_API_KEY || ''
+  const results = await searchYouTubeVideosByTerms(searchTerms, apiKey, {
+    resultsPerTerm: 5,
+    maxChannels: 100,
+    minSubscribers: 500,
+  })
+  console.log(`[standalone-discovery] YouTube: ${results.length} channels from ${searchTerms.length} terms`)
+
+  // Step 4a: Static brand filter — free
+  const afterStatic = results.filter(ch => {
+    const handle = ch.handle?.replace(/^@/, '') || null
+    if (isBrandOwned(ch.channelTitle, handle, ch.url, ch.description)) {
+      console.log(`[standalone-discovery] Static filter removed "${ch.channelTitle}"`)
+      return false
+    }
+    return true
+  })
+
+  // Step 4b: LLM quality filter + category assignment — 1 AI call
+  const llmResult = await llmChannelFilter(
+    afterStatic.map(ch => ({
+      channelTitle: ch.channelTitle,
+      handle: ch.handle?.replace(/^@/, '') || null,
+      description: ch.description + '\nVideos: ' + ch.anchorVideos.map(v => v.title).join('; '),
+      subscriberCount: ch.subscriberCount,
+    })),
+    categoryNames
+  )
+  const filtered = afterStatic.filter(ch => !llmResult.rejected.has(ch.channelTitle))
+  console.log(`[standalone-discovery] ${results.length} → ${afterStatic.length} (static) → ${filtered.length} (LLM) channels`)
+
+  // Step 5: Batch dedup — 1 DB call
+  const channelsWithHandles = filtered.map(ch => ({
+    ch,
+    handle: ch.handle?.replace(/^@/, '') || null,
+  }))
+  const allHandles = channelsWithHandles.map(c => c.handle).filter((h): h is string => !!h)
+  const allUrls = channelsWithHandles.map(c => c.ch.url).filter(Boolean)
+
+  const existingMap = new Map<string, string>()
+  if (allHandles.length > 0 || allUrls.length > 0) {
+    const handlePlaceholders = allHandles.map((_, i) => `LOWER($${i + 1})`).join(', ')
+    const urlPlaceholders = allUrls.map((_, i) => `$${allHandles.length + i + 1}`).join(', ')
+    const conditions: string[] = []
+    if (allHandles.length > 0) conditions.push(`(platform = 'youtube' AND LOWER(handle) IN (${handlePlaceholders}))`)
+    if (allUrls.length > 0) conditions.push(`url IN (${urlPlaceholders})`)
+    const existingRes = await dbQuery<{ id: string; handle: string | null; url: string | null }>(
+      `SELECT id, handle, url FROM ${t('creators')} WHERE ${conditions.join(' OR ')}`,
+      [...allHandles, ...allUrls]
+    )
+    for (const row of existingRes.data) {
+      if (row.handle) existingMap.set(row.handle.toLowerCase(), row.id)
+      if (row.url) existingMap.set(row.url, row.id)
+    }
+  }
+
+  const toInsert = channelsWithHandles.filter(({ ch, handle }) => {
+    const key = (handle && existingMap.get(handle.toLowerCase())) || existingMap.get(ch.url)
+    return !key
+  })
+  const alreadyExisted = channelsWithHandles.length - toInsert.length
+
+  // Step 6: Batch insert — 1 DB call
+  const now = new Date().toISOString()
+  const categoryPairs: { creatorId: string; catName: string }[] = []
+  let newInserted = 0
+
+  if (toInsert.length > 0) {
+    const newRows = toInsert.map(({ ch, handle }) => {
+      const id = uuidv4()
+      return { id, ch, handle }
+    })
+    await dbInsertMany(
+      t('creators'),
+      ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'subscriber_count', 'discovered_via', 'created_at', 'updated_at'],
+      newRows.map(r => [r.id, r.ch.channelTitle, r.ch.channelTitle, 'youtube', r.handle, r.ch.url, r.ch.subscriberCount, 'standalone_discovery', now, now]),
+      'DO NOTHING'
+    )
+    for (const { id, ch } of newRows) {
+      newInserted++
+      const cats = llmResult.categories.get(ch.channelTitle)
+      if (cats?.length) {
+        categoryPairs.push(...cats.map(catName => ({ creatorId: id, catName })))
+      }
+    }
+  }
+
+  // Step 7: Tag categories — 1-3 DB calls
+  if (categoryPairs.length > 0) {
+    await batchTagCategories(categoryPairs)
+  }
+
+  return { searched: results.length, filtered: filtered.length, new_inserted: newInserted, already_existed: alreadyExisted }
 }
 
 // ─── Main Discovery Orchestrator ───
