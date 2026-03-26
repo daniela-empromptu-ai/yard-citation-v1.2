@@ -66,8 +66,6 @@ export default function CreatorsPage() {
   const [search, setSearch] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [filterQuality, setFilterQuality] = useState('vetted')
-
   // Modals
   const [addOpen, setAddOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -75,6 +73,11 @@ export default function CreatorsPage() {
   const [catManageOpen, setCatManageOpen] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Discover modal
+  const [discoverOpen, setDiscoverOpen] = useState(false)
+  const [discoverLoading, setDiscoverLoading] = useState(false)
+  const [discoverCategoryIds, setDiscoverCategoryIds] = useState<string[]>([])
 
   // Add form
   const [form, setForm] = useState({ name: '', platform: 'youtube', handle: '', url: '', notes: '', email: '', category_ids: [] as string[] })
@@ -111,11 +114,6 @@ export default function CreatorsPage() {
   useEffect(() => { fetchCreators() }, [fetchCreators])
 
   useEffect(() => { setPage(1) }, [search, filterPlatform, filterCategory])
-
-  // Client-side quality filter: vetted = relationship_status != 'none' or has categories
-  const displayCreators = filterQuality === 'vetted'
-    ? creators.filter(c => (c.relationship_status && c.relationship_status !== 'none') || c.category_names)
-    : creators
 
   async function handleAdd() {
     if (!form.name.trim() || !form.platform) return
@@ -222,6 +220,27 @@ export default function CreatorsPage() {
     }
   }
 
+  async function handleDiscover() {
+    if (discoverCategoryIds.length === 0) return
+    setDiscoverLoading(true)
+    try {
+      const res = await fetch('/api/creators/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: discoverCategoryIds }),
+      })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      showToast('success', `Found ${json.new_inserted} new creators (${json.already_existed} already in DB)`)
+      setDiscoverOpen(false)
+      fetchCreators()
+    } catch (e) {
+      showToast('error', (e as Error).message)
+    } finally {
+      setDiscoverLoading(false)
+    }
+  }
+
   return (
     <div className="p-6">
       <PageHeader
@@ -231,6 +250,9 @@ export default function CreatorsPage() {
           <div className="flex items-center gap-2">
             <button onClick={() => setCatManageOpen(true)} className="btn-secondary text-xs">
               Categories
+            </button>
+            <button onClick={() => { setDiscoverCategoryIds([]); setDiscoverOpen(true) }} className="btn-secondary text-sm flex items-center gap-1">
+              <Search size={14} /> Discover
             </button>
             <button onClick={() => setAddOpen(true)} className="btn-primary text-sm flex items-center gap-1">
               <Plus size={14} /> Add Creator
@@ -264,22 +286,6 @@ export default function CreatorsPage() {
           <option value="">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
-        {/* Quality toggle pills */}
-        <div className="flex items-center gap-1">
-          {(['all', 'vetted'] as const).map(q => (
-            <button
-              key={q}
-              onClick={() => setFilterQuality(q)}
-              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-                filterQuality === q
-                  ? 'bg-blue-900/30 text-blue-400 border-blue-700/50'
-                  : 'bg-[#1e293b] text-slate-400 border-[#2d3748] hover:bg-[#263044]'
-              }`}
-            >
-              {q === 'all' ? 'All Creators' : 'Vetted'}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Table */}
@@ -288,7 +294,7 @@ export default function CreatorsPage() {
           <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-500">
             <RefreshCw size={14} className="animate-spin" /> Loading...
           </div>
-        ) : displayCreators.length === 0 ? (
+        ) : creators.length === 0 ? (
           <EmptyState
             icon="\ud83d\udc64"
             title="No creators found"
@@ -311,7 +317,7 @@ export default function CreatorsPage() {
                 </tr>
               </thead>
               <tbody>
-                {displayCreators.map(c => (
+                {creators.map(c => (
                   <tr key={c.id} className={c.excluded ? 'opacity-50' : ''}>
                     <td>
                       <Link href={`/creators/${c.id}`} className="font-medium text-slate-200 hover:text-blue-400">
@@ -527,6 +533,53 @@ export default function CreatorsPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Discover Creators Modal */}
+      <Modal open={discoverOpen} onClose={() => !discoverLoading && setDiscoverOpen(false)} title="Discover Creators" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Select categories to find YouTube creators. We&apos;ll search YouTube, filter for quality independent creators, and add them to your network automatically.
+          </p>
+          <div>
+            <label className="label">Categories</label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {categories.map(cat => (
+                <label key={cat.id} className={`text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors ${
+                  discoverCategoryIds.includes(cat.id)
+                    ? 'bg-blue-900/30 border-blue-700/50 text-blue-400'
+                    : 'bg-[#111827] border-[#2d3748] text-slate-400 hover:bg-[#263044]'
+                }`}>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={discoverCategoryIds.includes(cat.id)}
+                    onChange={e => setDiscoverCategoryIds(prev =>
+                      e.target.checked ? [...prev, cat.id] : prev.filter(id => id !== cat.id)
+                    )}
+                  />
+                  {cat.name}
+                </label>
+              ))}
+              {categories.length === 0 && (
+                <p className="text-xs text-slate-500">No categories yet. Add some via the Categories button.</p>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={() => setDiscoverOpen(false)} disabled={discoverLoading} className="btn-secondary text-sm">
+              Cancel
+            </button>
+            <button
+              onClick={handleDiscover}
+              disabled={discoverLoading || discoverCategoryIds.length === 0}
+              className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {discoverLoading && <RefreshCw size={13} className="animate-spin" />}
+              {discoverLoading ? 'Discovering...' : `Discover (${discoverCategoryIds.length} selected)`}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Categories Management Modal */}
