@@ -20,6 +20,7 @@ export interface VerificationResult {
   verified: boolean
   realName?: string
   reason: string
+  subscriberCount?: number
 }
 
 interface CreatorToVerify {
@@ -135,7 +136,7 @@ async function verifyYouTube(
   }
 
   console.log(`[verify] youtube/@${handle}: verified (tech domain content found in ${videos.length} videos)`)
-  return { verified: true, reason: 'Channel exists with tech-domain content' }
+  return { verified: true, reason: 'Channel exists with tech-domain content', subscriberCount: resolution.subscriberCount }
 }
 
 // ─── Dev.to ───

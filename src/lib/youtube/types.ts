@@ -26,6 +26,7 @@ export interface ChannelResolution {
   channelId: string | null
   method: 'parsed' | 'api_handle' | 'failed'
   error?: string
+  subscriberCount?: number
 }
 
 export type CreatorTranscriptStatus =

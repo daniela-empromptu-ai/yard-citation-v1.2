@@ -117,6 +117,43 @@ Return a JSON array with EXACTLY 15 objects, no more, no less:
   }
 }
 
+// ---- AI: Generate Search Terms from Categories (standalone, no campaign) ----
+export async function aiGenerateSearchTermsFromCategories(
+  categories: string[]
+): Promise<string[]> {
+  try {
+    await setupPrompt(
+      'generate_search_terms_from_categories',
+      ['categories'],
+      `You are a creator discovery specialist. Given content categories, generate EXACTLY 15 YouTube search terms that will find independent technical content creators in these areas.
+
+Categories: {categories}
+
+RULES:
+- EXACTLY 15 terms
+- Terms should be YouTube video search queries (what a viewer would type, e.g. "kubernetes production cost optimization" not just "kubernetes")
+- Mix of breadth: 4-5 broad terms, 6-7 medium, 3-4 niche
+- Include common synonyms and abbreviations as separate terms (e.g. both "kubernetes" and "k8s")
+- Focus on terms that surface INDEPENDENT creators who share real-world experience, not vendor/company channels
+- No duplicate or near-duplicate terms
+
+Return ONLY a JSON array of strings, no objects, no explanation:
+["term1", "term2", ...]`
+    )
+
+    const raw = await applyPrompt('generate_search_terms_from_categories', {
+      categories: categories.join(', '),
+    }, 'raw_text') as string
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed)) return parsed.slice(0, 15) as string[]
+    return []
+  } catch (e) {
+    console.error('aiGenerateSearchTermsFromCategories error:', e)
+    return []
+  }
+}
+
 // ---- AI: Score Creator ----
 export async function aiScoreCreator(params: {
   campaignBrief: string;

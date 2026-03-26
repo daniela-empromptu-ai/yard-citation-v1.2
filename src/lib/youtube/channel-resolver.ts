@@ -38,15 +38,20 @@ function parseHandleFromUrl(url: string): string | null {
 
 /**
  * Resolve channel ID via YouTube Data API channels.list (1 unit).
+ * Also fetches subscriberCount from statistics — same call, no extra quota.
  */
-async function resolveHandleViaApi(handle: string, apiKey: string): Promise<string | null> {
-  const url = `https://www.googleapis.com/youtube/v3/channels?forHandle=${encodeURIComponent(handle)}&part=id&key=${apiKey}`
+async function resolveHandleViaApi(handle: string, apiKey: string): Promise<{ channelId: string; subscriberCount?: number } | null> {
+  const url = `https://www.googleapis.com/youtube/v3/channels?forHandle=${encodeURIComponent(handle)}&part=id,statistics&key=${apiKey}`
   const res = await fetch(url)
   if (!res.ok) return null
 
   const data = await res.json()
   if (data.items && data.items.length > 0) {
-    return data.items[0].id
+    const item = data.items[0]
+    const subscriberCount = item.statistics?.subscriberCount
+      ? parseInt(item.statistics.subscriberCount, 10)
+      : undefined
+    return { channelId: item.id, subscriberCount }
   }
   return null
 }
@@ -69,9 +74,9 @@ export async function resolveChannelId(
   const handle = parseHandleFromUrl(platformUrl)
   if (handle) {
     try {
-      const channelId = await resolveHandleViaApi(handle, apiKey)
-      if (channelId) {
-        return { channelId, method: 'api_handle' }
+      const resolved = await resolveHandleViaApi(handle, apiKey)
+      if (resolved) {
+        return { channelId: resolved.channelId, method: 'api_handle', subscriberCount: resolved.subscriberCount }
       }
       return { channelId: null, method: 'failed', error: `No YouTube channel found for handle @${handle}` }
     } catch (e) {
