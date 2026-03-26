@@ -3,8 +3,6 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { compareSync } from 'bcryptjs'
 import { dbQuery } from './db'
 
-console.log('[auth] NEXTAUTH_SECRET present:', !!process.env.NEXTAUTH_SECRET, '| length:', process.env.NEXTAUTH_SECRET?.length)
-
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   providers: [
