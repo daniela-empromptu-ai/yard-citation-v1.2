@@ -196,24 +196,10 @@ export async function discoverByLLM(
       return { type: 'rejected' }
     }
 
-    // Verified — insert new creator
-    const creatorId = uuidv4()
-    await dbQuery(
-      `INSERT INTO ${t('creators')} (id, name, display_name, platform, handle, url, subscriber_count, discovered_via, brand_owned, created_at, updated_at)
-       VALUES ($1, $2, $2, $3, $4, $5, $6, 'campaign_discovery', false, $7, $7)
-       ON CONFLICT DO NOTHING`,
-      [creatorId, suggestion.name, suggestion.platform, handle || null, suggestion.url || null, verification.subscriberCount ?? null, now]
-    )
-
-    // Collect category pairs for batch processing after all suggestions are done
-    if (suggestion.suggested_categories?.length > 0) {
-      categoryPairs.push(...suggestion.suggested_categories.map(catName => ({ creatorId, catName })))
-    }
-
-    return {
-      type: 'new',
-      creator: { id: creatorId, name: suggestion.name, platform: suggestion.platform, handle: suggestion.handle, source: 'ai_discovery' },
-    }
+    // Phase C does not insert new creators into the global network — campaign-scoped only
+    // Only already-existing creators (found above) are used
+    console.log(`[discovery] Phase C: verified "${suggestion.name}" but skipping global insert (not in DB)`)
+    return { type: 'rejected' }
   }
 
   // Run in batches of 5 to limit concurrent API calls
@@ -828,13 +814,12 @@ export async function runDiscovery(
         }
       }
 
+      // Gumshoe does not insert new creators into the global network — only uses existing ones
       if (toInsert.length > 0) {
-        await dbInsertMany(
-          t('creators'),
-          ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'discovered_via', 'created_at', 'updated_at'],
-          toInsert.map((cu, i) => [insertedIds[i], cu.handle, cu.handle, cu.platform, cu.handle, cu.url, 'gumshoe', now, now]),
-          'DO NOTHING'
-        )
+        console.log(`[discovery] Gumshoe: skipping global insert for ${toInsert.length} new creators (not in DB)`)
+        // Remove the skipped creators from gumshoeCreators — they were added optimistically above
+        const skippedIds = new Set(insertedIds)
+        gumshoeCreators = gumshoeCreators.filter(gc => !skippedIds.has(gc.id))
       }
     } catch (e) {
       console.log(`[discovery] Gumshoe extraction failed, continuing: ${(e as Error).message}`)
