@@ -680,7 +680,12 @@ export async function runPrequalifyPipeline(
      FROM ${t('campaign_creators')} cc
      JOIN ${t('creators')} c ON c.id = cc.creator_id
      WHERE cc.campaign_id = $1 AND cc.pipeline_stage = 'discovered'
-     ORDER BY c.subscriber_count DESC NULLS LAST
+     ORDER BY (
+       SELECT COUNT(*) FROM creator_categories cc2
+       JOIN categories cat ON cat.id = cc2.category_id
+       JOIN campaign_topics ct ON ct.topic ILIKE '%' || cat.name || '%' OR cat.name ILIKE '%' || ct.topic || '%'
+       WHERE cc2.creator_id = c.id AND ct.campaign_id = $1
+     ) DESC, c.subscriber_count DESC NULLS LAST
      LIMIT $2`,
     [campaignId, parseInt(process.env.PREQUALIFY_LIMIT || '100', 10)]
   )
