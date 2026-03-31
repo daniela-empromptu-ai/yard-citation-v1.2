@@ -102,6 +102,10 @@ export default function NewCampaignPage() {
       showToast('error', 'Please fill in all required fields')
       return
     }
+    if (form.topics.length === 0) {
+      showToast('error', 'Please add at least one topic before creating the campaign')
+      return
+    }
     submittingRef.current = true
     setLoading(true)
     try {
@@ -293,7 +297,7 @@ export default function NewCampaignPage() {
           {/* Topics */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-slate-300">Topics</label>
+              <label className="text-sm font-medium text-slate-300">Topics *</label>
               <button
                 onClick={suggestTopics}
                 disabled={suggestingTopics || !form.creative_brief}
@@ -358,7 +362,13 @@ export default function NewCampaignPage() {
         </button>
         {step < STEPS.length - 1 ? (
           <button
-            onClick={() => setStep(s => s + 1)}
+            onClick={() => {
+              const next = step + 1
+              setStep(next)
+              if (next === 2 && form.creative_brief && suggestedTopics.length === 0 && form.topics.length === 0) {
+                suggestTopics()
+              }
+            }}
             className="flex items-center gap-2 px-4 h-9 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
           >
             Next <ChevronRight size={14} />
