@@ -139,6 +139,12 @@ export default function NewCampaignPage() {
     setLoading(false)
   }
 
+  const stepValid =
+    step === 0 ? form.client_id.trim() !== '' && form.name.trim() !== '' :
+    step === 1 ? form.creative_brief.trim() !== '' :
+    step === 2 ? form.topics.length > 0 :
+    true
+
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
@@ -369,14 +375,15 @@ export default function NewCampaignPage() {
                 suggestTopics()
               }
             }}
-            className="flex items-center gap-2 px-4 h-9 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+            disabled={!stepValid}
+            className="flex items-center gap-2 px-4 h-9 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next <ChevronRight size={14} />
           </button>
         ) : (
           <button
             onClick={submit}
-            disabled={loading}
+            disabled={loading || !stepValid}
             className="flex items-center gap-2 px-5 h-9 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
