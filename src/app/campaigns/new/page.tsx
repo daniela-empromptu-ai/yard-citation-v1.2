@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronLeft, Plus, X, Sparkles, Loader2 } from 'lucide-react'
 import { showToast } from '@/components/ui/Toaster'
@@ -15,6 +15,7 @@ export default function NewCampaignPage() {
   const [clients, setClients] = useState<Record<string, string>[]>([])
   const [loading, setLoading] = useState(false)
   const [suggestingTopics, setSuggestingTopics] = useState(false)
+  const submittingRef = useRef(false)
 
   const [form, setForm] = useState({
     client_id: '',
@@ -96,10 +97,12 @@ export default function NewCampaignPage() {
   }
 
   const submit = async () => {
+    if (submittingRef.current) return
     if (!form.client_id || !form.name || !form.creative_brief) {
       showToast('error', 'Please fill in all required fields')
       return
     }
+    submittingRef.current = true
     setLoading(true)
     try {
       const res = await fetch('/api/campaigns/create', {
@@ -128,6 +131,7 @@ export default function NewCampaignPage() {
     } catch (e) {
       showToast('error', `Error: ${(e as Error).message}`)
     }
+    submittingRef.current = false
     setLoading(false)
   }
 
