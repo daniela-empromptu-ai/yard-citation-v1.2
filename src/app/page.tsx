@@ -71,51 +71,6 @@ export default function DashboardPage() {
       <div className="grid grid-cols-3 gap-6">
         {/* Left column: Tables */}
         <div className="col-span-2 space-y-6">
-          {/* Needs Manual Review */}
-          <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2d3748]">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={15} className="text-amber-400" />
-                <h2 className="text-sm font-semibold text-slate-200">Needs Manual Review</h2>
-                {needsReview.length > 0 && (
-                  <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 bg-amber-900/30 text-amber-400 rounded-full">{needsReview.length}</span>
-                )}
-              </div>
-            </div>
-            {needsReview.length === 0 ? (
-              <div className="px-5 py-8 text-center text-slate-500 text-sm">
-                <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
-                No creators pending manual review
-              </div>
-            ) : (
-              <table className="table-dense w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left">Creator</th>
-                    <th className="text-left">Campaign</th>
-                    <th className="text-left">Score</th>
-                    <th className="text-left">Coverage</th>
-                    <th className="text-left">Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {needsReview.map((row) => (
-                    <tr key={String(row.cc_id)}>
-                      <td>
-                        <span className="font-medium text-slate-200">{String(row.creator_name)}</span>
-                        {row.platform ? <PlatformBadge platform={String(row.platform)} /> : null}
-                      </td>
-                      <td className="text-slate-400">{String(row.campaign_name)}</td>
-                      <td>{row.overall_score != null ? <ScorePill score={Number(row.overall_score)} /> : '—'}</td>
-                      <td><CoverageBadge coverage={String(row.evidence_coverage || 'none')} /></td>
-                      <td className="text-slate-500 text-xs max-w-xs truncate">{String(row.needs_manual_review_reason || '—')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
           {/* Recent Scoring Runs */}
           <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-[#2d3748]">

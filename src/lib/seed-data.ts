@@ -18,18 +18,6 @@ export async function seedDemoData(): Promise<{ inserted: number; errors: string
     }
   }
 
-  // ---- USERS ----
-  await run(
-    `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-    [IDS.USER_JACK, 'Jack Scrivener', 'jack@yard.live', 'qualifier', NOW, NOW],
-    'user_jack'
-  )
-  await run(
-    `INSERT INTO app_users (id, name, email, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-    [IDS.USER_KARL, 'Karl McCarthy', 'karl@yard.live', 'admin', NOW, NOW],
-    'user_karl'
-  )
-
   // ---- APP SETTINGS ----
   await run(
     `INSERT INTO app_settings (id, mask_pii_by_default, outreach_ready_score_threshold, min_evidence_coverage, default_ai_model, created_at, updated_at)
