@@ -351,9 +351,9 @@ Return ONLY a JSON array, no other text:
     console.log(`[prequalify] Stage 1 batch ${Math.floor(i / 10) + 1}/${Math.ceil(transcriptResults.length / 10)} scored`)
   }
 
-  // ── Stage 2: Rank top 20 → pick 10 ──
+  // ── Stage 2: Rank top 40 → pick 20 ──
   allStage1Scores.sort((a, b) => b.score - a.score)
-  const top20Ids = new Set(allStage1Scores.slice(0, 20).map(s => s.creator_id))
+  const top20Ids = new Set(allStage1Scores.slice(0, 40).map(s => s.creator_id))
   const top20Results = transcriptResults.filter(r => top20Ids.has(r.creatorId))
 
   const candidatesBlock = top20Results.map(cr => {
@@ -371,7 +371,7 @@ ${transcriptText}
     await setupPrompt(
       'prequalify_stage2',
       ['campaign_brief', 'campaign_topics', 'candidates_block', 'candidate_count'],
-      `You are a creator partnerships strategist selecting the TOP 10 creators for outreach.
+      `You are a creator partnerships strategist selecting the TOP 20 creators for outreach.
 
 CAMPAIGN: {campaign_brief}
 TOPICS: {campaign_topics}
@@ -379,7 +379,7 @@ TOPICS: {campaign_topics}
 CANDIDATES ({candidate_count}, with content samples):
 {candidates_block}
 
-Select exactly 10 (or fewer if less than 10 candidates have useful content). Return ONLY JSON, no other text:
+Select exactly 20 (or fewer if less than 20 candidates have useful content). Return ONLY JSON, no other text:
 {
   "selected": [{"creator_id":"...","rank":1,"score":95,"rationale":"...","key_quote":"..."}],
   "rejected": [{"creator_id":"...","reason":"..."}]
@@ -417,9 +417,9 @@ Select exactly 10 (or fewer if less than 10 candidates have useful content). Ret
     console.error('[prequalify] Stage 2 failed:', e)
   }
 
-  // Fallback: use Stage 1 top 10
-  console.log('[prequalify] Stage 2 failed, falling back to Stage 1 top 10')
-  const fallbackSelected = allStage1Scores.slice(0, 10).map((s, i) => ({
+  // Fallback: use Stage 1 top 20
+  console.log('[prequalify] Stage 2 failed, falling back to Stage 1 top 20')
+  const fallbackSelected = allStage1Scores.slice(0, 20).map((s, i) => ({
     creator_id: s.creator_id,
     rank: i + 1,
     score: s.score,
@@ -430,7 +430,7 @@ Select exactly 10 (or fewer if less than 10 candidates have useful content). Ret
 }
 
 /**
- * Fallback selection when no Anthropic key: pick top 10 by topic match + followers.
+ * Fallback selection when no Anthropic key: pick top 20 by topic match + followers.
  */
 export function fallbackSelectTop10(
   transcriptResults: CreatorTranscriptResult[],
@@ -464,7 +464,7 @@ export function fallbackSelectTop10(
 
   scored.sort((a, b) => b.score - a.score)
 
-  return scored.slice(0, 10).map((cr, i) => ({
+  return scored.slice(0, 20).map((cr, i) => ({
     creator_id: cr.creatorId,
     rank: i + 1,
     score: cr.score,
