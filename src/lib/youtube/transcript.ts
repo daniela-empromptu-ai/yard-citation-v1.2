@@ -76,10 +76,12 @@ function toTranscriptData(
 
   if (typeof content === 'string') {
     if (!content.trim()) return null
+    // Plain text — no timing data available, use empty segments so the LLM
+    // doesn't receive fake [0:00] timestamps for every quote.
     return {
       videoId,
       language: result.lang || lang,
-      segments: [{ text: content, start: 0, duration: 0 }],
+      segments: [],
       fullText: content,
     }
   }

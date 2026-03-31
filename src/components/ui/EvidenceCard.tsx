@@ -16,6 +16,18 @@ interface EvidenceCardProps {
   featured?: boolean;
 }
 
+function buildTimestampedUrl(url: string, seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return url
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+      u.searchParams.set('t', String(Math.floor(seconds)))
+      return u.toString()
+    }
+  } catch { /* non-URL */ }
+  return url
+}
+
 function formatTime(seconds: number | null | undefined): string {
   if (!seconds) return ''
   const m = Math.floor(seconds / 60)
@@ -75,7 +87,7 @@ export function EvidenceCard({
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-1.5 truncate pl-4">
           <ExternalLink size={10} />
           <a
-            href={url}
+            href={buildTimestampedUrl(url, tsStart)}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-blue-400 hover:underline truncate"
@@ -130,7 +142,7 @@ export function EvidenceCard({
       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-1.5 truncate">
         <ExternalLink size={10} />
         <a
-          href={url}
+          href={buildTimestampedUrl(url, tsStart)}
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-blue-400 hover:underline truncate"

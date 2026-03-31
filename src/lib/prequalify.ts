@@ -559,7 +559,9 @@ export async function persistResults(
           all_video_titles: (tr.videos || [tr.video]).map(v => v.title),
           prequalify_rank: sel.rank, prequalify_score: sel.score,
           prequalify_rationale: sel.rationale, key_quote: sel.key_quote,
-          transcript_segments: tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text })),
+          transcript_segments: tr.transcript.segments.length > 0
+            ? tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text }))
+            : undefined,
         }),
         'prequalification', 'complete', now, now,
       ])

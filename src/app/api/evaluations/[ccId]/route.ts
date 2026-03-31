@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { ccId: strin
 
     const [snippets, angles, recommended, contentItemsRes] = await Promise.all([
       dbQuery(
-        `SELECT es.*, ci.title as content_title, ci.url as content_url
+        `SELECT es.*, ci.title as title, ci.url as url, ci.platform as platform
          FROM evidence_snippets es
          JOIN content_items ci ON ci.id = es.content_item_id
          WHERE es.evaluation_id = $1`,
