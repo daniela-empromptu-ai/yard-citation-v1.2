@@ -9,7 +9,7 @@ export async function GET() {
          (SELECT COUNT(*) FROM campaign_creators cc WHERE cc.campaign_id = c.id AND cc.scoring_status = 'scored')::int as scored_count
        FROM campaigns c
        LEFT JOIN clients cl ON cl.id = c.client_id
-       LEFT JOIN app_users u ON u.id = c.owner_user_id
+       LEFT JOIN (SELECT DISTINCT ON (id) id, name FROM app_users ORDER BY id, created_at) u ON u.id = c.owner_user_id
        ORDER BY c.updated_at DESC`,
       []
     )
