@@ -3,11 +3,51 @@
  *
  * List articles:  GET https://dev.to/api/articles?username={handle}&per_page=10
  * Full article:   GET https://dev.to/api/articles/{id}
+ * Tag search:     GET https://dev.to/api/articles?tag={tag}&top=7&per_page=30
  *
  * Free, no auth needed, 30 req/min rate limit.
  */
 
 import { DevtoArticle, DevtoFetchResult } from './types'
+
+export interface DevtoAuthorResult {
+  username: string
+  name: string
+  profile_url: string
+}
+
+/**
+ * Search Dev.to for authors who write about the given topics using tag-based search.
+ * Returns unique authors across all matched tags.
+ */
+export async function searchDevtoByTopics(topics: string[]): Promise<DevtoAuthorResult[]> {
+  // Map topics to tag slugs: lowercase, strip spaces ("DevOps" → "devops")
+  const tags = topics.map(t => t.toLowerCase().replace(/\s+/g, ''))
+  const seen = new Set<string>()
+  const authors: DevtoAuthorResult[] = []
+
+  for (const tag of tags.slice(0, 4)) {
+    try {
+      const res = await fetch(
+        `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&top=7&per_page=30`,
+        { headers: { Accept: 'application/json', 'User-Agent': 'Yard-Creator-Discovery/1.0' }, signal: AbortSignal.timeout(10_000) }
+      )
+      if (!res.ok) continue
+      const articles = await res.json() as Array<{ user: { username: string; name: string } }>
+      for (const article of articles) {
+        const { username, name } = article.user || {}
+        if (username && !seen.has(username.toLowerCase())) {
+          seen.add(username.toLowerCase())
+          authors.push({ username, name: name || username, profile_url: `https://dev.to/${username}` })
+        }
+      }
+    } catch {
+      // swallow per-tag errors, continue with next tag
+    }
+  }
+
+  return authors
+}
 
 interface DevtoListItem {
   id: number

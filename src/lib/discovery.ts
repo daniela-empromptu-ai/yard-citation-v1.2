@@ -22,6 +22,10 @@ export interface DiscoveryResult {
   db_matched: number
   yt_search_found: number
   yt_search_new: number
+  rapid_research_found: number
+  rapid_research_new: number
+  devto_search_found: number
+  devto_search_new: number
   llm_suggested: number
   llm_new_inserted: number
   llm_deduped: number
@@ -196,10 +200,20 @@ export async function discoverByLLM(
       return { type: 'rejected' }
     }
 
-    // Phase C does not insert new creators into the global network — campaign-scoped only
-    // Only already-existing creators (found above) are used
-    console.log(`[discovery] Phase C: verified "${suggestion.name}" but skipping global insert (not in DB)`)
-    return { type: 'rejected' }
+    // Insert verified new creator into global network
+    const newId = uuidv4()
+    const cleanHandle = handle || null
+    await dbInsertMany(
+      t('creators'),
+      ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'discovered_via', 'created_at', 'updated_at'],
+      [[newId, suggestion.name, suggestion.name, suggestion.platform, cleanHandle, suggestion.url || null, 'llm_discovery', now, now]],
+      'DO NOTHING'
+    )
+    console.log(`[discovery] Phase C: inserted new creator "${suggestion.name}" (${suggestion.platform}/${cleanHandle || suggestion.url})`)
+    if (suggestion.suggested_categories?.length) {
+      categoryPairs.push(...suggestion.suggested_categories.map((catName: string) => ({ creatorId: newId, catName })))
+    }
+    return { type: 'new', creator: { id: newId, name: suggestion.name, platform: suggestion.platform, handle: suggestion.handle || null, source: 'ai_discovery' } }
   }
 
   // Run in batches of 5 to limit concurrent API calls
@@ -453,6 +467,147 @@ async function discoverByYouTubeSearch(
     return { creators, newInserted }
   } catch (e) {
     console.error('[discovery] YouTube Search failed:', (e as Error).message)
+    return { creators: [], newInserted: 0 }
+  }
+}
+
+// ─── Phase B2: Medium + Dev.to Discovery ───
+
+/**
+ * Scan a block of text (e.g. rapid_research response) for Medium and Dev.to profile URLs.
+ */
+function extractProfileUrlsFromText(text: string): Array<{ platform: 'medium' | 'devto'; handle: string; url: string }> {
+  const results: Array<{ platform: 'medium' | 'devto'; handle: string; url: string }> = []
+  const seen = new Set<string>()
+
+  const mediumRe = /medium\.com\/@([\w.-]+)/gi
+  let m: RegExpExecArray | null
+  while ((m = mediumRe.exec(text)) !== null) {
+    const handle = m[1].replace(/[.,;)]+$/, '')
+    const key = `medium:${handle.toLowerCase()}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      results.push({ platform: 'medium', handle, url: `https://medium.com/@${handle}` })
+    }
+  }
+
+  const DEVTO_RESERVED = new Set(['t', 'tag', 'search', 'top', 'settings', 'api', 'admin', 'pod'])
+  const devtoRe = /dev\.to\/([\w-]+)/gi
+  while ((m = devtoRe.exec(text)) !== null) {
+    const handle = m[1].replace(/[.,;)]+$/, '')
+    if (DEVTO_RESERVED.has(handle.toLowerCase())) continue
+    const key = `devto:${handle.toLowerCase()}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      results.push({ platform: 'devto', handle, url: `https://dev.to/${handle}` })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Shared verify → dedup → insert logic for Medium and Dev.to creators.
+ */
+async function insertDiscoveredCreators(
+  handles: Array<{ platform: 'medium' | 'devto'; handle: string; url: string }>,
+  discoveredVia: string
+): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
+  if (handles.length === 0) return { creators: [], newInserted: 0 }
+  const now = new Date().toISOString()
+
+  const unique = Array.from(
+    new Map(handles.map(h => [`${h.platform}:${h.handle.toLowerCase()}`, h])).values()
+  ).filter(h => !isBrandOwned(h.handle, h.handle, h.url))
+
+  const existingRes = await dbQuery<{ id: string; platform: string; handle: string }>(
+    `SELECT id, platform, handle FROM ${t('creators')}
+     WHERE platform IN ('medium', 'devto') AND LOWER(handle) = ANY($1)`,
+    [unique.map(h => h.handle.toLowerCase())]
+  )
+  const existingMap = new Map(existingRes.data.map(r => [`${r.platform}:${r.handle.toLowerCase()}`, r.id]))
+
+  const creators: MatchedCreator[] = []
+  let newInserted = 0
+  const toVerify: typeof unique = []
+
+  for (const h of unique) {
+    const id = existingMap.get(`${h.platform}:${h.handle.toLowerCase()}`)
+    if (id) {
+      creators.push({ id, name: h.handle, platform: h.platform, handle: h.handle, source: discoveredVia })
+    } else {
+      toVerify.push(h)
+    }
+  }
+
+  for (let i = 0; i < toVerify.length; i += 5) {
+    const batch = toVerify.slice(i, i + 5)
+    const results = await Promise.allSettled(batch.map(async h => {
+      const v = await Promise.race([
+        verifyCreator({ name: h.handle, platform: h.platform, handle: h.handle, url: h.url, suggested_categories: [] }, []),
+        new Promise<VerificationResult>(resolve => setTimeout(() => resolve({ verified: false, reason: 'timeout' }), 15_000)),
+      ])
+      if (!v.verified) {
+        console.log(`[discovery] ${discoveredVia}: rejected ${h.platform}/${h.handle} — ${v.reason}`)
+        return null
+      }
+      return { ...h, id: uuidv4() }
+    }))
+
+    const verified = results.flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
+    if (verified.length === 0) continue
+
+    await dbInsertMany(
+      t('creators'),
+      ['id', 'name', 'display_name', 'platform', 'handle', 'url', 'discovered_via', 'created_at', 'updated_at'],
+      verified.map(h => [h.id, h.handle, h.handle, h.platform, h.handle, h.url, discoveredVia, now, now]),
+      'DO NOTHING'
+    )
+    for (const h of verified) {
+      creators.push({ id: h.id, name: h.handle, platform: h.platform, handle: h.handle, source: discoveredVia })
+      newInserted++
+      console.log(`[discovery] ${discoveredVia}: inserted ${h.platform}/${h.handle}`)
+    }
+  }
+
+  return { creators, newInserted }
+}
+
+/**
+ * Discover Medium creators using rapid_research (AI-powered web search).
+ * Medium is behind Cloudflare so direct scraping isn't viable.
+ */
+export async function discoverByRapidResearch(
+  topics: string[]
+): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
+  const topicStr = topics.slice(0, 5).join(', ')
+  try {
+    const res = await callAIApi('/rapid_research', {
+      goal: `Find 8 independent individual technical writers on Medium who publish about: ${topicStr}. Exclude company blogs and vendor accounts. List their Medium profile URLs in the format medium.com/@handle.`,
+    }) as { value: string }
+    const handles = extractProfileUrlsFromText(res.value || '').filter(h => h.platform === 'medium')
+    console.log(`[discovery] rapid_research: found ${handles.length} Medium handles`)
+    return insertDiscoveredCreators(handles, 'rapid_research')
+  } catch (e) {
+    console.log(`[discovery] rapid_research failed: ${(e as Error).message}`)
+    return { creators: [], newInserted: 0 }
+  }
+}
+
+/**
+ * Discover Dev.to creators using their public tag-based article search API.
+ */
+export async function discoverByDevtoTagSearch(
+  topics: string[]
+): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
+  try {
+    const { searchDevtoByTopics } = await import('@/lib/devto')
+    const authors = await searchDevtoByTopics(topics)
+    console.log(`[discovery] Dev.to tag search: found ${authors.length} authors`)
+    const handles = authors.map(a => ({ platform: 'devto' as const, handle: a.username, url: a.profile_url }))
+    return insertDiscoveredCreators(handles, 'devto_search')
+  } catch (e) {
+    console.log(`[discovery] Dev.to tag search failed: ${(e as Error).message}`)
     return { creators: [], newInserted: 0 }
   }
 }
@@ -842,6 +997,13 @@ export async function runDiscovery(
     console.log('[discovery] YouTube API key not configured, skipping YouTube search')
   }
 
+  // Phase B2: Medium (rapid_research) + Dev.to (tag API) — run in parallel
+  const [rrResult, devtoResult] = await Promise.all([
+    discoverByRapidResearch(topics),
+    discoverByDevtoTagSearch(topics),
+  ])
+  console.log(`[discovery] Phase B2: Medium ${rrResult.creators.length} (${rrResult.newInserted} new), Dev.to ${devtoResult.creators.length} (${devtoResult.newInserted} new)`)
+
   // Load seed creators for LLM (use existing campaign creators or top DB matches)
   const seedRes = await dbQuery<{ name: string; platform: string; handle: string }>(
     `SELECT c.name, c.platform, c.handle
@@ -869,7 +1031,7 @@ export async function runDiscovery(
   ])
 
   // Link all discovered creators to campaign
-  const allCreators = [...gumshoeCreators, ...dbMatched, ...ytSearchCreators, ...llmResult.suggestions]
+  const allCreators = [...gumshoeCreators, ...dbMatched, ...ytSearchCreators, ...rrResult.creators, ...devtoResult.creators, ...llmResult.suggestions]
   const totalLinked = await linkCreatorsToCampaign(campaignId, userId, allCreators)
 
   // Log activity
@@ -877,6 +1039,10 @@ export async function runDiscovery(
     db_matched: dbMatched.length,
     yt_search_found: ytSearchCreators.length,
     yt_search_new: ytSearchNew,
+    rapid_research_found: rrResult.creators.length,
+    rapid_research_new: rrResult.newInserted,
+    devto_search_found: devtoResult.creators.length,
+    devto_search_new: devtoResult.newInserted,
     llm_suggested: llmResult.suggestions.length,
     llm_new_inserted: llmResult.newInserted,
     llm_deduped: llmResult.deduped,
