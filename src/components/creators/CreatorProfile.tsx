@@ -45,7 +45,17 @@ export default function CreatorProfileClient({ creator, categories, content, eva
             <h1 className="text-xl font-semibold text-slate-100">{creator.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               <PlatformBadge platform={creator.platform} />
-              {creator.handle && <span className="text-sm text-slate-400">{creator.handle}</span>}
+              {creator.handle && (() => {
+                const h = creator.handle.replace(/^@/, '')
+                const profileUrl = creator.url || (
+                  creator.platform === 'youtube' ? `https://www.youtube.com/@${h}` :
+                  creator.platform === 'medium' ? `https://medium.com/@${h}` :
+                  creator.platform === 'devto' ? `https://dev.to/${h}` : null
+                )
+                return profileUrl
+                  ? <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline">{creator.handle}</a>
+                  : <span className="text-sm text-slate-400">{creator.handle}</span>
+              })()}
               <RelBadge status={creator.relationship_status} />
             </div>
             <div className="flex items-center gap-2 mt-1.5">
