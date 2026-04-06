@@ -121,11 +121,15 @@ export async function fetchCreatorTranscripts(
 
       // Step 2: Select videos for transcript fetching
       // Priority: anchor videos from discovery > per-channel search > RSS fallback
+      // Recency filter: only consider videos published within the last 2 years
+      const twoYearsAgo = new Date(Date.now() - 2 * 365.25 * 24 * 60 * 60 * 1000)
       let topVideos: { videoId: string; title: string; publishedAt: string; url: string }[] = []
 
       if (creator.anchorVideos && creator.anchorVideos.length > 0) {
-        // Use anchor videos from discovery — already known to be relevant
-        topVideos = creator.anchorVideos.slice(0, videosPerCreator).map(v => ({
+        // Use anchor videos from discovery — filter to recent ones first
+        const recentAnchors = creator.anchorVideos.filter(v => new Date(v.publishedAt) >= twoYearsAgo)
+        const anchorsToUse = recentAnchors.length > 0 ? recentAnchors : creator.anchorVideos // fallback to all if none recent
+        topVideos = anchorsToUse.slice(0, videosPerCreator).map(v => ({
           videoId: v.videoId,
           title: v.title,
           publishedAt: v.publishedAt,
@@ -141,7 +145,7 @@ export async function fetchCreatorTranscripts(
           try {
             const channelResults = await searchChannelVideos(
               resolution.channelId, searchQuery, apiKey,
-              { maxResults: videosPerCreator }
+              { maxResults: videosPerCreator, publishedAfter: twoYearsAgo.toISOString() }
             )
             if (channelResults.length > 0) {
               topVideos = channelResults.map(r => ({
@@ -159,9 +163,11 @@ export async function fetchCreatorTranscripts(
 
         if (topVideos.length === 0) {
           const rssVideos = await getChannelVideos(resolution.channelId, 15)
+          const recentRss = rssVideos.filter(v => new Date(v.publishedAt) >= twoYearsAgo)
+          const rssToRank = recentRss.length > 0 ? recentRss : rssVideos // fallback if channel is older/slow
           const ranked = campaignTopics.length > 0
-            ? rankVideosByRelevance(rssVideos, campaignTopics)
-            : rssVideos
+            ? rankVideosByRelevance(rssToRank, campaignTopics)
+            : rssToRank
           topVideos = ranked.slice(0, videosPerCreator)
           if (topVideos.length > 0) {
             console.log(`[transcript] ${creator.creator_name}: RSS fallback — ${topVideos.length} videos`)
@@ -181,8 +187,10 @@ export async function fetchCreatorTranscripts(
       base.videos = topVideos
 
       // Step 3: Fetch transcripts for top N videos (0.5s delay between requests)
+      // Keep per-video transcripts separate so each gets its own content_item (fixes single-video evidence bug)
       const allSegments: { text: string; start: number; duration: number }[] = []
       const allFullTexts: string[] = []
+      const perVideoTranscripts: { video: typeof topVideos[0]; fullText: string; language: string }[] = []
       let transcriptLanguage = 'en'
       let anyTranscript = false
 
@@ -196,6 +204,7 @@ export async function fetchCreatorTranscripts(
           allSegments.push(...transcript.segments)
           allFullTexts.push(transcript.fullText)
           transcriptLanguage = transcript.language
+          perVideoTranscripts.push({ video, fullText: transcript.fullText, language: transcript.language })
         } else {
           console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
         }
@@ -206,7 +215,7 @@ export async function fetchCreatorTranscripts(
         continue
       }
 
-      // Merge transcripts into one
+      // Merged transcript kept for AI pre-qual screening (Stage 1/2 uses full merged text)
       const mergedTranscript = {
         videoId: topVideos[0].videoId,
         language: transcriptLanguage,
@@ -216,7 +225,7 @@ export async function fetchCreatorTranscripts(
 
       const totalWords = mergedTranscript.fullText.split(/\s+/).length
       console.log(`[transcript] ${creator.creator_name}: success — ${topVideos.length} videos, ${totalWords} words`)
-      results.push({ ...base, status: 'success', transcript: mergedTranscript })
+      results.push({ ...base, status: 'success', transcript: mergedTranscript, perVideoTranscripts })
     } catch (e) {
       console.log(`[transcript] ${creator.creator_name}: error — ${(e as Error).message}`)
       results.push({ ...base, status: 'error', error: (e as Error).message })
@@ -546,25 +555,26 @@ export async function persistResults(
         ])
       }
       ingestedIds.push(ar.creatorId)
-    } else if (tr.transcript && tr.video) {
-      // YouTube creator
-      contentRows.push([
-        tr.creatorId, campaignId, 'youtube', 'youtube_video',
-        tr.video.title, tr.video.url, tr.video.publishedAt,
-        now, tr.transcript.language,
-        tr.transcript.fullText, tr.transcript.fullText.split(/\s+/).length,
-        JSON.stringify({
-          video_id: tr.video.videoId,
-          all_video_ids: (tr.videos || [tr.video]).map(v => v.videoId),
-          all_video_titles: (tr.videos || [tr.video]).map(v => v.title),
-          prequalify_rank: sel.rank, prequalify_score: sel.score,
-          prequalify_rationale: sel.rationale, key_quote: sel.key_quote,
-          transcript_segments: tr.transcript.segments.length > 0
-            ? tr.transcript.segments.map(s => ({ t: s.start, d: s.duration, txt: s.text }))
-            : undefined,
-        }),
-        'prequalification', 'complete', now, now,
-      ])
+    } else if (tr.video) {
+      // YouTube creator — one content_item per video so evidence links to the correct video
+      const videosToStore = tr.perVideoTranscripts && tr.perVideoTranscripts.length > 0
+        ? tr.perVideoTranscripts
+        : [{ video: tr.video, fullText: tr.transcript?.fullText || '', language: tr.transcript?.language || 'en' }]
+
+      for (const pvt of videosToStore) {
+        contentRows.push([
+          tr.creatorId, campaignId, 'youtube', 'youtube_video',
+          pvt.video.title, pvt.video.url, pvt.video.publishedAt,
+          now, pvt.language,
+          pvt.fullText, pvt.fullText.split(/\s+/).length,
+          JSON.stringify({
+            video_id: pvt.video.videoId,
+            prequalify_rank: sel.rank, prequalify_score: sel.score,
+            prequalify_rationale: sel.rationale, key_quote: sel.key_quote,
+          }),
+          'prequalification', 'complete', now, now,
+        ])
+      }
       ingestedIds.push(tr.creatorId)
     } else {
       console.log(`[prequalify] ${tr.creatorName}: selected but no content (status: ${tr.status}), keeping as discovered`)

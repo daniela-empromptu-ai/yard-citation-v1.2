@@ -37,6 +37,12 @@ export type CreatorTranscriptStatus =
   | 'no_transcript'
   | 'error'
 
+export interface PerVideoTranscript {
+  video: VideoInfo
+  fullText: string
+  language: string
+}
+
 export interface CreatorTranscriptResult {
   creatorId: string
   creatorName: string
@@ -45,6 +51,8 @@ export interface CreatorTranscriptResult {
   video?: VideoInfo
   videos?: VideoInfo[]
   transcript?: TranscriptData
+  /** Individual transcript per video — used to create separate content_items so evidence links to the correct video */
+  perVideoTranscripts?: PerVideoTranscript[]
   followerCount?: number
   topics?: string[]
   error?: string

@@ -10,5 +10,6 @@ export type {
   ChannelResolution,
   CreatorTranscriptStatus,
   CreatorTranscriptResult,
+  PerVideoTranscript,
 } from './types'
 export type { YouTubeSearchResult } from './search'
