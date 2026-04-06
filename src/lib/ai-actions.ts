@@ -205,7 +205,7 @@ Title: ${ci.title}
 URL: ${ci.url}
 Platform: ${ci.platform}
 Views: ${ci.view_count || 'N/A'}
-Text (first 3000 chars): ${ci.raw_text.substring(0, 3000)}
+Text (first 8000 chars): ${ci.raw_text.substring(0, 8000)}
 `).join('\n')
 
   try {
