@@ -54,8 +54,8 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
 
   const ctx = ccRes.data[0]
   const ciRes = await dbQuery<{ id: string; title: string; url: string; platform: string; raw_text: string; metadata_json: Record<string, unknown>; published_at: string }>(
-    `SELECT id, title, url, platform, raw_text, metadata_json, published_at FROM ${t('content_items')} WHERE creator_id = $1 ORDER BY published_at DESC LIMIT 10`,
-    [ctx.creator_id]
+    `SELECT id, title, url, platform, raw_text, metadata_json, published_at FROM ${t('content_items')} WHERE creator_id = $1 AND campaign_id = $2 ORDER BY published_at DESC LIMIT 5`,
+    [ctx.creator_id, ctx.campaign_id]
   )
 
   const contentItems = ciRes.data

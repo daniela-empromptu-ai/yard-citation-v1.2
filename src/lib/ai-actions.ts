@@ -199,13 +199,18 @@ export async function aiScoreCreator(params: {
   needs_manual_review_reason: string | null;
   evidence_coverage: string;
 }> {
+  // Distribute a fixed character budget evenly across content items so total
+  // payload stays bounded regardless of how many videos were ingested.
+  // 30,000 chars ≈ 7,500 tokens — comfortably within builder API limits.
+  const TOTAL_CONTENT_BUDGET = 30_000
+  const charsPerItem = Math.floor(TOTAL_CONTENT_BUDGET / Math.max(1, params.contentItems.length))
   const contentSummary = params.contentItems.map(ci => `
 --- Content Item (id: ${ci.id}) ---
 Title: ${ci.title}
 URL: ${ci.url}
 Platform: ${ci.platform}
 Views: ${ci.view_count || 'N/A'}
-Text (first 8000 chars): ${ci.raw_text.substring(0, 8000)}
+Text: ${ci.raw_text.substring(0, charsPerItem)}
 `).join('\n')
 
   try {
