@@ -516,9 +516,13 @@ async function insertDiscoveredCreators(
   if (handles.length === 0) return { creators: [], newInserted: 0 }
   const now = new Date().toISOString()
 
-  const unique = Array.from(
+  const afterHeuristics = Array.from(
     new Map(handles.map(h => [`${h.platform}:${h.handle.toLowerCase()}`, h])).values()
   ).filter(h => !isBrandOwned(h.handle, h.handle, h.url))
+
+  // LLM brand filter — runs before verifyCreator to avoid wasting API calls on obvious rejects
+  const llmRejected = await llmCreatorFilter(afterHeuristics)
+  const unique = afterHeuristics.filter(h => !llmRejected.has(h.handle.toLowerCase()))
 
   const existingRes = await dbQuery<{ id: string; platform: string; handle: string }>(
     `SELECT id, platform, handle FROM ${t('creators')}
@@ -727,6 +731,73 @@ Return JSON only. Every kept channel must appear in categories.`
   } catch (e) {
     console.log(`[discovery] LLM quality filter failed: ${(e as Error).message}`)
     throw new Error('Quality filter failed — please try discovery again')
+  }
+}
+
+// ─── LLM Creator Quality Filter (Medium + Dev.to) ───
+
+const CREATOR_FILTER_INSTRUCTIONS = `You are a creator quality filter for a technical content sponsorship platform. We want INDEPENDENT INDIVIDUAL developers and writers sharing real technical experience.
+
+KEEP: Individual developers, engineers, or writers who share their own technical experience — even if they have a personal brand or sell courses.
+
+REJECT any of the following:
+- Company, startup, product, or project accounts (e.g. tangle_network, braingemai, ntctech, infra_tools)
+- Handles that look auto-generated or machine-created (random numbers/letters, no clear human identity)
+- Corporate blog arms or brand evangelist accounts
+- Gibberish or spam-looking handles
+
+Return JSON only: { "reject": ["handle1", "handle2", ...] }
+If none should be rejected, return: { "reject": [] }`
+
+const CREATOR_FILTER_BATCH_SIZE = 10
+
+/**
+ * Use LLM to filter Medium/Dev.to handles — reject brand accounts and junk handles.
+ * Runs before verifyCreator to avoid wasting verification API calls on obvious rejects.
+ */
+async function llmCreatorFilter(
+  handles: Array<{ platform: string; handle: string; url: string }>
+): Promise<Set<string>> {
+  if (handles.length === 0) return new Set()
+
+  try {
+    await callAIApi('/create-agent', {
+      agent_name: 'yard_creator_filter',
+      instructions: CREATOR_FILTER_INSTRUCTIONS,
+    })
+
+    const rejected = new Set<string>()
+    const ts = Date.now()
+
+    for (let batchStart = 0; batchStart < handles.length; batchStart += CREATOR_FILTER_BATCH_SIZE) {
+      const batch = handles.slice(batchStart, batchStart + CREATOR_FILTER_BATCH_SIZE)
+      const batchIndex = Math.floor(batchStart / CREATOR_FILTER_BATCH_SIZE)
+
+      const handlesList = batch.map((h, i) => `${i + 1}. ${h.platform}/${h.handle} (${h.url})`).join('\n')
+      const message = `Classify these creator handles:\n\n${handlesList}\n\nReturn JSON: { "reject": ["handle1", ...] }`
+
+      const result = await callAIApi('/chat', {
+        agent_id: 'yard_creator_filter',
+        session_id: `creator-filter-${ts}-batch-${batchIndex}`,
+        message,
+      }) as { response: string }
+
+      const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const parsed = JSON.parse(cleaned) as { reject?: string[] }
+      const rejectHandles = Array.isArray(parsed.reject) ? parsed.reject : []
+
+      for (const handle of rejectHandles) {
+        rejected.add(handle.toLowerCase())
+        console.log(`[discovery] LLM creator filter: "${handle}" → rejected`)
+      }
+    }
+
+    console.log(`[discovery] LLM creator filter: ${rejected.size}/${handles.length} rejected`)
+    return rejected
+  } catch (e) {
+    // Non-fatal: if the LLM filter fails, proceed without it (isBrandOwned still ran)
+    console.log(`[discovery] LLM creator filter failed: ${(e as Error).message} — skipping`)
+    return new Set()
   }
 }
 

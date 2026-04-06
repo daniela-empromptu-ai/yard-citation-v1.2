@@ -74,6 +74,10 @@ const VENDOR_SIGNALS = [
  * 2. Heuristic vendor signals in name/description (catches testing tool companies etc.)
  */
 export function isBrandOwned(name: string, handle?: string | null, url?: string | null, description?: string | null): boolean {
+  // Auto-generated SSO handles (GitHub/Google OAuth that user never renamed)
+  // e.g. _f7f80d, _97d10de984ee0, _71e5fe43f
+  if (handle && /_[0-9a-f]{6,}$/i.test(handle)) return true
+
   const haystack = [name, handle || '', url || ''].join(' ').toLowerCase()
 
   // Layer 1: Exact blocklist
