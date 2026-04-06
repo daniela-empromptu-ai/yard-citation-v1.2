@@ -19,7 +19,8 @@
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:medium.com)",
       "Bash(npx tsx:*)",
-      "WebFetch(domain:www.youtube.com)"
+      "WebFetch(domain:www.youtube.com)",
+      "Bash(npm run:*)"
     ]
   }
 }
