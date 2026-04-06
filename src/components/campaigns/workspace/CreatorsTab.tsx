@@ -11,6 +11,17 @@ import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLin
 
 // ─── Helpers ───
 
+function platformProfileUrl(platform: string, handle: string | null): string | null {
+  if (!handle) return null;
+  const h = handle.replace(/^@/, '');
+  switch (platform) {
+    case 'youtube': return `https://www.youtube.com/@${h}`;
+    case 'medium':  return `https://medium.com/@${h}`;
+    case 'devto':   return `https://dev.to/${h}`;
+    default:        return null;
+  }
+}
+
 function parseJsonArray(val: unknown): string[] {
   let arr: unknown[];
   if (Array.isArray(val)) {
@@ -137,9 +148,24 @@ function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void
 
       {/* Creator info */}
       <div className="min-w-0">
-        <div className="font-semibold text-sm leading-snug truncate transition-colors text-slate-100 group-hover:text-blue-400">
-          {cc.creator_name}
-        </div>
+        {(() => {
+          const profileUrl = platformProfileUrl(cc.creator_platform, cc.creator_handle);
+          return profileUrl ? (
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="font-semibold text-sm leading-snug truncate transition-colors text-slate-100 hover:text-blue-400 block"
+            >
+              {cc.creator_name}
+            </a>
+          ) : (
+            <div className="font-semibold text-sm leading-snug truncate transition-colors text-slate-100 group-hover:text-blue-400">
+              {cc.creator_name}
+            </div>
+          );
+        })()}
         {handle && (
           <div className="text-xs text-slate-500 truncate mt-0.5">{handle}</div>
         )}
@@ -280,7 +306,17 @@ function DetailPanel({
           <PlatformLogo platform={cc.creator_platform} color={palette.text} />
         </div>
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-slate-100 leading-snug">{cc.creator_name}</h2>
+          {(() => {
+            const profileUrl = platformProfileUrl(cc.creator_platform, cc.creator_handle);
+            return profileUrl ? (
+              <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-1.5">
+                <h2 className="text-xl font-bold text-slate-100 leading-snug group-hover:text-blue-400 transition-colors">{cc.creator_name}</h2>
+                <ExternalLink size={14} className="text-slate-500 group-hover:text-blue-400 transition-colors shrink-0 mt-0.5" />
+              </a>
+            ) : (
+              <h2 className="text-xl font-bold text-slate-100 leading-snug">{cc.creator_name}</h2>
+            );
+          })()}
           {handle && <p className="text-sm text-slate-500 mt-0.5">{handle}</p>}
           <div className="flex items-center gap-2 mt-2">
             <PlatformBadge platform={cc.creator_platform} />

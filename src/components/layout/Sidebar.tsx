@@ -8,9 +8,9 @@ import {
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  // { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/creators', label: 'Creators', icon: Users },
+  { href: '/creators', label: 'Creator Network', icon: Users },
 ]
 
 export function Sidebar() {
