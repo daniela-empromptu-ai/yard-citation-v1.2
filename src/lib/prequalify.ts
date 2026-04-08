@@ -533,7 +533,7 @@ export async function persistResults(
   }
 
   // ── Batch insert all content items ──
-  // Columns: creator_id, campaign_id, platform, content_type, title, url, published_at,
+  // Columns: creator_id, platform, content_type, title, url, published_at,
   //          fetched_at, language, raw_text, word_count, metadata_json,
   //          ingestion_method, ingestion_status, created_at, updated_at
   const contentRows: unknown[][] = []
@@ -555,7 +555,7 @@ export async function persistResults(
       const contentType = ar.platform === 'medium' ? 'medium_article' : 'devto_article'
       for (const article of ar.articles) {
         contentRows.push([
-          ar.creatorId, campaignId, ar.platform, contentType,
+          ar.creatorId, ar.platform, contentType,
           article.title, article.url, article.publishedAt,
           now, null, // fetched_at=now (handled below), language=null
           article.text, article.wordCount,
@@ -572,7 +572,7 @@ export async function persistResults(
 
       for (const pvt of videosToStore) {
         contentRows.push([
-          tr.creatorId, campaignId, 'youtube', 'youtube_video',
+          tr.creatorId, 'youtube', 'youtube_video',
           pvt.video.title, pvt.video.url, pvt.video.publishedAt,
           now, pvt.language,
           pvt.fullText, pvt.fullText.split(/\s+/).length,
@@ -598,13 +598,13 @@ export async function persistResults(
     const params: unknown[] = []
     let paramIdx = 1
     for (const row of contentRows) {
-      // fetched_at is at index 7 — replace with now()
-      const colParams = row.map((v, i) => i === 7 ? 'now()' : `$${paramIdx++}`)
+      // fetched_at is at index 6 — replace with now()
+      const colParams = row.map((v, i) => i === 6 ? 'now()' : `$${paramIdx++}`)
       valueClauses.push(`(${colParams.join(', ')})`)
-      params.push(...row.filter((_, i) => i !== 7))
+      params.push(...row.filter((_, i) => i !== 6))
     }
     await dbQuery(
-      `INSERT INTO ${t('content_items')} (creator_id, campaign_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
+      `INSERT INTO ${t('content_items')} (creator_id, platform, content_type, title, url, published_at, fetched_at, language, raw_text, word_count, metadata_json, ingestion_method, ingestion_status, created_at, updated_at)
        VALUES ${valueClauses.join(', ')} ON CONFLICT DO NOTHING`,
       params
     )

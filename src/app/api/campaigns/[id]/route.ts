@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         `SELECT cc.id, cc.campaign_id, cc.creator_id, cc.source, cc.pipeline_stage, cc.scoring_status, cc.created_at, cc.updated_at,
            cr.name as creator_name, cr.platform as creator_platform, cr.handle as creator_handle,
            ce.overall_score, ce.evidence_coverage, ce.needs_manual_review, ce.evaluated_at,
-           (SELECT COUNT(*)::int FROM content_items ci WHERE ci.creator_id = cr.id AND ci.campaign_id = $1) as content_item_count
+           (SELECT COUNT(*)::int FROM content_items ci WHERE ci.creator_id = cr.id) as content_item_count
          FROM campaign_creators cc
          JOIN creators cr ON cr.id = cc.creator_id
          LEFT JOIN creator_evaluations ce ON ce.campaign_creator_id = cc.id
@@ -56,7 +56,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     await dbQuery('DELETE FROM content_angles WHERE evaluation_id IN (SELECT id FROM creator_evaluations WHERE campaign_creator_id IN (SELECT id FROM campaign_creators WHERE campaign_id = $1))', [id])
     await dbQuery('DELETE FROM creator_evaluations WHERE campaign_creator_id IN (SELECT id FROM campaign_creators WHERE campaign_id = $1)', [id])
     await dbQuery('DELETE FROM campaign_creators WHERE campaign_id = $1', [id])
-    await dbQuery('DELETE FROM content_items WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM campaign_search_terms WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM campaign_topics WHERE campaign_id = $1', [id])
     await dbQuery('DELETE FROM activity_log WHERE campaign_id = $1', [id])

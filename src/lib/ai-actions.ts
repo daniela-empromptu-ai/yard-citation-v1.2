@@ -178,7 +178,7 @@ export async function aiScoreCreator(params: {
   score_content_quality: number;
   score_channel_performance: number;
   score_brand_fit: number;
-  strengths: Array<{ text: string; content_item_id: string; quote: string }>;
+  strengths: Array<{ text: string }>;
   weaknesses: Array<{ text: string }>;
   rationale_md: string;
   evidence_snippets: Array<{
@@ -246,7 +246,7 @@ Return this exact JSON structure:
   "score_content_quality": 0,
   "score_channel_performance": 0,
   "score_brand_fit": 0,
-  "strengths": [{"text":"...","content_item_id":"...","quote":"exact verbatim quote"}],
+  "strengths": [{"text":"..."}],
   "weaknesses": [{"text":"..."}],
   "rationale_md": "## Evaluation Summary\\n\\n...",
   "evidence_snippets": [

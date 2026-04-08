@@ -367,12 +367,15 @@ function DetailPanel({
         <div className="bg-[#111827] rounded-xl p-4">
           <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-3">Strengths</h3>
           <ul className="space-y-2">
-            {parseJsonArray(evaluation.strengths_json).map((s, i) => (
-              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                <span className="text-green-400 flex-shrink-0 mt-0.5 text-base leading-none">✓</span>
-                {s}
-              </li>
-            ))}
+            {parseJsonArray(evaluation.strengths_json).length === 0
+              ? <li className="text-sm text-slate-500 italic">No strengths identified</li>
+              : parseJsonArray(evaluation.strengths_json).map((s, i) => (
+                <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                  <span className="text-green-400 flex-shrink-0 mt-0.5 text-base leading-none">✓</span>
+                  {s}
+                </li>
+              ))
+            }
           </ul>
         </div>
         <div className="bg-[#111827] rounded-xl p-4">
