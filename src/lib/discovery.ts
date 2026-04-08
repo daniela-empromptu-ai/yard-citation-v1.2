@@ -8,6 +8,18 @@
  */
 
 import { dbQuery, dbInsertMany, t, callAIApi } from '@/lib/db'
+
+// ─── Local AI helpers (consistent with ai-actions.ts and prequalify.ts) ───
+async function setupPrompt(name: string, variables: string[], text: string) {
+  await callAIApi('/setup_ai_prompt', { prompt_name: name, input_variables: variables, prompt_text: text })
+}
+async function applyPrompt(name: string, inputData: Record<string, string>): Promise<string> {
+  const result = await callAIApi('/apply_prompt_to_data', {
+    prompt_name: name,
+    input_data: { ...inputData, return_type: 'raw_text' },
+  }) as { value: unknown }
+  return result.value as string
+}
 import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
@@ -602,11 +614,13 @@ export async function discoverByRapidResearch(
  * Discover Dev.to creators using their public tag-based article search API.
  */
 export async function discoverByDevtoTagSearch(
-  topics: string[]
+  topics: string[],
+  searchTerms?: string[]
 ): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
   try {
     const { searchDevtoByTopics } = await import('@/lib/devto')
-    const authors = await searchDevtoByTopics(topics)
+    const tagsToUse = searchTerms && searchTerms.length > 0 ? searchTerms : topics
+    const authors = await searchDevtoByTopics(tagsToUse)
     console.log(`[discovery] Dev.to tag search: found ${authors.length} authors`)
     const handles = authors.map(a => ({ platform: 'devto' as const, handle: a.username, url: a.profile_url }))
     return insertDiscoveredCreators(handles, 'devto_search')
@@ -636,9 +650,22 @@ export interface LLMFilterResult {
  * Use LLM to filter channels — reject brands, tutorial mills, academies, and unrelated content.
  * Also assigns categories to kept channels from the campaign topics list.
  * Campaign-aware: uses topics to judge relevance.
- * Uses create-agent + chat for stronger model quality than apply_prompt_to_data.
  */
-const QUALITY_FILTER_INSTRUCTIONS = `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior engineer would subscribe to for their own professional growth.
+const FILTER_BATCH_SIZE = 15
+
+export async function llmChannelFilter(
+  channels: ChannelForQualityCheck[],
+  campaignTopics: string[]
+): Promise<LLMFilterResult> {
+  if (channels.length === 0) return { rejected: new Set(), categories: new Map() }
+
+  console.log(`[llmChannelFilter] topics: ${campaignTopics.join(', ')} | channels: ${channels.length}`)
+
+  try {
+    await setupPrompt(
+      'yard_channel_filter',
+      ['topics', 'channels_block'],
+      `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior engineer would subscribe to for their own professional growth.
 
 TEST 1 — PERSON OR INSTITUTION?
 Is this a single person sharing their expertise, or an organization/company/product producing content?
@@ -653,35 +680,22 @@ Does this channel target working engineers solving real problems, or students le
 
 CATEGORIES RULE: Every kept channel MUST be assigned at least one category from the provided topics list. No kept channel may be omitted.
 
-Return JSON only:
+TOPICS: {topics}
+
+CHANNELS:
+{channels_block}
+
+Return JSON only. Every kept channel must appear in categories.
 { "reject": [1-indexed numbers], "categories": { "index": ["Category"] } }
 Example: { "reject": [2, 5], "categories": { "1": ["DevOps"], "3": ["DevOps", "CI/CD"] } }`
-
-const FILTER_BATCH_SIZE = 15
-
-export async function llmChannelFilter(
-  channels: ChannelForQualityCheck[],
-  campaignTopics: string[]
-): Promise<LLMFilterResult> {
-  if (channels.length === 0) return { rejected: new Set(), categories: new Map() }
-
-  console.log(`[llmChannelFilter] topics: ${campaignTopics.join(', ')} | channels: ${channels.length}`)
-
-  try {
-    // Create agent once — idempotent, 0 credits
-    await callAIApi('/create-agent', {
-      agent_name: 'yard_quality_filter',
-      instructions: QUALITY_FILTER_INSTRUCTIONS,
-    })
+    )
 
     const rejected = new Set<string>()
     const categories = new Map<string, string[]>()
-    const ts = Date.now()
 
     // Process in batches of FILTER_BATCH_SIZE to avoid payload size limits
     for (let batchStart = 0; batchStart < channels.length; batchStart += FILTER_BATCH_SIZE) {
       const batch = channels.slice(batchStart, batchStart + FILTER_BATCH_SIZE)
-      const batchIndex = Math.floor(batchStart / FILTER_BATCH_SIZE)
 
       const channelsBlock = batch.map((ch, i) => {
         const desc = (ch.description || '').trim().slice(0, 400)
@@ -691,20 +705,12 @@ export async function llmChannelFilter(
         return `${i + 1}. "${ch.channelTitle}" (@${ch.handle || 'unknown'}, ${ch.subscriberCount?.toLocaleString() || '?'} subs)\n   ${desc}${videos}`
       }).join('\n')
 
-      const message = `TOPICS: ${campaignTopics.join(', ')}
+      const raw = await applyPrompt('yard_channel_filter', {
+        topics: campaignTopics.join(', '),
+        channels_block: channelsBlock,
+      })
 
-CHANNELS:
-${channelsBlock}
-
-Return JSON only. Every kept channel must appear in categories.`
-
-      const result = await callAIApi('/chat', {
-        agent_id: 'yard_quality_filter',
-        session_id: `filter-${ts}-batch-${batchIndex}`,
-        message,
-      }) as { response: string }
-
-      const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       const parsed = JSON.parse(cleaned) as { reject?: number[]; categories?: Record<string, string[]> }
 
       const rejectIndices = Array.isArray(parsed.reject) ? parsed.reject : []
@@ -736,19 +742,6 @@ Return JSON only. Every kept channel must appear in categories.`
 
 // ─── LLM Creator Quality Filter (Medium + Dev.to) ───
 
-const CREATOR_FILTER_INSTRUCTIONS = `You are a creator quality filter for a technical content sponsorship platform. We want INDEPENDENT INDIVIDUAL developers and writers sharing real technical experience.
-
-KEEP: Individual developers, engineers, or writers who share their own technical experience — even if they have a personal brand or sell courses.
-
-REJECT any of the following:
-- Company, startup, product, or project accounts (e.g. tangle_network, braingemai, ntctech, infra_tools)
-- Handles that look auto-generated or machine-created (random numbers/letters, no clear human identity)
-- Corporate blog arms or brand evangelist accounts
-- Gibberish or spam-looking handles
-
-Return JSON only: { "reject": ["handle1", "handle2", ...] }
-If none should be rejected, return: { "reject": [] }`
-
 const CREATOR_FILTER_BATCH_SIZE = 10
 
 /**
@@ -761,28 +754,35 @@ async function llmCreatorFilter(
   if (handles.length === 0) return new Set()
 
   try {
-    await callAIApi('/create-agent', {
-      agent_name: 'yard_creator_filter',
-      instructions: CREATOR_FILTER_INSTRUCTIONS,
-    })
+    await setupPrompt(
+      'yard_creator_filter',
+      ['handles_list'],
+      `You are a creator quality filter for a technical content sponsorship platform. We want INDEPENDENT INDIVIDUAL developers and writers sharing real technical experience.
+
+KEEP: Individual developers, engineers, or writers who share their own technical experience — even if they have a personal brand or sell courses.
+
+REJECT any of the following:
+- Company, startup, product, or project accounts (e.g. tangle_network, braingemai, ntctech, infra_tools)
+- Handles that look auto-generated or machine-created (random numbers/letters, no clear human identity)
+- Corporate blog arms or brand evangelist accounts
+- Gibberish or spam-looking handles
+
+{handles_list}
+
+Return JSON only: { "reject": ["handle1", "handle2", ...] }
+If none should be rejected, return: { "reject": [] }`
+    )
 
     const rejected = new Set<string>()
-    const ts = Date.now()
 
     for (let batchStart = 0; batchStart < handles.length; batchStart += CREATOR_FILTER_BATCH_SIZE) {
       const batch = handles.slice(batchStart, batchStart + CREATOR_FILTER_BATCH_SIZE)
-      const batchIndex = Math.floor(batchStart / CREATOR_FILTER_BATCH_SIZE)
 
       const handlesList = batch.map((h, i) => `${i + 1}. ${h.platform}/${h.handle} (${h.url})`).join('\n')
-      const message = `Classify these creator handles:\n\n${handlesList}\n\nReturn JSON: { "reject": ["handle1", ...] }`
 
-      const result = await callAIApi('/chat', {
-        agent_id: 'yard_creator_filter',
-        session_id: `creator-filter-${ts}-batch-${batchIndex}`,
-        message,
-      }) as { response: string }
+      const raw = await applyPrompt('yard_creator_filter', { handles_list: handlesList })
 
-      const cleaned = result.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       const parsed = JSON.parse(cleaned) as { reject?: string[] }
       const rejectHandles = Array.isArray(parsed.reject) ? parsed.reject : []
 
@@ -976,6 +976,13 @@ export async function runDiscovery(
 
   if (topics.length === 0) throw new Error('No topics found for this campaign')
 
+  // Load search terms for platform tag searches (short keywords, better than long topic sentences)
+  const termsRes = await dbQuery<{ term: string }>(
+    `SELECT term FROM ${t('campaign_search_terms')} WHERE campaign_id = $1 AND approved = true ORDER BY order_index LIMIT 15`,
+    [campaignId]
+  )
+  const searchTerms = termsRes.data.map(r => r.term)
+
   const campaign: CampaignContext = {
     id: campaignId,
     creative_brief: camp.creative_brief || '',
@@ -1071,7 +1078,7 @@ export async function runDiscovery(
   // Phase B2: Medium (rapid_research) + Dev.to (tag API) — run in parallel
   const [rrResult, devtoResult] = await Promise.all([
     discoverByRapidResearch(topics),
-    discoverByDevtoTagSearch(topics),
+    discoverByDevtoTagSearch(topics, searchTerms),
   ])
   console.log(`[discovery] Phase B2: Medium ${rrResult.creators.length} (${rrResult.newInserted} new), Dev.to ${devtoResult.creators.length} (${devtoResult.newInserted} new)`)
 

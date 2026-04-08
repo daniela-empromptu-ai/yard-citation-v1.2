@@ -22,7 +22,7 @@ export interface DevtoAuthorResult {
  */
 export async function searchDevtoByTopics(topics: string[]): Promise<DevtoAuthorResult[]> {
   // Map topics to tag slugs: lowercase, strip spaces ("DevOps" → "devops")
-  const tags = topics.map(t => t.toLowerCase().replace(/\s+/g, ''))
+  const tags = topics.map(t => t.toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-'))
   const seen = new Set<string>()
   const authors: DevtoAuthorResult[] = []
 
