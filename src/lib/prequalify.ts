@@ -136,8 +136,12 @@ export async function fetchCreatorTranscripts(
           url: `https://www.youtube.com/watch?v=${v.videoId}`,
         }))
         console.log(`[transcript] ${creator.creator_name}: using ${topVideos.length} anchor videos from discovery`)
-      } else {
-        // No anchor videos — fall back to per-channel search, then RSS
+      }
+
+      // If we have fewer than videosPerCreator, supplement with per-channel search then RSS
+      if (topVideos.length < videosPerCreator) {
+        const needed = videosPerCreator - topVideos.length
+        const existingIds = new Set(topVideos.map(v => v.videoId))
         const sortedTopics = [...campaignTopics].sort((a, b) => a.length - b.length)
         const searchQuery = sortedTopics[0] || ''
 
@@ -147,30 +151,35 @@ export async function fetchCreatorTranscripts(
               resolution.channelId, searchQuery, apiKey,
               { maxResults: videosPerCreator, publishedAfter: twoYearsAgo.toISOString() }
             )
-            if (channelResults.length > 0) {
-              topVideos = channelResults.map(r => ({
+            const fresh = channelResults
+              .filter(r => !existingIds.has(r.videoId))
+              .slice(0, needed)
+            if (fresh.length > 0) {
+              topVideos.push(...fresh.map(r => ({
                 videoId: r.videoId,
                 title: r.title,
                 publishedAt: r.publishedAt || new Date().toISOString(),
                 url: `https://www.youtube.com/watch?v=${r.videoId}`,
-              }))
-              console.log(`[transcript] ${creator.creator_name}: per-channel search found ${topVideos.length} videos`)
+              })))
+              console.log(`[transcript] ${creator.creator_name}: supplemented with ${fresh.length} videos from channel search`)
             }
           } catch (e) {
             console.log(`[transcript] ${creator.creator_name}: channel search failed (${(e as Error).message})`)
           }
         }
 
-        if (topVideos.length === 0) {
+        if (topVideos.length < videosPerCreator) {
           const rssVideos = await getChannelVideos(resolution.channelId, 15)
           const recentRss = rssVideos.filter(v => new Date(v.publishedAt) >= twoYearsAgo)
-          const rssToRank = recentRss.length > 0 ? recentRss : rssVideos // fallback if channel is older/slow
+          const rssToRank = recentRss.length > 0 ? recentRss : rssVideos
           const ranked = campaignTopics.length > 0
             ? rankVideosByRelevance(rssToRank, campaignTopics)
             : rssToRank
-          topVideos = ranked.slice(0, videosPerCreator)
-          if (topVideos.length > 0) {
-            console.log(`[transcript] ${creator.creator_name}: RSS fallback — ${topVideos.length} videos`)
+          const allFetchedIds = new Set(topVideos.map(v => v.videoId))
+          const fresh = ranked.filter(v => !allFetchedIds.has(v.videoId)).slice(0, videosPerCreator - topVideos.length)
+          topVideos.push(...fresh)
+          if (fresh.length > 0) {
+            console.log(`[transcript] ${creator.creator_name}: supplemented with ${fresh.length} videos from RSS`)
           }
         }
       }
