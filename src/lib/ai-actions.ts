@@ -195,90 +195,127 @@ export async function aiScoreCreator(params: {
   }>;
 }): Promise<{
   overall_score: number;
-  score_technical_relevance: number;
-  score_audience_alignment: number;
-  score_content_quality: number;
-  score_channel_performance: number;
-  score_brand_fit: number;
-  strengths: Array<{ text: string }>;
-  weaknesses: Array<{ text: string }>;
-  rationale_md: string;
+  verdict: 'strong_fit' | 'possible_fit' | 'weak_fit' | 'pass';
+  fit_summary: string;
+  standout_signals: Array<{ text: string }>;
+  concerns: Array<{ text: string }>;
   needs_manual_review: boolean;
   needs_manual_review_reason: string | null;
 }> {
   const contentSummary = buildContentSummary(params.contentItems)
 
-  try {
-    await setupPrompt(
-      'score_creator_scores',
-      ['campaign_context', 'creator_profile', 'content_items_text'],
-      `You are a creator evaluation specialist with deep expertise in technical B2B content.
+  // TEMPORARY: setupPrompt call to register prompt in the code's app context.
+  // The builder GUI runs in a separate workspace — prompts created there don't
+  // propagate to this app_id. Remove once Andrew wires the GUI to this context.
+  const promptText = `You are evaluating a technical content creator for a B2B sponsorship campaign. Your job is to judge fit — not to fill out a rubric.
 
 Campaign context: {campaign_context}
 
 Creator profile: {creator_profile}
 
-Ingested content: {content_items_text}
+Ingested content (titles + transcripts/articles): {content_items_text}
 
-Score this creator against the rubric. Return ONLY valid JSON, no markdown.
+HOW TO THINK ABOUT FIT
 
-RUBRIC WEIGHTS:
-- technical_relevance: 30%
-- audience_alignment: 25%
-- content_quality: 20%
-- channel_performance: 15%
-- brand_fit: 10%
+A great creator for this campaign has three things going on:
 
-RULES:
-- Each dimension score is an integer 0–100.
-- Max 3 strengths, max 3 weaknesses, each ≤ 18 words.
-- rationale_md is a concise 2–3 sentence summary (≤ 120 words). Plain prose, no headings.
+1. Topical fit — their niche is adjacent to or overlapping with the campaign's problem space. Exact topic match is NOT required and should NOT heavily penalize the score. A CI/CD or DevOps creator is squarely in the adjacency zone for a code-review tool — their audience reviews PRs and cares about code quality pipelines. A Kubernetes creator, infrastructure automation creator, or general backend engineering creator are all valid. A crypto or mobile gaming creator is not. The absence of explicit product coverage is expected — that is what the sponsorship is for.
 
-Return this exact JSON structure:
+2. Practitioner signal — does their audience come to solve work problems, or to learn fundamentals? Tells of a practitioner audience: multi-repo work, enterprise patterns, production tooling, CLI/IDE workflows, "here's how I actually do X at my job." Anti-tells: "coding for beginners," "top 10 languages," exam prep, generic tutorials. Practitioner beats beginner for B2B every time.
+
+3. Demonstration authenticity — real human on camera (not AI voiceover), hands-on in the tool (not talking-head commentary), original work (not aggregated/re-licensed conference talks). Production quality matters, but polish without a real person is a red flag.
+
+TASTE NOTES (calibrate to these)
+
+- Niche depth beats reach. A QA-specialist at 17K subscribers beats a general coding channel at 200K for a testing tool.
+- Topical adjacency is fine — don't penalize a creator for not having already mentioned the campaign product. We expect the sponsorship to introduce it.
+- AI voiceovers, aggregated conference content, tutorial-mill aesthetics (churn of "top 10" listicles with no demonstration) are hard rejects.
+- Independent, practitioner-led channels are the target. Corporate channels, media aggregators, and founder-of-competitor channels may score on content but belong on a watch-only list — flag these in concerns, don't auto-reject.
+
+SCORING
+
+Return a single overall_score from 0 to 100 (integer). Use the full range:
+- 85–100 (strong_fit): three-for-three on fit, practitioner, authenticity. Confident recommendation.
+- 65–84 (possible_fit): solid on most axes, one soft spot. Worth a closer look.
+- 40–64 (weak_fit): notable gaps — wrong audience, thin niche overlap, or authenticity concerns.
+- 0–39 (pass): off-domain, inauthentic (AI/aggregated), or audience mismatch.
+
+CRITICAL: overall_score is on a 0–100 scale. Do not output 0–10 or 0–5. Scores of 8 or 9 mean "terrible fit, basically reject" — do not use them for strong creators.
+
+OUTPUT (valid JSON only, no markdown, no commentary):
+
 {
-  "score_technical_relevance": 0,
-  "score_audience_alignment": 0,
-  "score_content_quality": 0,
-  "score_channel_performance": 0,
-  "score_brand_fit": 0,
-  "strengths": [{"text":"..."}],
-  "weaknesses": [{"text":"..."}],
-  "rationale_md": "2-3 sentence summary"
-}`
-    )
+  "overall_score": 0,
+  "verdict": "strong_fit" | "possible_fit" | "weak_fit" | "pass",
+  "fit_summary": "2-3 sentences of plain prose explaining the fit. No headings, no bullet points.",
+  "standout_signals": [{"text": "..."}],
+  "concerns": [{"text": "..."}]
+}
 
-    const raw = await applyPrompt('score_creator_scores', {
-      campaign_context: `Brief: ${params.campaignBrief}\nTopics: ${params.topics.join(', ')}\nPersonas: ${params.personas.join(', ')}\nPrompt gaps: ${params.promptGaps.join('; ')}`,
-      creator_profile: `Name: ${params.creatorName}\nBio: ${params.creatorBio}\nPlatforms: ${params.platforms.join(', ')}`,
-      content_items_text: contentSummary,
-    }, 'raw_text') as string
+RULES
+- overall_score is an integer 0–100. Verdict must match the band above.
+- Max 3 standout_signals, max 3 concerns. Each ≤ 20 words.
+- fit_summary ≤ 100 words, plain prose.`
 
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const parsed = parseAIJson(cleaned)
+  await setupPrompt(
+    'score_creator_scores',
+    ['campaign_context', 'creator_profile', 'content_items_text'],
+    promptText,
+  )
 
-    const overall = Math.round(
-      (parsed.score_technical_relevance || 0) * 0.30 +
-      (parsed.score_audience_alignment || 0) * 0.25 +
-      (parsed.score_content_quality || 0) * 0.20 +
-      (parsed.score_channel_performance || 0) * 0.15 +
-      (parsed.score_brand_fit || 0) * 0.10
-    )
+  try {
+    const invoke = async () => {
+      const raw = await applyPrompt('score_creator_scores', {
+        campaign_context: `Brief: ${params.campaignBrief}\nTopics: ${params.topics.join(', ')}\nPersonas: ${params.personas.join(', ')}\nPrompt gaps: ${params.promptGaps.join('; ')}`,
+        creator_profile: `Name: ${params.creatorName}\nBio: ${params.creatorBio}\nPlatforms: ${params.platforms.join(', ')}`,
+        content_items_text: contentSummary,
+      }, 'raw_text') as string
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      return parseAIJson(cleaned)
+    }
 
-    const hasAllScores = ['score_technical_relevance', 'score_audience_alignment', 'score_content_quality', 'score_channel_performance', 'score_brand_fit']
-      .every(k => typeof parsed[k] === 'number')
-    const needs_manual_review = !hasAllScores
-    const needs_manual_review_reason = !hasAllScores ? 'One or more dimension scores missing from AI response' : null
+    let parsed = await invoke()
+
+    const verdictBand = (score: number): 'strong_fit' | 'possible_fit' | 'weak_fit' | 'pass' => {
+      if (score >= 80) return 'strong_fit'
+      if (score >= 60) return 'possible_fit'
+      if (score >= 40) return 'weak_fit'
+      return 'pass'
+    }
+
+    const validScale = (s: unknown): s is number =>
+      typeof s === 'number' && Number.isInteger(s) && s >= 0 && s <= 100 && s > 10
+
+    // Scale sanity check: if the LLM returned a /10 score (<=10), retry once.
+    // A legitimate sub-10 score means "terrible fit" which should be rare; we'd
+    // rather retry and risk a duplicate low score than silently save a 8/100.
+    if (!validScale(parsed.overall_score)) {
+      console.warn(`aiScoreCreator: suspect overall_score=${parsed.overall_score}, retrying once`)
+      parsed = await invoke()
+    }
+
+    const score = typeof parsed.overall_score === 'number' ? Math.round(parsed.overall_score) : 0
+    const clampedScore = Math.max(0, Math.min(100, score))
+    // Still <=10 after retry → almost certainly a scale bug, flag for review
+    const scaleSuspect = clampedScore > 0 && clampedScore <= 10
+    const verdict: 'strong_fit' | 'possible_fit' | 'weak_fit' | 'pass' =
+      (['strong_fit', 'possible_fit', 'weak_fit', 'pass'] as const).includes(parsed.verdict)
+        ? parsed.verdict
+        : verdictBand(clampedScore)
+
+    const needs_manual_review = scaleSuspect || typeof parsed.overall_score !== 'number'
+    const needs_manual_review_reason = scaleSuspect
+      ? `Suspected scale bug: model returned ${parsed.overall_score} on 0–100 scale`
+      : typeof parsed.overall_score !== 'number'
+        ? 'overall_score missing or non-numeric'
+        : null
 
     return {
-      overall_score: overall,
-      score_technical_relevance: parsed.score_technical_relevance || 0,
-      score_audience_alignment: parsed.score_audience_alignment || 0,
-      score_content_quality: parsed.score_content_quality || 0,
-      score_channel_performance: parsed.score_channel_performance || 0,
-      score_brand_fit: parsed.score_brand_fit || 0,
-      strengths: parsed.strengths || [],
-      weaknesses: parsed.weaknesses || [],
-      rationale_md: parsed.rationale_md || '',
+      overall_score: clampedScore,
+      verdict,
+      fit_summary: parsed.fit_summary || parsed.rationale_md || '',
+      standout_signals: parsed.standout_signals || parsed.strengths || [],
+      concerns: parsed.concerns || parsed.weaknesses || [],
       needs_manual_review,
       needs_manual_review_reason,
     }
@@ -606,10 +643,7 @@ function parseAIJson(text: string): ReturnType<typeof JSON.parse> {
 
   // Layer 4: Truncated JSON recovery — extract score fields from incomplete JSON
   // The builder API sometimes truncates long responses mid-JSON
-  const scoreFields = [
-    'overall_score', 'score_technical_relevance', 'score_audience_alignment',
-    'score_content_quality', 'score_channel_performance', 'score_brand_fit',
-  ]
+  const scoreFields = ['overall_score']
   const recovered: Record<string, unknown> = {}
   let hasScores = false
   for (const field of scoreFields) {
@@ -620,18 +654,21 @@ function parseAIJson(text: string): ReturnType<typeof JSON.parse> {
     }
   }
   if (hasScores) {
-    // Extract what text fields we can
-    const rationaleMatch = text.match(/"rationale_md"\s*:\s*"((?:[^"\\]|\\.)*)/)
-    if (rationaleMatch) recovered.rationale_md = rationaleMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+    // Extract new-rubric fields
+    const summaryMatch = text.match(/"fit_summary"\s*:\s*"((?:[^"\\]|\\.)*)/)
+    if (summaryMatch) recovered.fit_summary = summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
 
-    const strengthsMatch = text.match(/"strengths"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
-    if (strengthsMatch) {
-      try { recovered.strengths = JSON5.parse(`[${strengthsMatch[1]}]`) } catch { recovered.strengths = [] }
+    const verdictMatch = text.match(/"verdict"\s*:\s*"(strong_fit|possible_fit|weak_fit|pass)"/)
+    if (verdictMatch) recovered.verdict = verdictMatch[1]
+
+    const standoutMatch = text.match(/"standout_signals"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
+    if (standoutMatch) {
+      try { recovered.standout_signals = JSON5.parse(`[${standoutMatch[1]}]`) } catch { recovered.standout_signals = [] }
     }
 
-    const weaknessesMatch = text.match(/"weaknesses"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
-    if (weaknessesMatch) {
-      try { recovered.weaknesses = JSON5.parse(`[${weaknessesMatch[1]}]`) } catch { recovered.weaknesses = [] }
+    const concernsMatch = text.match(/"concerns"\s*:\s*\[([\s\S]*?)(?:\]|$)/)
+    if (concernsMatch) {
+      try { recovered.concerns = JSON5.parse(`[${concernsMatch[1]}]`) } catch { recovered.concerns = [] }
     }
 
     recovered.evidence_snippets = []

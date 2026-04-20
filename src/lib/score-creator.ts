@@ -98,14 +98,15 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
 
   await dbQuery(`DELETE FROM ${t('creator_evaluations')} WHERE campaign_creator_id = $1`, [campaignCreatorId])
 
+  // New rubric stores fit_summary → rationale_md, standout_signals → strengths_json,
+  // concerns → weaknesses_json. Verdict is computed on display from overall_score.
+  // Legacy 5-dim score_* columns default to 0 (not used by new rubric).
   const evalRes = await dbQuery<{ id: string }>(
-    `INSERT INTO ${t('creator_evaluations')} (campaign_creator_id, model_provider, model_name, evaluated_at, evidence_coverage, needs_manual_review, needs_manual_review_reason, overall_score, score_technical_relevance, score_audience_alignment, score_content_quality, score_channel_performance, score_brand_fit, strengths_json, weaknesses_json, rationale_md, created_at, updated_at)
-     VALUES ($1,'builder_api','claude-via-builder',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16) RETURNING id`,
+    `INSERT INTO ${t('creator_evaluations')} (campaign_creator_id, model_provider, model_name, evaluated_at, evidence_coverage, needs_manual_review, needs_manual_review_reason, overall_score, strengths_json, weaknesses_json, rationale_md, created_at, updated_at)
+     VALUES ($1,'builder_api','claude-via-builder',$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11) RETURNING id`,
     [campaignCreatorId, now, coverage, needsManualReview, nmrReason, computedScore,
-     scoringResult.score_technical_relevance, scoringResult.score_audience_alignment, scoringResult.score_content_quality,
-     scoringResult.score_channel_performance, scoringResult.score_brand_fit,
-     JSON.stringify(scoringResult.strengths || []), JSON.stringify(scoringResult.weaknesses || []),
-     scoringResult.rationale_md || '', now, now]
+     JSON.stringify(scoringResult.standout_signals || []), JSON.stringify(scoringResult.concerns || []),
+     scoringResult.fit_summary || '', now, now]
   )
 
   // Builder API proxy may not return RETURNING data — fallback to query

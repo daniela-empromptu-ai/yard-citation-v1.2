@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CoverageTag, PlatformBadge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
-import ScoreGauge, { DIMENSION_COLOR_HEX } from '@/components/ui/ScoreGauge';
+import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink } from 'lucide-react';
 
@@ -55,9 +55,7 @@ interface CampaignCreator {
 interface Evaluation {
   id: string; overall_score: number; evidence_coverage: string; needs_manual_review: boolean;
   needs_manual_review_reason: string | null; evaluated_at: string; rationale_md: string;
-  score_technical_relevance: number; score_audience_alignment: number; score_content_quality: number;
-  score_channel_performance: number; score_brand_fit: number;
-  strengths_json: string[]; weaknesses_json: string[];
+  strengths_json: unknown[]; weaknesses_json: unknown[];
 }
 
 interface EvidenceSnippet {
@@ -182,13 +180,26 @@ function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void
 
 // ─── Dimension Config ───
 
-const DIMS = [
-  { key: 'technical_relevance', label: 'Technical',  weight: 30 },
-  { key: 'audience_alignment',  label: 'Audience',   weight: 25 },
-  { key: 'content_quality',     label: 'Quality',    weight: 20 },
-  { key: 'channel_performance', label: 'Channel',    weight: 15 },
-  { key: 'brand_fit',           label: 'Brand Fit',  weight: 10 },
-] as const;
+const VERDICT_LABEL: Record<string, string> = {
+  strong_fit: 'Strong Fit',
+  possible_fit: 'Possible Fit',
+  weak_fit: 'Weak Fit',
+  pass: 'Pass',
+}
+
+const VERDICT_STYLE: Record<string, string> = {
+  strong_fit: 'bg-green-900/40 text-green-300 border border-green-700/50',
+  possible_fit: 'bg-blue-900/40 text-blue-300 border border-blue-700/50',
+  weak_fit: 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50',
+  pass: 'bg-slate-800 text-slate-400 border border-slate-700',
+}
+
+function getVerdict(score: number): string {
+  if (score >= 80) return 'strong_fit'
+  if (score >= 60) return 'possible_fit'
+  if (score >= 40) return 'weak_fit'
+  return 'pass'
+}
 
 // ─── Detail Panel ───
 
@@ -337,57 +348,54 @@ function DetailPanel({
         </div>
       )}
 
-      {/* Overall score */}
-      <div className="flex flex-col items-center gap-4 py-4">
+      {/* Score + verdict */}
+      <div className="flex flex-col items-center gap-3 py-4">
         <ScoreGauge score={evaluation.overall_score} size="xl" />
+        {(() => {
+          const verdict = getVerdict(evaluation.overall_score)
+          return (
+            <span className={`text-sm font-semibold px-3 py-1 rounded-full ${VERDICT_STYLE[verdict]}`}>
+              {VERDICT_LABEL[verdict]}
+            </span>
+          )
+        })()}
       </div>
 
-      {/* Dimension scores */}
-      <div>
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Score Breakdown</h3>
-        <div className="grid grid-cols-5 gap-4">
-          {DIMS.map(d => {
-            const score = (evaluation as unknown as Record<string, number>)[`score_${d.key}`] ?? 0;
-            return (
-              <div key={d.key} className="flex flex-col items-center gap-2">
-                <ScoreGauge
-                  score={score}
-                  size="md"
-                  label={d.label}
-                  weight={d.weight}
-                  color={DIMENSION_COLOR_HEX[d.key]}
-                />
-              </div>
-            );
-          })}
+      {/* Fit summary */}
+      {evaluation.rationale_md && (
+        <div className="bg-[#111827] rounded-xl p-4">
+          <p className="text-sm text-slate-300 leading-relaxed">{evaluation.rationale_md}</p>
         </div>
-      </div>
+      )}
 
-      {/* Strengths & Weaknesses */}
+      {/* Standout Signals & Concerns */}
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-[#111827] rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-3">Strengths</h3>
+          <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider mb-3">Standout Signals</h3>
           <ul className="space-y-2">
             {parseJsonArray(evaluation.strengths_json).length === 0
-              ? <li className="text-sm text-slate-500 italic">No strengths identified</li>
+              ? <li className="text-sm text-slate-500 italic">No standout signals identified</li>
               : parseJsonArray(evaluation.strengths_json).map((s, i) => (
                 <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
                   <span className="text-green-400 flex-shrink-0 mt-0.5 text-base leading-none">✓</span>
-                  {s}
+                  {typeof s === 'object' && s !== null ? (s as { text: string }).text : s}
                 </li>
               ))
             }
           </ul>
         </div>
         <div className="bg-[#111827] rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Weaknesses</h3>
+          <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Concerns</h3>
           <ul className="space-y-2">
-            {parseJsonArray(evaluation.weaknesses_json).map((w, i) => (
-              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                <span className="text-red-400 flex-shrink-0 mt-0.5 text-base leading-none">×</span>
-                {w}
-              </li>
-            ))}
+            {parseJsonArray(evaluation.weaknesses_json).length === 0
+              ? <li className="text-sm text-slate-500 italic">No concerns identified</li>
+              : parseJsonArray(evaluation.weaknesses_json).map((w, i) => (
+                <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                  <span className="text-red-400 flex-shrink-0 mt-0.5 text-base leading-none">×</span>
+                  {typeof w === 'object' && w !== null ? (w as { text: string }).text : w}
+                </li>
+              ))
+            }
           </ul>
         </div>
       </div>
