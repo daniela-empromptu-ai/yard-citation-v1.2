@@ -258,7 +258,7 @@ function FeedbackBox({ cc }: { cc: CampaignCreator }) {
 }
 
 function DetailPanel({
-  cc, evaluation, evidence, contentItems, angles, loading,
+  cc, evaluation, evidence, contentItems, angles, loading, enriching,
 }: {
   cc: CampaignCreator;
   evaluation: Evaluation | null;
@@ -266,6 +266,7 @@ function DetailPanel({
   contentItems: ContentItem[];
   angles: ContentAngle[];
   loading: boolean;
+  enriching: boolean;
 }) {
   const [showAllEvidence, setShowAllEvidence] = useState(false);
   const palette = PLATFORM_COLORS[cc.creator_platform] ?? DEFAULT_PLATFORM;
@@ -392,60 +393,88 @@ function DetailPanel({
       </div>
 
       {/* Evidence */}
-      {evidence.length > 0 && (
-        <div>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
-            Key Evidence <span className="text-slate-600 font-normal">({evidence.length})</span>
-          </h3>
-          <div className="space-y-2">
-            {featuredEvidence.map((ev, i) => (
-              <EvidenceCard
-                key={i}
-                featured
-                quote={ev.quote}
-                url={ev.url}
-                title={ev.title}
-                platform={ev.platform}
-                timestamp_start={ev.timestamp_start_seconds}
-                timestamp_end={ev.timestamp_end_seconds}
-                dimension={ev.dimension}
-                why_it_matters={ev.why_it_matters}
-                published_at={ev.published_at}
-              />
-            ))}
+      {(() => {
+        const belowThreshold = evaluation.overall_score < 80
+        const isPending = evaluation.evidence_coverage === 'pending'
+
+        if (enriching || (isPending && !belowThreshold)) {
+          return (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Key Evidence</h3>
+              <div className="bg-[#111827] rounded-xl p-6 flex items-center gap-3 text-slate-400">
+                <div className="w-5 h-5 border-2 border-blue-500/40 border-t-blue-500 rounded-full animate-spin" />
+                <span className="text-sm">Generating evidence and content angles…</span>
+              </div>
+            </div>
+          )
+        }
+
+        if (belowThreshold && evidence.length === 0) {
+          return (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Key Evidence</h3>
+              <p className="text-sm text-slate-500 italic">Evidence not generated for creators scoring below 80.</p>
+            </div>
+          )
+        }
+
+        if (evidence.length === 0) return null
+
+        return (
+          <div>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
+              Key Evidence <span className="text-slate-600 font-normal">({evidence.length})</span>
+            </h3>
+            <div className="space-y-2">
+              {featuredEvidence.map((ev, i) => (
+                <EvidenceCard
+                  key={i}
+                  featured
+                  quote={ev.quote}
+                  url={ev.url}
+                  title={ev.title}
+                  platform={ev.platform}
+                  timestamp_start={ev.timestamp_start_seconds}
+                  timestamp_end={ev.timestamp_end_seconds}
+                  dimension={ev.dimension}
+                  why_it_matters={ev.why_it_matters}
+                  published_at={ev.published_at}
+                />
+              ))}
+            </div>
+            {remainingEvidence.length > 0 && (
+              <>
+                {showAllEvidence ? (
+                  <div className="space-y-2 mt-2">
+                    {remainingEvidence.map((ev, i) => (
+                      <EvidenceCard
+                        key={i + 3}
+                        quote={ev.quote}
+                        url={ev.url}
+                        title={ev.title}
+                        platform={ev.platform}
+                        timestamp_start={ev.timestamp_start_seconds}
+                        timestamp_end={ev.timestamp_end_seconds}
+                        dimension={ev.dimension}
+                        why_it_matters={ev.why_it_matters}
+                        published_at={ev.published_at}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAllEvidence(true)}
+                    className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 mt-3 font-medium"
+                  >
+                    <ChevronDown size={15} />
+                    Show {remainingEvidence.length} more
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          {remainingEvidence.length > 0 && (
-            <>
-              {showAllEvidence ? (
-                <div className="space-y-2 mt-2">
-                  {remainingEvidence.map((ev, i) => (
-                    <EvidenceCard
-                      key={i + 3}
-                      quote={ev.quote}
-                      url={ev.url}
-                      title={ev.title}
-                      platform={ev.platform}
-                      timestamp_start={ev.timestamp_start_seconds}
-                      timestamp_end={ev.timestamp_end_seconds}
-                      dimension={ev.dimension}
-                      why_it_matters={ev.why_it_matters}
-                      published_at={ev.published_at}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowAllEvidence(true)}
-                  className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 mt-3 font-medium"
-                >
-                  <ChevronDown size={15} />
-                  Show {remainingEvidence.length} more
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {/* Content Evaluated */}
       {contentItems.length > 0 && (
@@ -514,6 +543,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [angles, setAngles] = useState<ContentAngle[]>([]);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [loadingEval, setLoadingEval] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [creatorsPage, setCreatorsPage] = useState(1);
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
@@ -531,13 +561,33 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     setAngles([]);
     setContentItems([]);
     setLoadingEval(true);
+    setEnriching(false);
     try {
       const res = await fetch(`/api/evaluations/${cc.id}`);
       const data = await res.json();
-      setEvaluation(data?.evaluation || null);
+      const evalObj = data?.evaluation || null;
+      setEvaluation(evalObj);
       setEvidence(data?.evidenceSnippets || data?.evidence || []);
       setAngles(data?.contentAngles || data?.angles || []);
       setContentItems(data?.contentItems || []);
+
+      // Lazy Stage 2: if this creator scored >=80 and evidence hasn't been generated,
+      // kick off enrichment and refetch once done.
+      if (evalObj && evalObj.evidence_coverage === 'pending' && evalObj.overall_score >= 80) {
+        setEnriching(true);
+        try {
+          const enrichRes = await fetch(`/api/evaluations/${cc.id}/enrich`, { method: 'POST' });
+          if (enrichRes.ok) {
+            const refreshed = await fetch(`/api/evaluations/${cc.id}`);
+            const refreshedData = await refreshed.json();
+            setEvaluation(refreshedData?.evaluation || null);
+            setEvidence(refreshedData?.evidenceSnippets || []);
+            setAngles(refreshedData?.contentAngles || []);
+          }
+        } finally {
+          setEnriching(false);
+        }
+      }
     } finally {
       setLoadingEval(false);
     }
@@ -564,6 +614,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             contentItems={contentItems}
             angles={angles}
             loading={loadingEval}
+            enriching={enriching}
           />
         </div>
       </div>

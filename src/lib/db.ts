@@ -90,5 +90,8 @@ export async function callAIApi(endpoint: string, body: object): Promise<unknown
     const text = await res.text()
     throw new Error(`AI API ${endpoint} failed (${res.status}): ${text}`)
   }
-  return res.json()
+  const contentLength = res.headers.get('content-length')
+  const text = await res.text()
+  console.log(`[callAIApi:${endpoint}] content-length=${contentLength} body-length=${text.length} tail=${JSON.stringify(text.slice(-60))}`)
+  return JSON.parse(text)
 }

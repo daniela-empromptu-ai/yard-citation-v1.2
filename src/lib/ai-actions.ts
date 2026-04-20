@@ -154,7 +154,29 @@ Return ONLY a JSON array of strings, no objects, no explanation:
   }
 }
 
-// ---- AI: Score Creator ----
+// ---- Shared: distribute a fixed character budget across content items ----
+// 30,000 chars ≈ 7,500 tokens — comfortably within builder API input limits.
+// Builder API input is truncated at ~70k chars total (per Andrew) — keep total well under that.
+const TOTAL_CONTENT_BUDGET = 60_000
+const MAX_CHARS_PER_ITEM = 40_000
+
+function buildContentSummary(
+  contentItems: Array<{ id: string; title: string; url: string; platform: string; raw_text: string; view_count?: number }>
+): string {
+  const charsPerItem = Math.min(MAX_CHARS_PER_ITEM, Math.floor(TOTAL_CONTENT_BUDGET / Math.max(1, contentItems.length)))
+  return contentItems.map(ci => `
+--- Content Item (id: ${ci.id}) ---
+Title: ${ci.title}
+URL: ${ci.url}
+Platform: ${ci.platform}
+Views: ${ci.view_count || 'N/A'}
+Text: ${ci.raw_text.substring(0, charsPerItem)}
+`).join('\n')
+}
+
+// ---- AI: Score Creator — Stage 1 (scores + rationale + strengths/weaknesses) ----
+// Builder API caps output at 4096 tokens; evidence + content angles are generated
+// lazily via aiEnrichEvaluation when a user opens a high-scoring creator's detail panel.
 export async function aiScoreCreator(params: {
   campaignBrief: string;
   topics: string[];
@@ -181,6 +203,109 @@ export async function aiScoreCreator(params: {
   strengths: Array<{ text: string }>;
   weaknesses: Array<{ text: string }>;
   rationale_md: string;
+  needs_manual_review: boolean;
+  needs_manual_review_reason: string | null;
+}> {
+  const contentSummary = buildContentSummary(params.contentItems)
+
+  try {
+    await setupPrompt(
+      'score_creator_scores',
+      ['campaign_context', 'creator_profile', 'content_items_text'],
+      `You are a creator evaluation specialist with deep expertise in technical B2B content.
+
+Campaign context: {campaign_context}
+
+Creator profile: {creator_profile}
+
+Ingested content: {content_items_text}
+
+Score this creator against the rubric. Return ONLY valid JSON, no markdown.
+
+RUBRIC WEIGHTS:
+- technical_relevance: 30%
+- audience_alignment: 25%
+- content_quality: 20%
+- channel_performance: 15%
+- brand_fit: 10%
+
+RULES:
+- Each dimension score is an integer 0–100.
+- Max 3 strengths, max 3 weaknesses, each ≤ 18 words.
+- rationale_md is a concise 2–3 sentence summary (≤ 120 words). Plain prose, no headings.
+
+Return this exact JSON structure:
+{
+  "score_technical_relevance": 0,
+  "score_audience_alignment": 0,
+  "score_content_quality": 0,
+  "score_channel_performance": 0,
+  "score_brand_fit": 0,
+  "strengths": [{"text":"..."}],
+  "weaknesses": [{"text":"..."}],
+  "rationale_md": "2-3 sentence summary"
+}`
+    )
+
+    const raw = await applyPrompt('score_creator_scores', {
+      campaign_context: `Brief: ${params.campaignBrief}\nTopics: ${params.topics.join(', ')}\nPersonas: ${params.personas.join(', ')}\nPrompt gaps: ${params.promptGaps.join('; ')}`,
+      creator_profile: `Name: ${params.creatorName}\nBio: ${params.creatorBio}\nPlatforms: ${params.platforms.join(', ')}`,
+      content_items_text: contentSummary,
+    }, 'raw_text') as string
+
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const parsed = parseAIJson(cleaned)
+
+    const overall = Math.round(
+      (parsed.score_technical_relevance || 0) * 0.30 +
+      (parsed.score_audience_alignment || 0) * 0.25 +
+      (parsed.score_content_quality || 0) * 0.20 +
+      (parsed.score_channel_performance || 0) * 0.15 +
+      (parsed.score_brand_fit || 0) * 0.10
+    )
+
+    const hasAllScores = ['score_technical_relevance', 'score_audience_alignment', 'score_content_quality', 'score_channel_performance', 'score_brand_fit']
+      .every(k => typeof parsed[k] === 'number')
+    const needs_manual_review = !hasAllScores
+    const needs_manual_review_reason = !hasAllScores ? 'One or more dimension scores missing from AI response' : null
+
+    return {
+      overall_score: overall,
+      score_technical_relevance: parsed.score_technical_relevance || 0,
+      score_audience_alignment: parsed.score_audience_alignment || 0,
+      score_content_quality: parsed.score_content_quality || 0,
+      score_channel_performance: parsed.score_channel_performance || 0,
+      score_brand_fit: parsed.score_brand_fit || 0,
+      strengths: parsed.strengths || [],
+      weaknesses: parsed.weaknesses || [],
+      rationale_md: parsed.rationale_md || '',
+      needs_manual_review,
+      needs_manual_review_reason,
+    }
+  } catch (e) {
+    console.error('aiScoreCreator error:', e)
+    throw new Error(`Scoring failed: ${(e as Error).message}`)
+  }
+}
+
+// ---- AI: Enrich Evaluation — Stage 2 (evidence snippets + content angles) ----
+// Lazy; triggered when a user opens a detail panel for a creator scoring >= 80.
+export async function aiEnrichEvaluation(params: {
+  campaignBrief: string;
+  topics: string[];
+  personas: string[];
+  creatorName: string;
+  creatorBio: string;
+  platforms: string[];
+  contentItems: Array<{
+    id: string;
+    title: string;
+    url: string;
+    platform: string;
+    raw_text: string;
+    view_count?: number;
+  }>;
+}): Promise<{
   evidence_snippets: Array<{
     content_item_id: string;
     timestamp_start_seconds: number | null;
@@ -195,29 +320,17 @@ export async function aiScoreCreator(params: {
     persona: string;
     key_points: string[];
   }>;
+  evidence_coverage: string;
   needs_manual_review: boolean;
   needs_manual_review_reason: string | null;
-  evidence_coverage: string;
 }> {
-  // Distribute a fixed character budget evenly across content items so total
-  // payload stays bounded regardless of how many videos were ingested.
-  // 30,000 chars ≈ 7,500 tokens — comfortably within builder API limits.
-  const TOTAL_CONTENT_BUDGET = 30_000
-  const charsPerItem = Math.floor(TOTAL_CONTENT_BUDGET / Math.max(1, params.contentItems.length))
-  const contentSummary = params.contentItems.map(ci => `
---- Content Item (id: ${ci.id}) ---
-Title: ${ci.title}
-URL: ${ci.url}
-Platform: ${ci.platform}
-Views: ${ci.view_count || 'N/A'}
-Text: ${ci.raw_text.substring(0, charsPerItem)}
-`).join('\n')
+  const contentSummary = buildContentSummary(params.contentItems)
 
   try {
     await setupPrompt(
-      'score_creator',
+      'score_creator_evidence',
       ['campaign_context', 'creator_profile', 'content_items_text'],
-      `You are a creator evaluation specialist with deep expertise in technical content and FinOps.
+      `You are a creator evaluation specialist with deep expertise in technical B2B content.
 
 Campaign context: {campaign_context}
 
@@ -225,30 +338,20 @@ Creator profile: {creator_profile}
 
 Ingested content: {content_items_text}
 
-Evaluate this creator using the rubric below. Return ONLY valid JSON, no markdown.
-
-RUBRIC WEIGHTS:
-- technical_relevance: 30%
-- audience_alignment: 25%
-- content_quality: 20%
-- channel_performance: 15%
-- brand_fit: 10%
+Extract evidence and propose content angles for this creator. Return ONLY valid JSON, no markdown.
 
 CRITICAL RULE: Every evidence quote MUST be an exact substring from the content text provided above. Do not paraphrase. Extract verbatim.
 
 TIMESTAMP RULE: For YouTube content where text is prefixed with [M:SS] timestamps, set timestamp_start_seconds to the total seconds value of the [M:SS] timestamp nearest to the beginning of the quoted text. For example, [3:42] → 222 seconds.
 
+RULES:
+- Max 4 evidence_snippets. Prefer coverage across multiple content items and multiple dimensions.
+- dimension must be one of: technical_relevance, audience_alignment, content_quality, channel_performance, brand_fit.
+- Max 2 content_angles.
+- why_it_matters ≤ 25 words each.
+
 Return this exact JSON structure:
 {
-  "overall_score": 0,
-  "score_technical_relevance": 0,
-  "score_audience_alignment": 0,
-  "score_content_quality": 0,
-  "score_channel_performance": 0,
-  "score_brand_fit": 0,
-  "strengths": [{"text":"..."}],
-  "weaknesses": [{"text":"..."}],
-  "rationale_md": "## Evaluation Summary\\n\\n...",
   "evidence_snippets": [
     {
       "content_item_id": "...",
@@ -270,19 +373,17 @@ Return this exact JSON structure:
 }`
     )
 
-    const raw = await applyPrompt('score_creator', {
-      campaign_context: `Brief: ${params.campaignBrief}\nTopics: ${params.topics.join(', ')}\nPersonas: ${params.personas.join(', ')}\nPrompt gaps: ${params.promptGaps.join('; ')}`,
+    const raw = await applyPrompt('score_creator_evidence', {
+      campaign_context: `Brief: ${params.campaignBrief}\nTopics: ${params.topics.join(', ')}\nPersonas: ${params.personas.join(', ')}`,
       creator_profile: `Name: ${params.creatorName}\nBio: ${params.creatorBio}\nPlatforms: ${params.platforms.join(', ')}`,
       content_items_text: contentSummary,
     }, 'raw_text') as string
 
-    let cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const parsed = parseAIJson(cleaned)
 
-    // Evidence validation: verify every quote is an exact substring of its content item's raw_text
     const contentMap = new Map(params.contentItems.map(ci => [ci.id, ci.raw_text]))
-    let failedQuotes: string[] = []
-
+    const failedQuotes: string[] = []
     for (const snippet of (parsed.evidence_snippets || [])) {
       const raw_text = contentMap.get(snippet.content_item_id)
       if (raw_text && !raw_text.includes(snippet.quote)) {
@@ -290,16 +391,6 @@ Return this exact JSON structure:
       }
     }
 
-    // Compute overall score from weighted dimensions
-    const overall = Math.round(
-      parsed.score_technical_relevance * 0.30 +
-      parsed.score_audience_alignment * 0.25 +
-      parsed.score_content_quality * 0.20 +
-      parsed.score_channel_performance * 0.15 +
-      parsed.score_brand_fit * 0.10
-    )
-
-    // Compute evidence coverage
     const validSnippets = (parsed.evidence_snippets || []).filter((s: { content_item_id: string; quote: string }) => {
       const rt = contentMap.get(s.content_item_id)
       return rt && rt.includes(s.quote)
@@ -311,21 +402,16 @@ Return this exact JSON structure:
     else if (validSnippets.length >= 3 && uniqueItems >= 2 && uniqueDims >= 2) evidence_coverage = 'medium'
     else if (validSnippets.length >= 1) evidence_coverage = 'weak'
 
-    const needs_manual_review = failedQuotes.length > 0
-    const needs_manual_review_reason = failedQuotes.length > 0
-      ? `Evidence validation failed: ${failedQuotes.join('; ')}`
-      : null
-
     return {
-      ...parsed,
-      overall_score: overall,
-      needs_manual_review,
-      needs_manual_review_reason,
+      evidence_snippets: parsed.evidence_snippets || [],
+      content_angles: parsed.content_angles || [],
       evidence_coverage,
+      needs_manual_review: failedQuotes.length > 0,
+      needs_manual_review_reason: failedQuotes.length > 0 ? `Evidence validation failed: ${failedQuotes.join('; ')}` : null,
     }
   } catch (e) {
-    console.error('aiScoreCreator error:', e)
-    throw new Error(`Scoring failed: ${(e as Error).message}`)
+    console.error('aiEnrichEvaluation error:', e)
+    throw new Error(`Enrichment failed: ${(e as Error).message}`)
   }
 }
 
@@ -469,6 +555,7 @@ Return ONLY a JSON array, no markdown:
     }, 'raw_text') as string;
 
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    if (!cleaned || cleaned === 'None' || cleaned === 'null' || cleaned === 'undefined') return [];
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
 
@@ -492,6 +579,11 @@ Return ONLY a JSON array, no markdown:
  * Layer 3: Extract JSON object/array with regex + JSON5
  */
 function parseAIJson(text: string): ReturnType<typeof JSON.parse> {
+  console.log(`[parseAIJson] length=${text.length} tail=${JSON.stringify(text.slice(-60))}`)
+  // Builder API sometimes returns "None" (Python null) instead of JSON
+  if (!text || text === 'None' || text === 'null' || text === 'undefined') {
+    throw new Error('Builder returned empty/null response')
+  }
   // Layer 1: strict JSON
   try {
     return JSON.parse(text)
