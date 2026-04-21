@@ -9,10 +9,7 @@
 
 import { dbQuery, dbInsertMany, t, callAIApi } from '@/lib/db'
 
-// ─── Local AI helpers (consistent with ai-actions.ts and prequalify.ts) ───
-async function setupPrompt(name: string, variables: string[], text: string) {
-  await callAIApi('/setup_ai_prompt', { prompt_name: name, input_variables: variables, prompt_text: text })
-}
+// ─── Local AI helpers ───
 async function applyPrompt(name: string, inputData: Record<string, string>): Promise<string> {
   const result = await callAIApi('/apply_prompt_to_data', {
     prompt_name: name,
@@ -662,34 +659,6 @@ export async function llmChannelFilter(
   console.log(`[llmChannelFilter] topics: ${campaignTopics.join(', ')} | channels: ${channels.length}`)
 
   try {
-    await setupPrompt(
-      'yard_channel_filter',
-      ['topics', 'channels_block'],
-      `You are a YouTube channel quality filter for creator sponsorship campaigns. We want INDEPENDENT PRACTITIONERS who share real-world experience — the kind of creator a senior engineer would subscribe to for their own professional growth.
-
-TEST 1 — PERSON OR INSTITUTION?
-Is this a single person sharing their expertise, or an organization/company/product producing content?
-- REJECT: companies marketing their own product (GitHub, Docker, GitLab, HashiCorp, Datadog, Better Stack, Grafana), educational institutions (freeCodeCamp, Simplilearn, edureka, KodeKloud), bootcamps, conference channels, consulting firms
-- REJECT: the official channel of a tool or product itself — even if educational (e.g. the official GitHub channel, the official Kubernetes channel)
-- KEEP: individual practitioners, even if they have a recognizable brand name or sell courses (e.g. Fireship, Theo, ThePrimeagen, NetworkChuck, TechWorld with Nana)
-
-TEST 2 — PRACTITIONER OR TEACHER?
-Does this channel target working engineers solving real problems, or students learning from scratch?
-- REJECT: channels whose primary audience is beginners/students, structured curriculum channels
-- KEEP: opinionated takes, war stories, tool deep-dives, production experience — content a senior engineer watches for their own work
-
-CATEGORIES RULE: Every kept channel MUST be assigned at least one category from the provided topics list. No kept channel may be omitted.
-
-TOPICS: {topics}
-
-CHANNELS:
-{channels_block}
-
-Return JSON only. Every kept channel must appear in categories.
-{ "reject": [1-indexed numbers], "categories": { "index": ["Category"] } }
-Example: { "reject": [2, 5], "categories": { "1": ["DevOps"], "3": ["DevOps", "CI/CD"] } }`
-    )
-
     const rejected = new Set<string>()
     const categories = new Map<string, string[]>()
 
@@ -754,25 +723,6 @@ async function llmCreatorFilter(
   if (handles.length === 0) return new Set()
 
   try {
-    await setupPrompt(
-      'yard_creator_filter',
-      ['handles_list'],
-      `You are a creator quality filter for a technical content sponsorship platform. We want INDEPENDENT INDIVIDUAL developers and writers sharing real technical experience.
-
-KEEP: Individual developers, engineers, or writers who share their own technical experience — even if they have a personal brand or sell courses.
-
-REJECT any of the following:
-- Company, startup, product, or project accounts (e.g. tangle_network, braingemai, ntctech, infra_tools)
-- Handles that look auto-generated or machine-created (random numbers/letters, no clear human identity)
-- Corporate blog arms or brand evangelist accounts
-- Gibberish or spam-looking handles
-
-{handles_list}
-
-Return JSON only: { "reject": ["handle1", "handle2", ...] }
-If none should be rejected, return: { "reject": [] }`
-    )
-
     const rejected = new Set<string>()
 
     for (let batchStart = 0; batchStart < handles.length; batchStart += CREATOR_FILTER_BATCH_SIZE) {

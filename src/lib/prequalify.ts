@@ -251,14 +251,6 @@ export async function fetchCreatorTranscripts(
 
 // ─── 2. AI Narrowing ───
 
-async function setupPrompt(name: string, variables: string[], text: string) {
-  await callAIApi('/setup_ai_prompt', {
-    prompt_name: name,
-    input_variables: variables,
-    prompt_text: text,
-  })
-}
-
 async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string) {
   const result = await callAIApi('/apply_prompt_to_data', {
     prompt_name: name,
@@ -273,40 +265,6 @@ export async function aiNarrowCreators(
 ): Promise<{ selected: Stage2Selection[]; allStage1Scores: Stage1Score[] }> {
   // ── Stage 1: Batch score ──
   const allStage1Scores: Stage1Score[] = []
-
-  await setupPrompt(
-    'prequalify_stage1',
-    ['campaign_brief', 'campaign_topics', 'creators_block'],
-    `You are screening content creators for a sponsored content campaign. Creators may be from YouTube, Medium, Dev.to, or other platforms.
-
-CAMPAIGN: {campaign_brief}
-TOPICS: {campaign_topics}
-
-CREATORS (score each 0-100 on campaign fit):
-{creators_block}
-
-EXCLUSION RULES — score 0 for any of these:
-- Company/vendor-owned channels — cloud providers, DevOps vendors, testing/QA tool companies (BrowserStack, Applitools, TestRail, mabl, etc.), developer platforms (Vercel, Supabase). If it's a company selling a product, score 0.
-- Training/certification companies or bootcamp channels
-- Creators who haven't published in 2+ years (dormant)
-- Channels with primarily AI-generated or synthetic content
-- Auto-dubbed/auto-translated content
-- Lifestyle, vlog, or non-technical content creators
-ONLY score independent creators — individuals or small creator-led channels, not companies.
-
-QUALITY SIGNALS — use these to differentiate:
-- Score HIGHER (60+) for channels where a senior developer or CTO would learn something new — production war stories, architecture deep-dives, real-world tooling reviews, conference talks
-- Score LOWER for tutorial mills that only teach beginners step-by-step instructions ("How to Install X", "X Tutorial for Beginners") — cap these at 15 even if topic-relevant
-- Independent creators sharing real-world experience and production insights — score 60+
-- Creators who demonstrate hands-on expertise (debugging live, showing real codebases, sharing failures) — score higher
-
-Scoring rules:
-- Creators WITH content (transcripts or articles): score based on content depth, originality, and whether a senior engineer would subscribe
-- Creators WITHOUT content: score based on topic match and follower count only, cap score at 20
-
-Return ONLY a JSON array, no other text:
-[{"creator_id":"...","score":85,"reason":"one sentence"}]`
-  )
 
   // Build name→ID lookup so we can recover from garbled UUIDs in AI responses
   const nameToId = new Map<string, string>()
@@ -386,24 +344,6 @@ ${transcriptText}
   }).join('\n\n')
 
   try {
-    await setupPrompt(
-      'prequalify_stage2',
-      ['campaign_brief', 'campaign_topics', 'candidates_block', 'candidate_count'],
-      `You are a creator partnerships strategist selecting the TOP 20 creators for outreach.
-
-CAMPAIGN: {campaign_brief}
-TOPICS: {campaign_topics}
-
-CANDIDATES ({candidate_count}, with content samples):
-{candidates_block}
-
-Select exactly 20 (or fewer if less than 20 candidates have useful content). Return ONLY JSON, no other text:
-{
-  "selected": [{"creator_id":"...","rank":1,"score":95,"rationale":"...","key_quote":"..."}],
-  "rejected": [{"creator_id":"...","reason":"..."}]
-}`
-    )
-
     const raw = await applyPrompt('prequalify_stage2', {
       campaign_brief: campaignContext.brief,
       campaign_topics: campaignContext.topics.join(', '),
