@@ -616,7 +616,7 @@ export async function discoverByDevtoTagSearch(
 ): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
   try {
     const { searchDevtoByTopics } = await import('@/lib/devto')
-    const tagsToUse = searchTerms && searchTerms.length > 0 ? searchTerms : topics
+    const tagsToUse = topics // Dev.to tags are short topic slugs, not verbose search phrases
     const authors = await searchDevtoByTopics(tagsToUse)
     console.log(`[discovery] Dev.to tag search: found ${authors.length} authors`)
     const handles = authors.map(a => ({ platform: 'devto' as const, handle: a.username, url: a.profile_url }))

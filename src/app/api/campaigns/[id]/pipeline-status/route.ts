@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   }>(
     `SELECT id, type, status, error_message, started_at, finished_at, created_at
      FROM ${t('jobs')}
-     WHERE campaign_id = $1 AND type = 'full_pipeline'
+     WHERE campaign_id = $1 AND type IN ('full_pipeline', 'surface_more')
      ORDER BY created_at DESC LIMIT 1`,
     [campaignId]
   )

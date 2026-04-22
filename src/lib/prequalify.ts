@@ -735,13 +735,13 @@ export async function runPrequalifyPipeline(
       segments: [],
       fullText: ar.combinedText,
     } : undefined,
-    // Use first article as "video" equivalent for display
-    video: ar.articles.length > 0 ? {
-      videoId: '',
-      title: ar.articles[0].title,
-      publishedAt: ar.articles[0].publishedAt,
-      url: ar.articles[0].url,
-    } : undefined,
+    // Use newest article as "video" equivalent for dormancy check + display
+    video: ar.articles.length > 0 ? (() => {
+      const newest = ar.articles.reduce((a, b) =>
+        new Date(a.publishedAt) >= new Date(b.publishedAt) ? a : b
+      )
+      return { videoId: '', title: newest.title, publishedAt: newest.publishedAt, url: newest.url }
+    })() : undefined,
   }))
 
   // Other platform creators: no content available
@@ -764,7 +764,7 @@ export async function runPrequalifyPipeline(
     const publishedAt = cr.latestPublishDate || cr.video?.publishedAt || null
     if (publishedAt && isDormant(publishedAt)) {
       dormantIds.push(cr.creatorId)
-      console.log(`[prequalify] ${cr.creatorName}: excluded (dormant — last RSS video ${publishedAt.slice(0, 10)})`)
+      console.log(`[prequalify] ${cr.creatorName}: excluded (dormant — last content ${publishedAt.slice(0, 10)})`)
       continue
     }
     allResults.push(cr)

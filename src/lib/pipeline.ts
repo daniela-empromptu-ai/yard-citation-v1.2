@@ -112,6 +112,60 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
   return scored
 }
 
+// ─── Surface More Pipeline (no reset — preserves dismissed/scored creators) ───
+
+export async function runSurfaceMorePipeline(campaignId: string, userId: string, jobId: string): Promise<void> {
+  try {
+    await updateJobStatus(jobId, 'running')
+    await logJobEvent(jobId, 'info', 'Surface More started — discovering additional creators')
+
+    // ── Step 1: Discovery (dedup skips all existing campaign_creators) ──
+    await logJobEvent(jobId, 'info', 'Step 1/3: Discovery — finding additional creators')
+    const discoveryResult = await runDiscovery(campaignId, userId)
+    await logJobEvent(jobId, 'info', `Discovery complete: ${discoveryResult.total_linked} new creators linked`, discoveryResult as unknown as Record<string, unknown>)
+
+    if (discoveryResult.total_linked === 0) {
+      await logJobEvent(jobId, 'warn', 'No new creators discovered')
+      await updateJobStatus(jobId, 'completed')
+      return
+    }
+
+    // ── Step 2: Pre-qualification ──
+    await logJobEvent(jobId, 'info', 'Step 2/3: Pre-qualification — fetching content & narrowing')
+    const campRes = await dbQuery<{ creative_brief: string }>(
+      `SELECT creative_brief FROM ${t('campaigns')} WHERE id = $1`,
+      [campaignId]
+    )
+    const topicsRes = await dbQuery<{ topic: string }>(
+      `SELECT topic FROM ${t('campaign_topics')} WHERE campaign_id = $1`,
+      [campaignId]
+    )
+
+    try {
+      const prequalResult = await runPrequalifyPipeline(campaignId, userId, {
+        brief: campRes.data[0]?.creative_brief || '',
+        topics: topicsRes.data.map(r => r.topic),
+      })
+      await logJobEvent(jobId, 'info', `Pre-qualification complete: ${prequalResult.selected_count} selected from ${prequalResult.total_discovered}`)
+    } catch (e) {
+      await logJobEvent(jobId, 'warn', `Pre-qualification failed: ${(e as Error).message} — continuing to scoring`)
+    }
+
+    // ── Step 3: Scoring ──
+    await logJobEvent(jobId, 'info', 'Step 3/3: Scoring — evaluating new creators')
+    const scored = await runScoringBatch(campaignId, userId, jobId)
+    await logJobEvent(jobId, 'info', `Scoring complete: ${scored} creators scored`)
+
+    await updateJobStatus(jobId, 'completed')
+    await logJobEvent(jobId, 'info', 'Surface More pipeline completed')
+  } catch (e) {
+    const msg = (e as Error).message || 'Unknown pipeline error'
+    console.error(`[surface-more] Fatal error for campaign ${campaignId}:`, msg)
+    try { await logJobEvent(jobId, 'error', `Pipeline failed: ${msg}`) } catch { /* ignore */ }
+    try { await updateJobStatus(jobId, 'failed', msg) } catch { /* ignore */ }
+  }
+}
+
 // ─── Full Pipeline ───
 
 export async function runFullPipeline(campaignId: string, userId: string, jobId: string): Promise<void> {

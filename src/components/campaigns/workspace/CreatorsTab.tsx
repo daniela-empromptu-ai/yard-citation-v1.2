@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CoverageTag, PlatformBadge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink, X, Plus } from 'lucide-react';
 
 // ─── Helpers ───
 
@@ -109,9 +109,80 @@ function PlatformLogo({ platform, color }: { platform: string; color: string }) 
   );
 }
 
+// ─── Dismiss Modal ───
+
+const DISMISS_REASONS = ['Too expensive', 'Wrong audience', 'Brand conflict', 'Already in talks', 'Other'];
+
+function DismissModal({
+  cc,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  cc: CampaignCreator;
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  const [reason, setReason] = useState('');
+  const [custom, setCustom] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-[#1e293b] border border-[#2d3748] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 className="text-base font-semibold text-slate-100 mb-1">Remove from campaign?</h3>
+        <p className="text-sm text-slate-400 mb-4">{cc.creator_name} won&apos;t appear in this campaign again.</p>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {DISMISS_REASONS.map(r => (
+            <button
+              key={r}
+              onClick={() => setReason(reason === r ? '' : r)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                reason === r
+                  ? 'bg-red-900/40 border-red-600/60 text-red-300'
+                  : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-slate-500'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+
+        {reason === 'Other' && (
+          <input
+            autoFocus
+            value={custom}
+            onChange={e => setCustom(e.target.value)}
+            placeholder="Describe the reason…"
+            className="w-full bg-[#111827] border border-[#2d3748] rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50 mb-4"
+          />
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 border border-[#2d3748] hover:border-slate-500 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(reason === 'Other' ? custom : reason)}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-500 text-white transition-all disabled:opacity-50"
+          >
+            {loading ? 'Removing…' : 'Remove'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Creator Card ───
 
-function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void }) {
+function CreatorCard({ cc, onClick, onDismiss }: { cc: CampaignCreator; onClick: () => void; onDismiss: (e: React.MouseEvent) => void }) {
   const palette = PLATFORM_COLORS[cc.creator_platform] ?? DEFAULT_PLATFORM;
   const isScored = cc.overall_score != null;
   const handle = cc.creator_handle
@@ -136,12 +207,21 @@ function CreatorCard({ cc, onClick }: { cc: CampaignCreator; onClick: () => void
         >
           <PlatformLogo platform={cc.creator_platform} color={palette.text} />
         </div>
-        {isScored && (
-          <div className="text-right">
-            <div className="text-2xl font-bold text-slate-100">{cc.overall_score}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">score</div>
-          </div>
-        )}
+        <div className="flex items-start gap-2">
+          {isScored && (
+            <div className="text-right">
+              <div className="text-2xl font-bold text-slate-100">{cc.overall_score}</div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">score</div>
+            </div>
+          )}
+          <button
+            onClick={onDismiss}
+            title="Remove from campaign"
+            className="p-1 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Creator info */}
@@ -553,11 +633,87 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [loadingEval, setLoadingEval] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [creatorsPage, setCreatorsPage] = useState(1);
+  const [dismissTarget, setDismissTarget] = useState<CampaignCreator | null>(null);
+  const [dismissing, setDismissing] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [surfaceMoreRunning, setSurfaceMoreRunning] = useState(false);
+  const [surfaceMoreError, setSurfaceMoreError] = useState<string | null>(null);
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
 
+  // Poll for surface-more job completion
+  useEffect(() => {
+    if (!surfaceMoreRunning) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/campaigns/${campaign.id}/pipeline-status`);
+        const data = await res.json();
+        if (data.job?.status === 'completed' || data.job?.status === 'failed') {
+          setSurfaceMoreRunning(false);
+          if (data.job.status === 'failed') {
+            setSurfaceMoreError('Pipeline failed — please try again.');
+          } else {
+            router.refresh();
+          }
+        }
+      } catch { /* ignore transient fetch errors */ }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [surfaceMoreRunning, campaign.id, router]);
+
+  async function handleSurfaceMore() {
+    setSurfaceMoreError(null);
+    const rawUser = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
+    let userId: string | null = null;
+    if (rawUser) {
+      try { userId = (JSON.parse(rawUser) as { id: string }).id ?? rawUser; } catch { userId = rawUser; }
+    }
+    if (!userId) {
+      setSurfaceMoreError('No active user — please reload the page.');
+      return;
+    }
+    setSurfaceMoreRunning(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/surface-more`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!res.ok) {
+        let msg = 'Failed to start pipeline.';
+        try { const d = await res.json(); msg = d.error || msg; } catch { /* non-JSON body */ }
+        setSurfaceMoreError(msg);
+        setSurfaceMoreRunning(false);
+      }
+    } catch {
+      setSurfaceMoreError('Network error — please try again.');
+      setSurfaceMoreRunning(false);
+    }
+  }
+
+  async function confirmDismiss(reason: string) {
+    if (!dismissTarget) return;
+    setDismissing(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/creators/${dismissTarget.id}/dismiss`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || null }),
+      });
+      if (res.ok) {
+        setDismissedIds(prev => { const s = new Set(prev); s.add(dismissTarget!.id); return s; });
+        if (selectedCc?.id === dismissTarget.id) setSelectedCc(null);
+      }
+    } catch { /* Network error — leave creator visible */ }
+    setDismissTarget(null);
+    setDismissing(false);
+  }
+
   const filteredCreators = (campaignCreators as CampaignCreator[]).filter(cc =>
-    cc.pipeline_stage !== 'excluded' && cc.overall_score != null
+    cc.pipeline_stage !== 'excluded' &&
+    cc.pipeline_stage !== 'dismissed' &&
+    cc.overall_score != null &&
+    !dismissedIds.has(cc.id)
   );
   const creatorsTotalPages = Math.max(1, Math.ceil(filteredCreators.length / CREATORS_PAGE_SIZE));
   const pagedCreators = filteredCreators.slice((creatorsPage - 1) * CREATORS_PAGE_SIZE, creatorsPage * CREATORS_PAGE_SIZE);
@@ -640,6 +796,30 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             description="Go to Search Terms and click Generate Engagement Leads to discover creators."
           />
         </div>
+      ) : filteredCreators.length === 0 ? (
+        <div className="space-y-4">
+          <div className="card">
+            <EmptyState
+              icon=""
+              title="All creators removed"
+              description="You've removed all creators from this campaign. Surface more to find new ones."
+            />
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={handleSurfaceMore}
+              disabled={surfaceMoreRunning}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60"
+            >
+              {surfaceMoreRunning ? (
+                <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Finding more…</>
+              ) : (
+                <><Plus size={14} />Surface More Creators</>
+              )}
+            </button>
+          </div>
+          {surfaceMoreError && <p className="text-xs text-red-400 text-center">{surfaceMoreError}</p>}
+        </div>
       ) : (
         <>
           {/* Header */}
@@ -649,8 +829,30 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 {filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''} for {campaign.client_name || 'your brand'}
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">
-                Click any creator to view their evaluation and content angles.
+                Click any creator to view their evaluation. Remove poor fits with ×.
               </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleSurfaceMore}
+                disabled={surfaceMoreRunning}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {surfaceMoreRunning ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Finding more…
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} />
+                    Surface More Creators
+                  </>
+                )}
+              </button>
+              {surfaceMoreError && (
+                <p className="text-xs text-red-400">{surfaceMoreError}</p>
+              )}
             </div>
           </div>
 
@@ -661,6 +863,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 key={cc.id}
                 cc={cc}
                 onClick={() => loadEvaluation(cc)}
+                onDismiss={e => { e.stopPropagation(); setDismissTarget(cc); }}
               />
             ))}
           </div>
@@ -680,6 +883,16 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             </div>
           )}
         </>
+      )}
+
+      {/* Dismiss modal */}
+      {dismissTarget && (
+        <DismissModal
+          cc={dismissTarget}
+          onConfirm={confirmDismiss}
+          onCancel={() => setDismissTarget(null)}
+          loading={dismissing}
+        />
       )}
     </div>
   );
