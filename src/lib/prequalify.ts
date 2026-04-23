@@ -251,12 +251,36 @@ export async function fetchCreatorTranscripts(
 
 // ─── 2. AI Narrowing ───
 
-async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string) {
-  const result = await callAIApi('/apply_prompt_to_data', {
-    prompt_name: name,
-    input_data: { ...inputData, return_type: returnType },
-  }) as { value: unknown }
-  return result.value
+async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string, retries = 2): Promise<unknown> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await callAIApi('/apply_prompt_to_data', {
+      prompt_name: name,
+      input_data: { ...inputData, return_type: returnType },
+    }) as { value: unknown }
+
+    const value = result.value
+
+    // Builder returned Python None (serialization bug) — retry
+    if (value === 'None' || value === null || value === undefined) {
+      if (attempt < retries) {
+        console.log(`[applyPrompt] ${name}: got None response, retrying (${attempt + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        continue
+      }
+      return value
+    }
+
+    // Builder failed to substitute variables — model responded conversationally instead of with data
+    if (typeof value === 'string' && !value.trim().startsWith('{') && !value.trim().startsWith('[') && value.length < 500) {
+      if (attempt < retries) {
+        console.log(`[applyPrompt] ${name}: got conversational response (variable substitution failed?), retrying (${attempt + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        continue
+      }
+    }
+
+    return value
+  }
 }
 
 export async function aiNarrowCreators(
@@ -357,14 +381,19 @@ ${transcriptText}
       // Fix garbled IDs from Stage 2
       for (const sel of result.selected) {
         if (!transcriptResults.some(t => t.creatorId === sel.creator_id)) {
-          // Try name-based recovery from the candidates
-          const byName = top20Results.find(r =>
-            sel.creator_id.toLowerCase().includes(r.creatorName.toLowerCase()) ||
-            r.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())
-          )
-          if (byName) {
-            console.log(`[prequalify] Stage 2 fixed garbled ID: "${sel.creator_id}" → ${byName.creatorId} (${byName.creatorName})`)
-            sel.creator_id = byName.creatorId
+          const byPrefix = top20Results.find(r => r.creatorId.startsWith(sel.creator_id))
+          if (byPrefix) {
+            console.log(`[prequalify] Stage 2 fixed truncated ID: "${sel.creator_id}" → ${byPrefix.creatorId} (${byPrefix.creatorName})`)
+            sel.creator_id = byPrefix.creatorId
+          } else {
+            const byName = top20Results.find(r =>
+              sel.creator_id.toLowerCase().includes(r.creatorName.toLowerCase()) ||
+              r.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())
+            )
+            if (byName) {
+              console.log(`[prequalify] Stage 2 fixed garbled ID: "${sel.creator_id}" → ${byName.creatorId} (${byName.creatorName})`)
+              sel.creator_id = byName.creatorId
+            }
           }
         }
       }
@@ -461,12 +490,18 @@ export async function persistResults(
   // ── Resolve selected creator IDs (AI may garble UUIDs) ──
   for (const sel of selected) {
     if (!allTranscripts.some(tr => tr.creatorId === sel.creator_id)) {
-      for (const candidate of allTranscripts) {
-        if (sel.creator_id.includes(candidate.creatorName.toLowerCase()) ||
-            candidate.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())) {
-          console.log(`[prequalify] persistResults: matched "${sel.creator_id}" → ${candidate.creatorId} (${candidate.creatorName}) by name`)
-          sel.creator_id = candidate.creatorId
-          break
+      const byPrefix = allTranscripts.find(tr => tr.creatorId.startsWith(sel.creator_id))
+      if (byPrefix) {
+        console.log(`[prequalify] persistResults: matched truncated "${sel.creator_id}" → ${byPrefix.creatorId} (${byPrefix.creatorName})`)
+        sel.creator_id = byPrefix.creatorId
+      } else {
+        for (const candidate of allTranscripts) {
+          if (sel.creator_id.includes(candidate.creatorName.toLowerCase()) ||
+              candidate.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())) {
+            console.log(`[prequalify] persistResults: matched "${sel.creator_id}" → ${candidate.creatorId} (${candidate.creatorName}) by name`)
+            sel.creator_id = candidate.creatorId
+            break
+          }
         }
       }
     }

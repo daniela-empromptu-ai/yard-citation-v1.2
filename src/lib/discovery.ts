@@ -587,8 +587,7 @@ async function insertDiscoveredCreators(
 }
 
 /**
- * Discover Medium creators using rapid_research (AI-powered web search).
- * Medium is behind Cloudflare so direct scraping isn't viable.
+ * Discover Medium and Dev.to creators using rapid_research (AI-powered web search).
  */
 export async function discoverByRapidResearch(
   topics: string[]
@@ -596,10 +595,12 @@ export async function discoverByRapidResearch(
   const topicStr = topics.slice(0, 5).join(', ')
   try {
     const res = await callAIApi('/rapid_research', {
-      goal: `Find 8 independent individual technical writers on Medium who publish about: ${topicStr}. Exclude company blogs and vendor accounts. List their Medium profile URLs in the format medium.com/@handle.`,
+      goal: `Find 8 independent individual technical writers on Medium or Dev.to who publish about: ${topicStr}. Exclude company blogs and vendor accounts. List their profile URLs using these formats: medium.com/@handle or dev.to/handle.`,
     }) as { value: string }
-    const handles = extractProfileUrlsFromText(res.value || '').filter(h => h.platform === 'medium')
-    console.log(`[discovery] rapid_research: found ${handles.length} Medium handles`)
+    const handles = extractProfileUrlsFromText(res.value || '')
+    const mediumCount = handles.filter(h => h.platform === 'medium').length
+    const devtoCount = handles.filter(h => h.platform === 'devto').length
+    console.log(`[discovery] rapid_research: found ${handles.length} handles (${mediumCount} Medium, ${devtoCount} Dev.to)`)
     return insertDiscoveredCreators(handles, 'rapid_research')
   } catch (e) {
     console.log(`[discovery] rapid_research failed: ${(e as Error).message}`)
@@ -1049,12 +1050,12 @@ export async function runDiscovery(
 
   // Phase C: LLM look-alike discovery (supplementary to API search) — with overall timeout
   const llmResult = await Promise.race([
-    discoverByLLM(campaign, seeds, options.llmCount || 20),
+    discoverByLLM(campaign, seeds, options.llmCount || 10),
     new Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number; rejected: number }>(resolve =>
       setTimeout(() => {
-        console.log('[discovery] LLM discovery phase timed out (90s), continuing with other results')
+        console.log('[discovery] LLM discovery phase timed out (150s), continuing with other results')
         resolve({ suggestions: [], newInserted: 0, deduped: 0, rejected: 0 })
-      }, 90_000)
+      }, 150_000)
     ),
   ])
 

@@ -3,12 +3,34 @@
 import { callAIApi } from './db'
 import JSON5 from 'json5'
 
-async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string) {
-  const result = await callAIApi('/apply_prompt_to_data', {
-    prompt_name: name,
-    input_data: { ...inputData, return_type: returnType },
-  }) as { value: unknown }
-  return result.value
+async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string, retries = 2): Promise<unknown> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await callAIApi('/apply_prompt_to_data', {
+      prompt_name: name,
+      input_data: { ...inputData, return_type: returnType },
+    }) as { value: unknown }
+
+    const value = result.value
+
+    if (value === 'None' || value === null || value === undefined) {
+      if (attempt < retries) {
+        console.log(`[applyPrompt] ${name}: got None response, retrying (${attempt + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        continue
+      }
+      return value
+    }
+
+    if (typeof value === 'string' && !value.trim().startsWith('{') && !value.trim().startsWith('[') && value.length < 500) {
+      if (attempt < retries) {
+        console.log(`[applyPrompt] ${name}: got conversational response (variable substitution failed?), retrying (${attempt + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        continue
+      }
+    }
+
+    return value
+  }
 }
 
 // ---- AI: Suggest Topics ----
@@ -331,13 +353,15 @@ export async function aiDiscoverCreators(params: {
   const n = params.count || 20;
 
   try {
+    const campaignContext = [
+      `Brief: ${params.brief}`,
+      `Topics: ${params.topics.join(', ')}`,
+      `Personas: ${params.personas.join(', ')}`,
+    ].join('\n');
+    console.log(`[aiDiscoverCreators] input sizes — campaign_context: ${campaignContext.length} chars, seed_creators: ${seedList.length} chars, count: ${n}`);
+
     const raw = await applyPrompt('discover_lookalike_creators', {
-      campaign_context: [
-        `Brief: ${params.brief}`,
-        `Topics: ${params.topics.join(', ')}`,
-        `Personas: ${params.personas.join(', ')}`,
-        params.gumshoeNotes ? `Gumshoe report: ${params.gumshoeNotes}` : '',
-      ].filter(Boolean).join('\n'),
+      campaign_context: campaignContext,
       seed_creators: seedList,
       count: String(n),
     }, 'raw_text') as string;
