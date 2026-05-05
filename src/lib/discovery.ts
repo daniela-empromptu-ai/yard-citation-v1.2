@@ -159,9 +159,10 @@ export async function discoverByLLM(
   const VERIFY_BATCH_SIZE = 5
   const VERIFY_TIMEOUT_MS = 15_000
 
+  // Note: brand-owned suggestions were already filtered out at the `.filter(s => !isBrandOwned(...))`
+  // step above (see `filtered` construction). No need to re-check here.
   const processSuggestion = async (suggestion: typeof filtered[0]): Promise<
     | { type: 'existing'; creator: MatchedCreator }
-    | { type: 'brand' }
     | { type: 'rejected' }
     | { type: 'new'; creator: MatchedCreator }
   > => {
@@ -191,11 +192,6 @@ export async function discoverByLLM(
         type: 'existing',
         creator: { id: existingId, name: suggestion.name, platform: suggestion.platform, handle: suggestion.handle, source: 'ai_discovery' },
       }
-    }
-
-    // Skip brand-owned
-    if (isBrandOwned(suggestion.name, suggestion.handle, suggestion.url)) {
-      return { type: 'brand' }
     }
 
     // Verify creator exists on platform — with timeout to prevent hangs
@@ -241,9 +237,6 @@ export async function discoverByLLM(
       switch (result.value.type) {
         case 'existing':
           suggestions.push(result.value.creator)
-          deduped++
-          break
-        case 'brand':
           deduped++
           break
         case 'rejected':

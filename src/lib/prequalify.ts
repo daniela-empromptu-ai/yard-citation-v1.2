@@ -119,6 +119,15 @@ export async function fetchCreatorTranscripts(
         base.latestPublishDate = latestRssVideo.publishedAt
       }
 
+      // Early dormancy gate: skip Supadata transcript fetches for stale channels.
+      // The post-loop dormancy block (~line 794) still finds these via latestPublishDate
+      // and persists the campaign_creators / creators exclusion bookkeeping.
+      if (base.latestPublishDate && isDormant(base.latestPublishDate)) {
+        console.log(`[transcript] ${creator.creator_name}: skipping (dormant — last upload ${base.latestPublishDate.slice(0, 10)})`)
+        results.push({ ...base, status: 'no_video' })
+        continue
+      }
+
       // Step 2: Select videos for transcript fetching
       // Priority: anchor videos from discovery > per-channel search > RSS fallback
       // Recency filter: only consider videos published within the last 2 years
