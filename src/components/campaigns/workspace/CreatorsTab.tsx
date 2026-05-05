@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink, X, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink, X, Plus, Sparkles } from 'lucide-react';
 
 // ─── Helpers ───
 
@@ -182,7 +182,7 @@ function DismissModal({
 
 // ─── Creator Card ───
 
-function CreatorCard({ cc, onClick, onDismiss }: { cc: CampaignCreator; onClick: () => void; onDismiss: (e: React.MouseEvent) => void }) {
+function CreatorCard({ cc, onClick, onDismiss, onFindSimilar, findSimilarDisabled }: { cc: CampaignCreator; onClick: () => void; onDismiss: (e: React.MouseEvent) => void; onFindSimilar: (e: React.MouseEvent) => void; findSimilarDisabled: boolean }) {
   const palette = PLATFORM_COLORS[cc.creator_platform] ?? DEFAULT_PLATFORM;
   const isScored = cc.overall_score != null;
   const handle = cc.creator_handle
@@ -214,6 +214,14 @@ function CreatorCard({ cc, onClick, onDismiss }: { cc: CampaignCreator; onClick:
               <div className="text-[10px] text-slate-500 uppercase tracking-wide">score</div>
             </div>
           )}
+          <button
+            onClick={onFindSimilar}
+            disabled={findSimilarDisabled || !cc.creator_handle}
+            title={cc.creator_handle ? 'Find more creators like this one' : 'Cannot find similar — creator has no handle'}
+            className="p-1 rounded-lg text-slate-600 hover:text-blue-400 hover:bg-blue-900/20 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0 disabled:cursor-not-allowed"
+          >
+            <Sparkles size={14} />
+          </button>
           <button
             onClick={onDismiss}
             title="Remove from campaign"
@@ -661,7 +669,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     return () => clearInterval(interval);
   }, [surfaceMoreRunning, campaign.id, router]);
 
-  async function handleSurfaceMore() {
+  async function handleSurfaceMore(seedCreatorId?: string) {
     setSurfaceMoreError(null);
     const rawUser = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
     let userId: string | null = null;
@@ -677,7 +685,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
       const res = await fetch(`/api/campaigns/${campaign.id}/surface-more`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify(seedCreatorId ? { user_id: userId, seed_creator_id: seedCreatorId } : { user_id: userId }),
       });
       if (!res.ok) {
         let msg = 'Failed to start pipeline.';
@@ -807,7 +815,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
           </div>
           <div className="flex justify-center">
             <button
-              onClick={handleSurfaceMore}
+              onClick={() => handleSurfaceMore()}
               disabled={surfaceMoreRunning}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60"
             >
@@ -834,7 +842,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             </div>
             <div className="flex flex-col items-end gap-1">
               <button
-                onClick={handleSurfaceMore}
+                onClick={() => handleSurfaceMore()}
                 disabled={surfaceMoreRunning}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -864,6 +872,8 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 cc={cc}
                 onClick={() => loadEvaluation(cc)}
                 onDismiss={e => { e.stopPropagation(); setDismissTarget(cc); }}
+                onFindSimilar={e => { e.stopPropagation(); handleSurfaceMore(cc.creator_id); }}
+                findSimilarDisabled={surfaceMoreRunning}
               />
             ))}
           </div>

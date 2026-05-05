@@ -337,6 +337,7 @@ export async function aiDiscoverCreators(params: {
   gumshoeNotes: string;
   seedCreators: Array<{ name: string; platform: string; handle: string }>;
   existingHandles: Set<string>;
+  excludedHandles?: Set<string>;
   count?: number;
 }): Promise<Array<{
   name: string;
@@ -371,10 +372,12 @@ export async function aiDiscoverCreators(params: {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
 
-    // Filter out creators already in DB (by platform+handle)
+    // Filter out creators already in DB or explicitly excluded (e.g. dismissed in this campaign)
     return parsed.filter((c: { platform: string; handle: string }) => {
       const key = `${c.platform}:${(c.handle || '').toLowerCase().replace(/^@/, '')}`;
-      return !params.existingHandles.has(key);
+      if (params.existingHandles.has(key)) return false;
+      if (params.excludedHandles && params.excludedHandles.has(key)) return false;
+      return true;
     });
   } catch (e) {
     console.error('aiDiscoverCreators error:', e);

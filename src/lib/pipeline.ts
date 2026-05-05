@@ -6,7 +6,7 @@
 
 import { dbQuery, t } from '@/lib/db'
 import { v4 as uuidv4 } from 'uuid'
-import { runDiscovery } from '@/lib/discovery'
+import { runDiscovery, runSimilarDiscovery } from '@/lib/discovery'
 import { runPrequalifyPipeline } from '@/lib/prequalify'
 import { scoreCreator } from '@/lib/score-creator'
 
@@ -114,14 +114,27 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
 
 // ─── Surface More Pipeline (no reset — preserves dismissed/scored creators) ───
 
-export async function runSurfaceMorePipeline(campaignId: string, userId: string, jobId: string): Promise<void> {
+export async function runSurfaceMorePipeline(
+  campaignId: string,
+  userId: string,
+  jobId: string,
+  seedCreatorId?: string
+): Promise<void> {
   try {
     await updateJobStatus(jobId, 'running')
-    await logJobEvent(jobId, 'info', 'Surface More started — discovering additional creators')
+    const startMsg = seedCreatorId
+      ? `Find Similar started — anchoring on creator ${seedCreatorId}`
+      : 'Surface More started — discovering additional creators'
+    await logJobEvent(jobId, 'info', startMsg)
 
     // ── Step 1: Discovery (dedup skips all existing campaign_creators) ──
-    await logJobEvent(jobId, 'info', 'Step 1/3: Discovery — finding additional creators')
-    const discoveryResult = await runDiscovery(campaignId, userId)
+    const stepLabel = seedCreatorId
+      ? 'Step 1/3: Discovery — finding creators similar to seed'
+      : 'Step 1/3: Discovery — finding additional creators'
+    await logJobEvent(jobId, 'info', stepLabel)
+    const discoveryResult = seedCreatorId
+      ? await runSimilarDiscovery(campaignId, userId, seedCreatorId)
+      : await runDiscovery(campaignId, userId)
     await logJobEvent(jobId, 'info', `Discovery complete: ${discoveryResult.total_linked} new creators linked`, discoveryResult as unknown as Record<string, unknown>)
 
     if (discoveryResult.total_linked === 0) {

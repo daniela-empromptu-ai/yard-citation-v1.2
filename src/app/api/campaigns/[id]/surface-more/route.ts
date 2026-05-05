@@ -10,7 +10,8 @@ interface RouteContext {
 export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
     const campaignId = params.id
-    const { user_id } = await req.json()
+    const body = await req.json()
+    const { user_id, seed_creator_id } = body as { user_id?: string; seed_creator_id?: string }
 
     if (!user_id) {
       return NextResponse.json({ error: 'user_id is required' }, { status: 400 })
@@ -29,13 +30,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
 
     const jobId = uuidv4()
+    const jobType = seed_creator_id ? 'find_similar' : 'surface_more'
     await dbQuery(
       `INSERT INTO ${t('jobs')} (id, type, status, campaign_id, created_by_user_id, created_at, updated_at)
-       VALUES ($1, 'surface_more', 'queued', $2, $3, now(), now())`,
-      [jobId, campaignId, user_id]
+       VALUES ($1, $2, 'queued', $3, $4, now(), now())`,
+      [jobId, jobType, campaignId, user_id]
     )
 
-    runSurfaceMorePipeline(campaignId, user_id, jobId).catch(err =>
+    runSurfaceMorePipeline(campaignId, user_id, jobId, seed_creator_id).catch(err =>
       console.error(`[surface-more] Unhandled error:`, err)
     )
 

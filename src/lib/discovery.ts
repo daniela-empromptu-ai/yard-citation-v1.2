@@ -114,7 +114,8 @@ export async function discoverByCategories(
 export async function discoverByLLM(
   campaign: CampaignContext,
   seedCreators: Array<{ name: string; platform: string; handle: string }>,
-  count = 20
+  count = 20,
+  excludedHandles?: Set<string>
 ): Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number; rejected: number }> {
   // Build set of existing platform+handle pairs for dedup
   const existingRes = await dbQuery<{ platform: string; handle: string }>(
@@ -131,6 +132,7 @@ export async function discoverByLLM(
     gumshoeNotes: campaign.gumshoe_notes,
     seedCreators,
     existingHandles,
+    excludedHandles,
     count,
   })
 
@@ -1091,6 +1093,111 @@ export async function runDiscovery(
     `INSERT INTO ${t('activity_log')} (campaign_id, actor_user_id, event_type, event_data_json, created_at)
      VALUES ($1, $2, 'discovery', $3::jsonb, now())`,
     [campaignId, userId, JSON.stringify(result)]
+  )
+
+  return result
+}
+
+/**
+ * Find creators similar to a single seed creator.
+ * Anchors LLM look-alike on one approved creator instead of running the broad pipeline.
+ * Excludes creators already dismissed on this campaign.
+ */
+export async function runSimilarDiscovery(
+  campaignId: string,
+  userId: string,
+  seedCreatorId: string,
+  options: { count?: number } = {}
+): Promise<DiscoveryResult> {
+  const campRes = await dbQuery<{
+    creative_brief: string; personas: string[]; gumshoe_notes: string
+  }>(
+    `SELECT creative_brief, personas, gumshoe_notes FROM ${t('campaigns')} WHERE id = $1`,
+    [campaignId]
+  )
+  if (campRes.data.length === 0) throw new Error('Campaign not found')
+  const camp = campRes.data[0]
+
+  const topicsRes = await dbQuery<{ topic: string }>(
+    `SELECT topic FROM ${t('campaign_topics')} WHERE campaign_id = $1 AND approved = true`,
+    [campaignId]
+  )
+  let topics = topicsRes.data.map(r => r.topic)
+  if (topics.length === 0) {
+    const allTopics = await dbQuery<{ topic: string }>(
+      `SELECT topic FROM ${t('campaign_topics')} WHERE campaign_id = $1`,
+      [campaignId]
+    )
+    topics = allTopics.data.map(r => r.topic)
+  }
+  if (topics.length === 0) throw new Error('No topics found for this campaign')
+
+  const seedRes = await dbQuery<{ name: string; platform: string; handle: string | null }>(
+    `SELECT name, platform, handle FROM ${t('creators')} WHERE id = $1`,
+    [seedCreatorId]
+  )
+  if (seedRes.data.length === 0) throw new Error('Seed creator not found')
+  const seedRow = seedRes.data[0]
+  if (!seedRow.handle) throw new Error('Seed creator has no handle — cannot anchor look-alike')
+  const seed = { name: seedRow.name, platform: seedRow.platform, handle: seedRow.handle }
+
+  // Build exclude set: dismissed creators on this campaign
+  const dismissedRes = await dbQuery<{ platform: string; handle: string }>(
+    `SELECT c.platform, c.handle FROM ${t('campaign_creators')} cc
+     JOIN ${t('creators')} c ON c.id = cc.creator_id
+     WHERE cc.campaign_id = $1 AND cc.pipeline_stage = 'dismissed' AND c.handle IS NOT NULL`,
+    [campaignId]
+  )
+  const excludedHandles = new Set(
+    dismissedRes.data.map(r => `${r.platform}:${(r.handle || '').toLowerCase().replace(/^@/, '')}`)
+  )
+
+  const campaign: CampaignContext = {
+    id: campaignId,
+    creative_brief: camp.creative_brief || '',
+    topics,
+    personas: camp.personas || [],
+    gumshoe_notes: camp.gumshoe_notes || '',
+  }
+
+  const count = options.count || 15
+  console.log(`[discovery] runSimilarDiscovery: seed=${seed.platform}/${seed.handle}, exclude=${excludedHandles.size}, count=${count}`)
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const llmResult = await Promise.race([
+    discoverByLLM(campaign, [seed], count, excludedHandles).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }),
+    new Promise<{ suggestions: MatchedCreator[]; newInserted: number; deduped: number; rejected: number }>(resolve => {
+      timeoutId = setTimeout(() => {
+        console.log('[discovery] runSimilarDiscovery: LLM phase timed out (150s)')
+        resolve({ suggestions: [], newInserted: 0, deduped: 0, rejected: 0 })
+      }, 150_000)
+    }),
+  ])
+
+  const totalLinked = await linkCreatorsToCampaign(campaignId, userId, llmResult.suggestions)
+
+  const result: DiscoveryResult = {
+    db_matched: 0,
+    yt_search_found: 0,
+    yt_search_new: 0,
+    rapid_research_found: 0,
+    rapid_research_new: 0,
+    devto_search_found: 0,
+    devto_search_new: 0,
+    llm_suggested: llmResult.suggestions.length,
+    llm_new_inserted: llmResult.newInserted,
+    llm_deduped: llmResult.deduped,
+    llm_rejected: llmResult.rejected,
+    gumshoe_extracted: 0,
+    total_linked: totalLinked,
+  }
+
+  await dbQuery(
+    `INSERT INTO ${t('activity_log')} (campaign_id, actor_user_id, event_type, event_data_json, created_at)
+     VALUES ($1, $2, 'find_similar', $3::jsonb, now())`,
+    [campaignId, userId, JSON.stringify({ seed_creator_id: seedCreatorId, ...result })]
   )
 
   return result
