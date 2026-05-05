@@ -75,7 +75,7 @@ export async function runScoringBatch(campaignId: string, userId: string, jobId?
 
   let scored = 0
   const failed: string[] = []
-  const SCORE_BATCH_SIZE = 3
+  const SCORE_BATCH_SIZE = 8
 
   for (let i = 0; i < ccRes.data.length; i += SCORE_BATCH_SIZE) {
     const batch = ccRes.data.slice(i, i + SCORE_BATCH_SIZE)

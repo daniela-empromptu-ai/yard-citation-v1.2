@@ -76,18 +76,41 @@ interface PrequalifyResult {
 
 // ─── 1. Fetch Creator Transcripts ───
 
+// Bounded concurrency limiter — caps in-flight async calls.
+// Used to spread Supadata fetches across the rate budget without overrunning it.
+function createLimiter(max: number) {
+  let inFlight = 0
+  const queue: (() => void)[] = []
+  return async function run<T>(fn: () => Promise<T>): Promise<T> {
+    if (inFlight >= max) {
+      await new Promise<void>(resolve => queue.push(resolve))
+    }
+    inFlight++
+    try {
+      return await fn()
+    } finally {
+      inFlight--
+      const next = queue.shift()
+      if (next) next()
+    }
+  }
+}
+
 export async function fetchCreatorTranscripts(
   creators: CreatorRow[],
   campaignTopics: string[] = []
 ): Promise<CreatorTranscriptResult[]> {
   const apiKey = process.env.YOUTUBE_API_KEY || ''
   const videosPerCreator = parseInt(process.env.VIDEOS_PER_CREATOR || '3', 10)
-  const results: CreatorTranscriptResult[] = []
-  let transcriptRequests = 0
+  const concurrency = parseInt(process.env.SUPADATA_CONCURRENCY || '8', 10)
 
-  // Process sequentially to respect Supadata rate limits (free tier: 1 req/s)
-  for (let i = 0; i < creators.length; i++) {
-    const creator = creators[i]
+  // Shared limiter across all creators × videos. Cap of 8 stays under Basic's 10 rps budget.
+  const supadataLimit = createLimiter(concurrency)
+  let completedCount = 0
+
+  console.log(`[prequalify] Transcript fetch starting: ${creators.length} creators, concurrency=${concurrency}`)
+
+  const processCreator = async (creator: CreatorRow): Promise<CreatorTranscriptResult> => {
     const base: CreatorTranscriptResult = {
       creatorId: creator.creator_id,
       creatorName: creator.creator_name,
@@ -98,8 +121,7 @@ export async function fetchCreatorTranscripts(
 
     if (!creator.platform_url) {
       console.log(`[transcript] ${creator.creator_name}: no YouTube URL, skipping`)
-      results.push(base)
-      continue
+      return base
     }
 
     try {
@@ -107,47 +129,37 @@ export async function fetchCreatorTranscripts(
       const resolution = await resolveChannelId(creator.platform_url, apiKey)
       if (!resolution.channelId) {
         console.log(`[transcript] ${creator.creator_name}: channel resolution failed — ${resolution.error || 'no channel ID'}  (url: ${creator.platform_url})`)
-        results.push({ ...base, status: 'no_channel', error: resolution.error })
-        continue
+        return { ...base, status: 'no_channel', error: resolution.error }
       }
       base.channelId = resolution.channelId
 
       // Fetch latest video date via RSS for dormancy check (free, ~1s)
-      // Anchor videos may be old but topically relevant — not a signal of dormancy
       const latestRssVideo = await getLatestVideo(resolution.channelId)
       if (latestRssVideo) {
         base.latestPublishDate = latestRssVideo.publishedAt
       }
 
       // Early dormancy gate: skip Supadata transcript fetches for stale channels.
-      // The post-loop dormancy block (~line 794) still finds these via latestPublishDate
-      // and persists the campaign_creators / creators exclusion bookkeeping.
       if (base.latestPublishDate && isDormant(base.latestPublishDate)) {
         console.log(`[transcript] ${creator.creator_name}: skipping (dormant — last upload ${base.latestPublishDate.slice(0, 10)})`)
-        results.push({ ...base, status: 'no_video' })
-        continue
+        return { ...base, status: 'no_video' }
       }
 
       // Step 2: Select videos for transcript fetching
-      // Priority: anchor videos from discovery > per-channel search > RSS fallback
-      // Recency filter: only consider videos published within the last 2 years
       const twoYearsAgo = new Date(Date.now() - 2 * 365.25 * 24 * 60 * 60 * 1000)
       let topVideos: { videoId: string; title: string; publishedAt: string; url: string }[] = []
 
       if (creator.anchorVideos && creator.anchorVideos.length > 0) {
-        // Use anchor videos from discovery — filter to recent ones first
         const recentAnchors = creator.anchorVideos.filter(v => new Date(v.publishedAt) >= twoYearsAgo)
-        const anchorsToUse = recentAnchors.length > 0 ? recentAnchors : creator.anchorVideos // fallback to all if none recent
+        const anchorsToUse = recentAnchors.length > 0 ? recentAnchors : creator.anchorVideos
         topVideos = anchorsToUse.slice(0, videosPerCreator).map(v => ({
           videoId: v.videoId,
           title: v.title,
           publishedAt: v.publishedAt,
           url: `https://www.youtube.com/watch?v=${v.videoId}`,
         }))
-        console.log(`[transcript] ${creator.creator_name}: using ${topVideos.length} anchor videos from discovery`)
       }
 
-      // If we have fewer than videosPerCreator, supplement with per-channel search then RSS
       if (topVideos.length < videosPerCreator) {
         const needed = videosPerCreator - topVideos.length
         const existingIds = new Set(topVideos.map(v => v.videoId))
@@ -170,7 +182,6 @@ export async function fetchCreatorTranscripts(
                 publishedAt: r.publishedAt || new Date().toISOString(),
                 url: `https://www.youtube.com/watch?v=${r.videoId}`,
               })))
-              console.log(`[transcript] ${creator.creator_name}: supplemented with ${fresh.length} videos from channel search`)
             }
           } catch (e) {
             console.log(`[transcript] ${creator.creator_name}: channel search failed (${(e as Error).message})`)
@@ -187,24 +198,18 @@ export async function fetchCreatorTranscripts(
           const allFetchedIds = new Set(topVideos.map(v => v.videoId))
           const fresh = ranked.filter(v => !allFetchedIds.has(v.videoId)).slice(0, videosPerCreator - topVideos.length)
           topVideos.push(...fresh)
-          if (fresh.length > 0) {
-            console.log(`[transcript] ${creator.creator_name}: supplemented with ${fresh.length} videos from RSS`)
-          }
         }
       }
 
       if (topVideos.length === 0) {
         console.log(`[transcript] ${creator.creator_name}: no videos found for channel ${resolution.channelId}`)
-        results.push({ ...base, status: 'no_video' })
-        continue
+        return { ...base, status: 'no_video' }
       }
 
       base.video = topVideos[0]
       base.videos = topVideos
 
-      // Step 3: Fetch transcripts for top N videos (cache-first, Supadata fallback)
-      // Cache hit: a previous campaign already transcribed this video → reuse raw_text from content_items.
-      // This skips the 1 req/sec Supadata rate limit for any video we've seen before.
+      // Step 3: Cache lookup, then fetch missing transcripts concurrently
       const cacheRes = await dbQuery<{ url: string; raw_text: string; language: string | null }>(
         `SELECT url, raw_text, language FROM ${t('content_items')} WHERE url = ANY($1)`,
         [topVideos.map(v => v.url)]
@@ -218,42 +223,36 @@ export async function fetchCreatorTranscripts(
       const cacheHits = topVideos.filter(v => cache.has(v.url)).length
       console.log(`[transcript] ${creator.creator_name}: ${cacheHits}/${topVideos.length} cached, fetching ${topVideos.length - cacheHits} via Supadata`)
 
-      // Keep per-video transcripts separate so each gets its own content_item (fixes single-video evidence bug)
+      // Fetch transcripts for all videos in parallel — Supadata calls go through the shared limiter.
+      const transcriptResults = await Promise.all(topVideos.map(async (video) => {
+        const cached = cache.get(video.url)
+        if (cached) {
+          return { video, transcript: { videoId: video.videoId, language: cached.language, segments: [] as { text: string; start: number; duration: number }[], fullText: cached.fullText } }
+        }
+        const transcript = await supadataLimit(() => buildTranscriptFromTimedText(video.videoId))
+        if (!transcript) {
+          console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
+        }
+        return { video, transcript }
+      }))
+
       const allSegments: { text: string; start: number; duration: number }[] = []
       const allFullTexts: string[] = []
       const perVideoTranscripts: { video: typeof topVideos[0]; fullText: string; language: string }[] = []
       let transcriptLanguage = 'en'
-      let anyTranscript = false
 
-      for (const video of topVideos) {
-        const cached = cache.get(video.url)
-        let transcript: { videoId: string; language: string; segments: { text: string; start: number; duration: number }[]; fullText: string } | null = null
-
-        if (cached) {
-          transcript = { videoId: video.videoId, language: cached.language, segments: [], fullText: cached.fullText }
-        } else {
-          if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 500))
-          transcriptRequests++
-          transcript = await buildTranscriptFromTimedText(video.videoId)
-        }
-
-        if (transcript) {
-          anyTranscript = true
-          allSegments.push(...transcript.segments)
-          allFullTexts.push(transcript.fullText)
-          transcriptLanguage = transcript.language
-          perVideoTranscripts.push({ video, fullText: transcript.fullText, language: transcript.language })
-        } else {
-          console.log(`[transcript] ${creator.creator_name}: no transcript for video ${video.videoId}`)
-        }
+      for (const r of transcriptResults) {
+        if (!r.transcript) continue
+        allSegments.push(...r.transcript.segments)
+        allFullTexts.push(r.transcript.fullText)
+        transcriptLanguage = r.transcript.language
+        perVideoTranscripts.push({ video: r.video, fullText: r.transcript.fullText, language: r.transcript.language })
       }
 
-      if (!anyTranscript) {
-        results.push({ ...base, status: 'no_transcript' })
-        continue
+      if (perVideoTranscripts.length === 0) {
+        return { ...base, status: 'no_transcript' }
       }
 
-      // Merged transcript kept for AI pre-qual screening (Stage 1/2 uses full merged text)
       const mergedTranscript = {
         videoId: topVideos[0].videoId,
         language: transcriptLanguage,
@@ -263,18 +262,20 @@ export async function fetchCreatorTranscripts(
 
       const totalWords = mergedTranscript.fullText.split(/\s+/).length
       console.log(`[transcript] ${creator.creator_name}: success — ${topVideos.length} videos, ${totalWords} words`)
-      results.push({ ...base, status: 'success', transcript: mergedTranscript, perVideoTranscripts })
+      return { ...base, status: 'success', transcript: mergedTranscript, perVideoTranscripts }
     } catch (e) {
       console.log(`[transcript] ${creator.creator_name}: error — ${(e as Error).message}`)
-      results.push({ ...base, status: 'error', error: (e as Error).message })
-    }
-
-    if ((i + 1) % 10 === 0) {
-      console.log(`[prequalify] Transcript progress: ${i + 1}/${creators.length}`)
+      return { ...base, status: 'error', error: (e as Error).message }
+    } finally {
+      completedCount++
+      if (completedCount % 10 === 0 || completedCount === creators.length) {
+        console.log(`[prequalify] Transcript progress: ${completedCount}/${creators.length} done`)
+      }
     }
   }
-  console.log(`[prequalify] Transcript progress: ${creators.length}/${creators.length} done`)
 
+  // Process all creators in parallel — the supadataLimit caps actual Supadata in-flight calls.
+  const results = await Promise.all(creators.map(processCreator))
   return results
 }
 
