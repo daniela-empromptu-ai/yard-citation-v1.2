@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { CoverageTag, PlatformBadge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
@@ -633,6 +634,7 @@ function DetailPanel({
 // ─── Main Component ───
 
 export default function CreatorsTab({ campaign, campaignCreators }: Props) {
+  const { data: session } = useSession();
   const [selectedCc, setSelectedCc] = useState<CampaignCreator | null>(null);
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evidence, setEvidence] = useState<EvidenceSnippet[]>([]);
@@ -671,10 +673,12 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
 
   async function handleSurfaceMore(seedCreatorId?: string) {
     setSurfaceMoreError(null);
-    const rawUser = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
-    let userId: string | null = null;
-    if (rawUser) {
-      try { userId = (JSON.parse(rawUser) as { id: string }).id ?? rawUser; } catch { userId = rawUser; }
+    let userId: string | null = (session?.user as { id?: string } | undefined)?.id ?? null;
+    if (!userId) {
+      const rawUser = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
+      if (rawUser) {
+        try { userId = (JSON.parse(rawUser) as { id: string }).id ?? rawUser; } catch { userId = rawUser; }
+      }
     }
     if (!userId) {
       setSurfaceMoreError('No active user — please reload the page.');
