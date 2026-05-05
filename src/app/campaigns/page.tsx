@@ -1,23 +1,56 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { StageBadge } from '@/components/ui/Badge'
-import { Plus, RefreshCw, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronRight, Trash2, Plus, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 
+const STEPS = ['setup', 'analysis', 'opportunities', 'outreach', 'production', 'client-view']
+const STAGE_TO_STEP: Record<string, string> = {
+  draft: 'setup', setup: 'setup',
+  discovery: 'analysis', analysis: 'analysis',
+  scoring: 'outreach', scored: 'outreach', review: 'outreach',
+  engage: 'outreach', opportunities: 'outreach', outreach: 'outreach',
+  production: 'production',
+  'client-view': 'client-view', live: 'client-view',
+}
+function campaignTab(stage: unknown): string {
+  const step = STAGE_TO_STEP[String(stage)] ?? 'setup'
+  const idx = STEPS.indexOf(step)
+  return STEPS[Math.max(0, idx - 1)] || step
+}
+
+const AVATAR_PALETTES = [
+  { bg: 'rgba(237,126,8,0.18)',  text: '#ed7e08' },
+  { bg: 'rgba(99,102,241,0.18)', text: '#818cf8' },
+  { bg: 'rgba(34,197,94,0.18)',  text: '#4ade80' },
+  { bg: 'rgba(236,72,153,0.18)', text: '#f472b6' },
+  { bg: 'rgba(14,165,233,0.18)', text: '#38bdf8' },
+  { bg: 'rgba(168,85,247,0.18)', text: '#c084fc' },
+]
+function avatarPalette(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff
+  return AVATAR_PALETTES[h % AVATAR_PALETTES.length]
+}
+
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const PAGE_SIZE = 20
   const router = useRouter()
   const { addToast } = useToast()
 
@@ -34,15 +67,6 @@ export default function CampaignsPage() {
       .catch(e => { setError(e.message); setLoading(false) })
   }
   useEffect(() => { load() }, [])
-
-  const filtered = campaigns.filter(c =>
-    !search || String(c.name).toLowerCase().includes(search.toLowerCase()) ||
-    String(c.client_name).toLowerCase().includes(search.toLowerCase())
-  )
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  useEffect(() => { setPage(1) }, [search])
 
   const handleDelete = async () => {
     if (!deleteTarget) return
@@ -64,161 +88,154 @@ export default function CampaignsPage() {
     }
   }
 
+  const activeCount = campaigns.filter(c => c.status === 'active').length
+
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-100">Campaigns</h1>
-          <p className="text-sm text-slate-400 mt-0.5">{campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}</p>
+    <div className="max-w-4xl mx-auto pb-12">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="text-[11px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+          <span style={{ color: 'var(--accent)' }}>—</span> Workspace
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Filter campaigns…"
-              className="pl-8 pr-3 h-8 text-xs border border-[#2d3748] rounded-lg bg-[#111827] text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-            />
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-[32px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>Campaigns</h1>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+              {activeCount} active campaign{activeCount !== 1 ? 's' : ''}
+              {campaigns.length > activeCount ? ` · ${campaigns.length - activeCount} draft` : ''}
+            </p>
           </div>
-          <button onClick={load} className="flex items-center gap-1.5 px-3 h-8 border border-[#2d3748] rounded-lg text-xs text-slate-400 hover:bg-[#263044]">
-            <RefreshCw size={12} />
-          </button>
-          <button onClick={() => router.push('/campaigns/new')} className="flex items-center gap-1.5 px-3 h-8 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700">
-            <Plus size={13} /> New Campaign
-          </button>
         </div>
       </div>
 
+      {/* Column headers */}
+      {!loading && campaigns.length > 0 && (
+        <div className="grid grid-cols-[1fr_100px_90px_90px_32px] gap-4 px-4 mb-2">
+          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Client</div>
+          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Status</div>
+          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Experts</div>
+          <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Last run</div>
+          <div />
+        </div>
+      )}
+
+      {/* States */}
       {loading && (
-        <div className="flex items-center gap-2 text-slate-500"><RefreshCw size={14} className="animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 py-12 justify-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          <Loader2 size={14} className="animate-spin" /> Loading…
+        </div>
       )}
-
       {error && (
-        <div className="p-4 bg-red-900/20 rounded-lg border border-red-700/40">
-          <p className="text-red-400 text-sm">Error: {error}</p>
-          <button onClick={load} className="mt-2 text-xs text-red-300 underline hover:no-underline">Retry</button>
+        <div className="p-4 rounded-xl text-[13px]" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          {error} — <button onClick={load} className="underline">retry</button>
         </div>
       )}
 
-      {!loading && !error && (<>
-        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl overflow-hidden">
-          {paged.length === 0 ? (
-            <EmptyState
-              icon="\ud83d\udce2"
-              title="No campaigns found"
-              description="Seed demo data in Settings or create a new campaign"
-              action={{ label: 'Create Campaign', onClick: () => router.push('/campaigns/new') }}
-            />
-          ) : (
-            <table className="table-dense w-full">
-              <thead>
-                <tr>
-                  <th className="text-left">Campaign Name</th>
-                  <th className="text-left">Client</th>
-                  <th className="text-left">Stage</th>
-                  <th className="text-left">GEO Targets</th>
-                  <th className="text-left">Owner</th>
-                  <th className="text-left">Creators</th>
-                  <th className="text-left">Scored</th>
-                  <th className="text-left">Updated</th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map(c => (
-                  <tr
-                    key={String(c.id)}
-                    className="cursor-pointer hover:bg-[#263044]"
-                    onClick={() => router.push(`/campaigns/${c.id}/setup`)}
-                  >
-                    <td>
-                      <Link
-                        href={`/campaigns/${c.id}/setup`}
-                        className="font-semibold text-slate-200 hover:text-blue-400"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {String(c.name)}
-                      </Link>
-                    </td>
-                    <td className="text-slate-400">{String(c.client_name)}</td>
-                    <td><StageBadge stage={String(c.stage)} /></td>
-                    <td className="text-xs text-slate-500">
-                      {Array.isArray(c.geo_targets) ? c.geo_targets.join(', ') : String(c.geo_targets || '')}
-                    </td>
-                    <td className="text-slate-400 text-sm">{String(c.owner_name)}</td>
-                    <td className="text-slate-300 font-medium">{String(c.creator_count || 0)}</td>
-                    <td>
-                      <span className={`text-sm font-medium ${Number(c.scored_count) > 0 ? 'text-green-400' : 'text-slate-500'}`}>
-                        {String(c.scored_count || 0)}
-                      </span>
-                    </td>
-                    <td className="text-slate-500 text-xs">
-                      {c.updated_at ? new Date(String(c.updated_at)).toLocaleDateString() : '—'}
-                    </td>
-                    <td>
-                      <button
-                        onClick={e => { e.stopPropagation(); setDeleteTarget(c) }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                        title="Delete campaign"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+      {!loading && !error && campaigns.length === 0 && (
+        <EmptyState
+          icon=""
+          title="No campaigns yet"
+          description="Create your first campaign to get started."
+          action={{ label: 'New campaign', onClick: () => router.push('/campaigns/new') }}
+        />
+      )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
-            <span>Page {page} of {totalPages} ({filtered.length} campaigns)</span>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1 border border-[#2d3748] rounded-lg text-xs text-slate-400 hover:bg-[#263044] disabled:opacity-30">
-                <ChevronLeft size={16} />
-              </button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="p-1 border border-[#2d3748] rounded-lg text-xs text-slate-400 hover:bg-[#263044] disabled:opacity-30">
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </>)}
-      {/* Delete confirmation modal */}
+      {/* Campaign rows */}
+      {!loading && !error && campaigns.length > 0 && (
+        <div className="space-y-2">
+          {campaigns.map(c => {
+            const clientName = String(c.client_name || '')
+            const palette = avatarPalette(clientName)
+            const initial = clientName.charAt(0).toUpperCase()
+            const expertCount = Number(c.expert_count || 0)
+            const lastRunAt = c.last_run_at ? relativeTime(String(c.last_run_at)) : null
+            const isActive = c.status === 'active'
+            const href = `/campaigns/${c.id}/${campaignTab(c.stage)}`
+
+            return (
+              <div
+                key={String(c.id)}
+                onClick={() => router.push(href)}
+                className="group grid grid-cols-[1fr_100px_90px_90px_32px] gap-4 items-center px-4 py-4 rounded-xl cursor-pointer transition-colors"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--border-default)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-subtle)')}
+              >
+                {/* Client + campaign name */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-bold shrink-0"
+                    style={{ background: palette.bg, color: palette.text }}
+                  >
+                    {initial}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {String(c.name)}
+                    </div>
+                    <div className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {clientName}
+                      {c.owner_name ? ` · ${String(c.owner_name)}` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={isActive
+                      ? { background: 'rgba(34,197,94,0.12)', color: '#4ade80' }
+                      : { background: 'var(--bg-elevated)', color: 'var(--text-muted)' }
+                    }
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: isActive ? '#4ade80' : 'var(--text-muted)' }} />
+                    {isActive ? 'Live' : 'Draft'}
+                  </span>
+                </div>
+
+                {/* Experts */}
+                <div className="text-[13px] font-semibold" style={{ color: expertCount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                  {expertCount > 0 ? `${expertCount} experts` : '—'}
+                </div>
+
+                {/* Last run */}
+                <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                  {lastRunAt ?? '—'}
+                </div>
+
+                {/* Chevron + delete */}
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={e => { e.stopPropagation(); setDeleteTarget(c) }}
+                    className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Delete"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                  <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Delete modal */}
       <Modal open={deleteTarget !== null} onClose={() => !deleting && setDeleteTarget(null)} title="Delete Campaign" size="sm">
         {deleteTarget && (
           <div className="space-y-4">
-            <div className="p-3 bg-red-900/20 border border-red-700/40 rounded-lg">
-              <p className="text-sm font-medium text-red-400">This is a destructive action that cannot be undone.</p>
+            <div className="p-3 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <p className="text-[13px] font-medium" style={{ color: '#f87171' }}>This cannot be undone.</p>
             </div>
-            <p className="text-sm text-slate-300">
-              Delete <strong className="text-slate-100">{String(deleteTarget.name)}</strong>? This will permanently remove:
-            </p>
-            <ul className="text-sm text-slate-400 space-y-1 ml-4 list-disc">
-              <li>All search terms, topics, and campaign settings</li>
-              <li>All creator evaluations and scores for this campaign</li>
-              <li>All activity history</li>
-            </ul>
-            <p className="text-xs text-slate-500">
-              Creators themselves will remain in your Creator Network.
+            <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+              Delete <strong style={{ color: 'var(--text-primary)' }}>{String(deleteTarget.name)}</strong>? All evaluations, scores, and activity history will be removed.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-lg border border-[#2d3748] hover:bg-[#263044]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
-              >
-                {deleting ? 'Deleting...' : 'Delete Campaign'}
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="btn-ghost text-[13px]">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} className="h-8 px-4 rounded-lg text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: '#dc2626' }}>
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

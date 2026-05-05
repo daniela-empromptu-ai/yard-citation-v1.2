@@ -34,6 +34,7 @@ export default async function CampaignPage({ params }: Props) {
     dbQuery<{
       id: string; creator_id: string; campaign_id: string;
       creator_name: string; creator_platform: string; creator_handle: string | null;
+      creator_subscriber_count: number | null; creator_categories: string | null;
       source: string | null; pipeline_stage: string; scoring_status: string;
       overall_score: number | null; evidence_coverage: string | null;
       needs_manual_review: boolean | null; evaluated_at: string | null;
@@ -42,6 +43,8 @@ export default async function CampaignPage({ params }: Props) {
       SELECT
         cc.id, cc.creator_id, cc.campaign_id, cc.source, cc.pipeline_stage, cc.scoring_status, cc.updated_at, cc.client_feedback, cc.client_rating,
         cr.name as creator_name, cr.platform as creator_platform, cr.handle as creator_handle,
+        cr.subscriber_count as creator_subscriber_count,
+        (SELECT string_agg(cat.name, '|' ORDER BY cat.name) FROM ${t('creator_categories')} crc JOIN ${t('categories')} cat ON cat.id = crc.category_id WHERE crc.creator_id = cc.creator_id) as creator_categories,
         e.overall_score, e.evidence_coverage, e.needs_manual_review, e.evaluated_at
       FROM ${t('campaign_creators')} cc
       JOIN ${t('creators')} cr ON cr.id = cc.creator_id

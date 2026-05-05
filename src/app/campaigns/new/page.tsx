@@ -2,400 +2,140 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, ChevronLeft, Plus, X, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowRight, Plus } from 'lucide-react'
 import { showToast } from '@/components/ui/Toaster'
 import { useSession } from 'next-auth/react'
-
-const STEPS = ['Basics', 'Creative Brief', 'Personas & Topics']
+import { PageHeader } from '@/components/ui/PageHeader'
 
 export default function NewCampaignPage() {
   const router = useRouter()
   const { data: session } = useSession()
-  const [step, setStep] = useState(0)
-  const [clients, setClients] = useState<Record<string, string>[]>([])
-  const [loading, setLoading] = useState(false)
-  const [suggestingTopics, setSuggestingTopics] = useState(false)
   const submittingRef = useRef(false)
 
-  const [form, setForm] = useState({
-    client_id: '',
-    name: '',
-    geo_targets: [] as string[],
-    language: 'English',
-    product_category: '',
-    creative_brief: '',
-    gumshoe_notes: '',
-    personas: [] as string[],
-    topics: [] as string[],
-    newGeo: '',
-    newPersona: '',
-    newTopic: '',
-    newClientName: '',
-    owner_user_id: 'a1000000-0000-0000-0000-000000000001',
-  })
-
-  const [suggestedTopics, setSuggestedTopics] = useState<{ topic: string; confidence: number; rationale: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([])
+  const [clientId, setClientId] = useState('')
+  const [newClientName, setNewClientName] = useState('')
+  const [name, setName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    fetch('/api/clients').then(r => r.json()).then(setClients).catch(() => setClients([]))
+    fetch('/api/clients')
+      .then((r) => r.json())
+      .then(setClients)
+      .catch(() => setClients([]))
   }, [])
-
-  useEffect(() => {
-    if (session?.user?.id) {
-      setForm(f => ({ ...f, owner_user_id: session.user.id }))
-    }
-  }, [session])
-
-  const update = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
-
-  const addToArray = (key: string, valueKey: string) => {
-    const val = form[valueKey as keyof typeof form] as string
-    if (!val.trim()) return
-    const arr = form[key as keyof typeof form] as string[]
-    if (!arr.includes(val.trim())) {
-      update(key, [...arr, val.trim()])
-    }
-    update(valueKey, '')
-  }
-
-  const removeFromArray = (key: string, val: string) => {
-    const arr = form[key as keyof typeof form] as string[]
-    update(key, arr.filter(x => x !== val))
-  }
-
-  const createClient = async () => {
-    if (!form.newClientName.trim()) return
-    const res = await fetch('/api/clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: form.newClientName }),
-    })
-    if (!res.ok) return
-    const listRes = await fetch(`/api/clients?_t=${Date.now()}`)
-    const allClients = await listRes.json()
-    setClients(allClients)
-    const created = allClients.find((c: Record<string, string>) => c.name === form.newClientName.trim())
-    if (created) update('client_id', created.id)
-    update('newClientName', '')
-  }
-
-  const suggestTopics = async () => {
-    if (!form.creative_brief.trim()) return
-    setSuggestingTopics(true)
-    try {
-      const res = await fetch('/api/ai/suggest-topics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief: form.creative_brief }),
-      })
-      const topics = await res.json()
-      setSuggestedTopics(Array.isArray(topics) ? topics : [])
-    } catch (e) {
-      showToast('error', `Failed to suggest topics: ${(e as Error).message}`)
-    }
-    setSuggestingTopics(false)
-  }
 
   const submit = async () => {
     if (submittingRef.current) return
-    if (!form.client_id || !form.name || !form.creative_brief) {
-      showToast('error', 'Please fill in all required fields')
+    const finalClientId = clientId === 'new' ? 'new' : clientId
+    if (!finalClientId || !name.trim()) {
+      showToast('error', 'Pick a client and enter a campaign name')
       return
     }
-    if (form.topics.length === 0) {
-      showToast('error', 'Please add at least one topic before creating the campaign')
+    if (clientId === 'new' && !newClientName.trim()) {
+      showToast('error', 'Enter the new client name')
       return
     }
     submittingRef.current = true
-    setLoading(true)
+    setCreating(true)
     try {
       const res = await fetch('/api/campaigns/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client_id: form.client_id,
-          name: form.name,
-          owner_user_id: form.owner_user_id,
-          geo_targets: form.geo_targets,
-          language: form.language,
-          product_category: form.product_category,
-          creative_brief: form.creative_brief,
-          gumshoe_notes: form.gumshoe_notes || null,
-          personas: form.personas,
-          topics: form.topics,
+          client_id: finalClientId,
+          new_client_name: clientId === 'new' ? newClientName.trim() : undefined,
+          name: name.trim(),
+          owner_user_id: session?.user?.id || '',
+          language: 'English',
+          creative_brief: '',
+          personas: [],
+          topics: [],
         }),
       })
-      const campaign = await res.json()
-      if (campaign.campaign_id) {
-        showToast('success', 'Campaign created — generating search terms...')
-        router.push(`/campaigns/${campaign.campaign_id}/search-terms`)
+      const data = await res.json()
+      if (data.campaign_id) {
+        router.replace(`/campaigns/${data.campaign_id}/setup`)
       } else {
-        showToast('error', `Failed to create campaign: ${campaign.error || 'Unknown error'}`)
+        showToast('error', `Failed to create: ${data.error || 'Unknown error'}`)
       }
     } catch (e) {
       showToast('error', `Error: ${(e as Error).message}`)
+    } finally {
+      submittingRef.current = false
+      setCreating(false)
     }
-    submittingRef.current = false
-    setLoading(false)
   }
 
-  const stepValid =
-    step === 0 ? form.client_id.trim() !== '' && form.name.trim() !== '' :
-    step === 1 ? form.creative_brief.trim() !== '' :
-    step === 2 ? form.topics.length > 0 :
-    true
-
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-[480px] mx-auto pb-12">
+      <PageHeader
+        eyebrow="New campaign"
+        title="Start a campaign"
+        subtitle="Pick the client and give the campaign a name. You'll set the brief and topics on the next step."
+      />
+
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-100">New Campaign</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Set up a creator discovery campaign</p>
-      </div>
-
-      {/* Progress */}
-      <div className="flex items-center gap-0 mb-8">
-        {STEPS.map((s, i) => (
-          <div key={s} className="flex items-center">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : i < step ? 'bg-green-900/30 text-green-400' : 'bg-slate-800/50 text-slate-500'}`}>
-              <span>{i < step ? '\u2713' : i + 1}</span>
-              <span>{s}</span>
-            </div>
-            {i < STEPS.length - 1 && <ChevronRight size={14} className="text-slate-600 mx-1" />}
-          </div>
-        ))}
-      </div>
-
-      {/* STEP 0: Basics */}
-      {step === 0 && (
-        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Client *</label>
-            <div className="flex gap-2">
-              <select
-                value={form.client_id}
-                onChange={e => update('client_id', e.target.value)}
-                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select client...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <input
-                placeholder="Or create new..."
-                value={form.newClientName}
-                onChange={e => update('newClientName', e.target.value)}
-                className="w-40 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => e.key === 'Enter' && createClient()}
-              />
-              <button onClick={createClient} className="px-3 h-9 bg-[#263044] hover:bg-slate-700 text-sm rounded-lg text-slate-300 font-medium">Add</button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Campaign Name *</label>
-            <input
-              value={form.name}
-              onChange={e => update('name', e.target.value)}
-              placeholder="e.g. CloudForge — Kubernetes Cost Optimization (US)"
-              className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">GEO Targets</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={form.newGeo}
-                onChange={e => update('newGeo', e.target.value)}
-                placeholder="e.g. United States"
-                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => e.key === 'Enter' && addToArray('geo_targets', 'newGeo')}
-              />
-              <button onClick={() => addToArray('geo_targets', 'newGeo')} className="px-3 h-9 bg-[#263044] hover:bg-slate-700 text-sm rounded-lg text-slate-300 font-medium">
-                <Plus size={14} />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {form.geo_targets.map(g => (
-                <span key={g} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-900/30 text-blue-400 text-xs rounded-full">
-                  {g}
-                  <button onClick={() => removeFromArray('geo_targets', g)}><X size={10} /></button>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Language</label>
-              <input
-                value={form.language}
-                onChange={e => update('language', e.target.value)}
-                className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Product Category</label>
-              <input
-                value={form.product_category}
-                onChange={e => update('product_category', e.target.value)}
-                placeholder="e.g. FinOps / Kubernetes"
-                className="w-full h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 1: Brief + Gumshoe */}
-      {step === 1 && (
-        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Creative Brief * <span className="text-slate-500 font-normal">(Markdown supported)</span></label>
-            <p className="text-xs text-slate-500 mb-2">This brief provides context for topic extraction and creator fit.</p>
-            <textarea
-              value={form.creative_brief}
-              onChange={e => update('creative_brief', e.target.value)}
-              placeholder="# Campaign Brief&#10;&#10;## Key message&#10;..."
-              rows={14}
-              className="w-full px-3 py-2 border border-[#2d3748] rounded-lg text-sm font-mono bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Gumshoe Report URL <span className="text-slate-500 font-normal">(optional)</span></label>
-            <p className="text-xs text-slate-500 mb-2">Link a Gumshoe report to automatically extract cited creators during discovery.</p>
-            <input
-              type="url"
-              value={form.gumshoe_notes}
-              onChange={e => update('gumshoe_notes', e.target.value)}
-              placeholder="https://app.gumshoe.ai/r/brand/report/12345"
-              className="w-full px-3 py-2 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: Personas + Topics */}
-      {step === 2 && (
-        <div className="bg-[#1e293b] border border-[#2d3748] rounded-xl p-6 space-y-6">
-          {/* Personas */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Personas</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={form.newPersona}
-                onChange={e => update('newPersona', e.target.value)}
-                placeholder="e.g. Platform Engineer"
-                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => e.key === 'Enter' && addToArray('personas', 'newPersona')}
-              />
-              <button onClick={() => addToArray('personas', 'newPersona')} className="px-3 h-9 bg-[#263044] text-slate-300 text-sm rounded-lg font-medium hover:bg-slate-700">Add</button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {form.personas.map(p => (
-                <span key={p} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-900/30 text-purple-400 text-xs rounded-full">
-                  {p}
-                  <button onClick={() => removeFromArray('personas', p)}><X size={10} /></button>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Topics */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-slate-300">Topics *</label>
-              <button
-                onClick={suggestTopics}
-                disabled={suggestingTopics || !form.creative_brief}
-                className="flex items-center gap-1.5 px-3 h-7 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
-                {suggestingTopics ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                Suggest topics (AI)
-              </button>
-            </div>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={form.newTopic}
-                onChange={e => update('newTopic', e.target.value)}
-                placeholder="e.g. Kubernetes cost optimization"
-                className="flex-1 h-9 px-3 border border-[#2d3748] rounded-lg text-sm bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => e.key === 'Enter' && addToArray('topics', 'newTopic')}
-              />
-              <button onClick={() => addToArray('topics', 'newTopic')} className="px-3 h-9 bg-[#263044] text-slate-300 text-sm rounded-lg font-medium hover:bg-slate-700">Add</button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {form.topics.map(t => (
-                <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-900/30 text-blue-400 text-xs rounded-full">
-                  {t}
-                  <button onClick={() => removeFromArray('topics', t)}><X size={10} /></button>
-                </span>
-              ))}
-            </div>
-            {suggestedTopics.length > 0 && (
-              <div className="border border-purple-700/50 rounded-lg p-3 bg-purple-900/20">
-                <p className="text-xs font-semibold text-purple-400 mb-2">AI Suggestions (click to add):</p>
-                {suggestedTopics.map((s, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-2">
-                    <button
-                      onClick={() => {
-                        if (!form.topics.includes(s.topic)) update('topics', [...form.topics, s.topic])
-                        setSuggestedTopics(prev => prev.filter((_, j) => j !== i))
-                      }}
-                      className="shrink-0 px-2.5 py-1 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700"
-                    >
-                      + {s.topic}
-                    </button>
-                    <div>
-                      <span className="text-[10px] text-purple-400 font-medium">Confidence: {Math.round(s.confidence * 100)}%</span>
-                      <p className="text-[11px] text-slate-400">{s.rationale}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between mt-6">
-        <button
-          onClick={() => setStep(s => Math.max(0, s - 1))}
-          disabled={step === 0}
-          className="flex items-center gap-2 px-4 h-9 border border-[#2d3748] rounded-lg text-sm text-slate-400 hover:bg-[#263044] disabled:opacity-40"
+        <div
+          className="text-[10px] font-semibold uppercase tracking-widest mb-1.5"
+          style={{ color: 'var(--text-secondary)' }}
         >
-          <ChevronLeft size={14} /> Back
-        </button>
-        {step < STEPS.length - 1 ? (
-          <button
-            onClick={() => {
-              const next = step + 1
-              setStep(next)
-              if (next === 2 && form.creative_brief && suggestedTopics.length === 0 && form.topics.length === 0) {
-                suggestTopics()
-              }
-            }}
-            disabled={!stepValid}
-            className="flex items-center gap-2 px-4 h-9 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next <ChevronRight size={14} />
-          </button>
-        ) : (
-          <button
-            onClick={submit}
-            disabled={loading || !stepValid}
-            className="flex items-center gap-2 px-5 h-9 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                Creating Campaign...
-              </>
-            ) : (
-              'Create Campaign'
-            )}
-          </button>
+          Client
+        </div>
+        <select
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          className="select-field"
+        >
+          <option value="">Select a client…</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+          <option value="new">+ Create new client</option>
+        </select>
+        {clientId === 'new' && (
+          <input
+            value={newClientName}
+            onChange={(e) => setNewClientName(e.target.value)}
+            placeholder="New client name"
+            className="input-field mt-2"
+          />
         )}
+      </div>
+
+      <div className="mb-6">
+        <div
+          className="text-[10px] font-semibold uppercase tracking-widest mb-1.5"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          Campaign name
+        </div>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Q3 visibility push"
+          className="input-field"
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-3 mt-10">
+        <button
+          onClick={() => router.push('/campaigns')}
+          className="btn-ghost text-[13px]"
+          disabled={creating}
+        >
+          Cancel
+        </button>
+        <button onClick={submit} disabled={creating} className="btn-primary">
+          {creating ? 'Creating…' : (
+            <>
+              Continue to Setup
+              <ArrowRight size={14} />
+            </>
+          )}
+        </button>
       </div>
     </div>
   )

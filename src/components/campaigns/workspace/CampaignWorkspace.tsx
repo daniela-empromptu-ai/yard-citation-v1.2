@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { stageLabel } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ComingSoon } from '@/components/ui/ComingSoon';
 import SetupTab from './SetupTab';
-import SearchTermsTab from './SearchTermsTab';
 import DiscoveryTab from './DiscoveryTab';
 import CreatorsTab from './CreatorsTab';
 
 interface CampaignCreatorRow {
   id: string; creator_id: string; creator_name: string; creator_platform: string;
   creator_handle: string | null; source: string | null;
+  creator_subscriber_count?: number | null;
+  creator_categories?: string | null;
   pipeline_stage: string; scoring_status: string;
   overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
@@ -45,131 +46,162 @@ interface Props {
   pipelineJob?: PipelineJob | null;
 }
 
+const STEP_META: Record<string, { eyebrow: string; title: (campaignName: string) => string; subtitle: string }> = {
+  setup: {
+    eyebrow: 'Step 1 — Setup',
+    title: (n) => `${n} setup`,
+    subtitle: "Give us the brand and the brief. We'll run the visibility analysis next.",
+  },
+  analysis: {
+    eyebrow: 'Step 2 — Analysis',
+    title: () => 'Visibility analysis',
+    subtitle: 'Where the brand stands across AI-cited sources.',
+  },
+  opportunities: {
+    eyebrow: 'Step 3 — Opportunities',
+    title: () => 'Pick what to act on',
+    subtitle: "Select opportunities to queue for outreach. You'll review and approve the drafts next.",
+  },
+  outreach: {
+    eyebrow: 'Step 4 — Outreach',
+    title: () => 'Outreach queue',
+    subtitle: 'Review each draft. Approve, edit, or skip. Nothing sends until you approve.',
+  },
+  production: {
+    eyebrow: 'Step 5 — Production',
+    title: () => 'Production board',
+    subtitle: 'Live content moving through creation. Drag cards between stages as they progress.',
+  },
+  'client-view': {
+    eyebrow: 'Step 6 — Client view',
+    title: () => 'Client dashboard',
+    subtitle: "What the client sees. Snapshot of visibility lift and live placements.",
+  },
+};
+
+const STEP_ALIAS: Record<string, string> = {
+  'search-terms': 'setup',
+  discovery: 'analysis',
+  engage: 'opportunities',
+  creators: 'opportunities',
+  activity: 'setup',
+};
+
 export default function CampaignWorkspace({
   campaign, topics, searchTerms, campaignCreators, activityLog, initialTab, pipelineJob,
 }: Props) {
-  const mapTab = (t: string) => t === 'creators' ? 'engage' : t === 'activity' ? 'setup' : t;
-  const [activeTab, setActiveTab] = useState(mapTab(initialTab || 'setup'));
+  const resolveStep = (raw: string) => STEP_ALIAS[raw] || raw || 'setup';
+  const [step, setStep] = useState(resolveStep(initialTab));
   const [liveSearchTerms, setLiveSearchTerms] = useState(searchTerms);
   const [justStartedPipeline, setJustStartedPipeline] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    setLiveSearchTerms(searchTerms);
-  }, [searchTerms]);
+  useEffect(() => { setLiveSearchTerms(searchTerms); }, [searchTerms]);
+  useEffect(() => { setStep(resolveStep(initialTab)); }, [initialTab]);
 
   const pipelineRunning = pipelineJob?.status === 'queued' || pipelineJob?.status === 'running';
   const pipelineCompleted = pipelineJob?.status === 'completed';
   const pipelineRan = pipelineJob != null;
   const hasScoredCreators = campaignCreators.some(cc => cc.overall_score != null);
 
-  // Clear justStartedPipeline once server data catches up
   useEffect(() => {
-    if (pipelineRunning && justStartedPipeline) {
-      setJustStartedPipeline(false);
-    }
+    if (pipelineRunning && justStartedPipeline) setJustStartedPipeline(false);
   }, [pipelineRunning, justStartedPipeline]);
-
-  const TABS = [
-    { id: 'setup', label: 'Setup', show: true },
-    { id: 'search-terms', label: 'Search Terms', show: true, count: liveSearchTerms.length },
-    { id: 'discovery', label: 'Discovery', show: pipelineRunning || justStartedPipeline || pipelineCompleted },
-    { id: 'engage', label: 'Engage', show: hasScoredCreators || (pipelineCompleted && !pipelineRunning) },
-  ];
-
-  const visibleTabs = TABS.filter(t => t.show);
 
   const handlePipelineStarted = () => {
     setJustStartedPipeline(true);
-    setActiveTab('discovery');
-    router.replace(`/campaigns/${campaign.id}/discovery`, { scroll: false });
+    setStep('analysis');
+    router.replace(`/campaigns/${campaign.id}/analysis`, { scroll: false });
     router.refresh();
   };
 
   const handleDiscoveryComplete = () => {
-    setActiveTab('engage');
-    router.replace(`/campaigns/${campaign.id}/engage`, { scroll: false });
+    setStep('analysis');
+    router.replace(`/campaigns/${campaign.id}/analysis`, { scroll: false });
     router.refresh();
   };
 
   const tabProps = { campaign, topics, searchTerms: liveSearchTerms, campaignCreators, activityLog };
+  const meta = STEP_META[step] || STEP_META.setup;
 
-  return (
-    <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-[#2d3748]">
-      {/* Campaign header */}
-      <div className="px-8 pt-6 pb-0 bg-[#1e293b]">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Link href="/campaigns" className="text-xs text-slate-400 hover:text-white transition-colors">Campaigns</Link>
-              <span className="text-xs text-slate-600">/</span>
-              <span className="text-xs text-slate-300">{campaign.client_name}</span>
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{campaign.name}</h1>
-            <div className="flex items-center gap-2.5 mt-2">
-              <span className={`badge text-xs ${campaign.status === 'active' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-slate-800/50 text-slate-400 border-slate-600/50'}`}>
-                {campaign.status}
-              </span>
-              {pipelineRunning && (
-                <span className="badge text-xs bg-blue-900/30 text-blue-400 border-blue-700/50 animate-pulse">
-                  Generating...
-                </span>
-              )}
-              {campaign.geo_targets && (
-                <span className="text-xs text-slate-400">{(campaign.geo_targets as unknown as string[]).join(' \u00B7 ')}</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span>Owner: <span className="text-slate-200">{campaign.owner_name}</span></span>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-0 overflow-x-auto border-b border-[#2d3748]">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); router.replace(`/campaigns/${campaign.id}/${tab.id}`, { scroll: false }); }}
-              className={`px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
-              }`}
-            >
-              {tab.label}
-              {tab.count !== undefined && tab.count > 0 && (
-                <span className="ml-1.5 badge bg-slate-800/50 text-slate-400 border-slate-600/50 text-xs">
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto bg-[#111827]">
-        <div className="p-6 pt-5">
-          {activeTab === 'setup' && <SetupTab {...tabProps} />}
-          {activeTab === 'search-terms' && (
-            <SearchTermsTab
-              {...tabProps}
-              pipelineRan={pipelineRan}
-              onPipelineStarted={handlePipelineStarted}
-              onTermsUpdated={(t) => setLiveSearchTerms(t as typeof searchTerms)}
-            />
-          )}
-          {activeTab === 'discovery' && (
+  const renderStep = () => {
+    switch (step) {
+      case 'setup':
+        return <SetupTab {...tabProps} />;
+      case 'analysis':
+        if (pipelineRunning || justStartedPipeline) {
+          return (
             <DiscoveryTab
               campaign={campaign}
               pipelineJob={pipelineJob}
               onComplete={handleDiscoveryComplete}
             />
-          )}
-          {activeTab === 'engage' && <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />}
-        </div>
-      </div>
+          );
+        }
+        return (
+          <ComingSoon
+            title=""
+            description="AI visibility score, category leaderboard, and gap topics — pulled from Gumshoe citation runs once the analysis is wired up."
+          />
+        );
+      case 'opportunities':
+        if (hasScoredCreators || pipelineCompleted) {
+          return <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />;
+        }
+        return (
+          <ComingSoon
+            title=""
+            description="Qualified experts surfaced from the latest analysis run. Launch the analysis from Setup to populate this view."
+          />
+        );
+      case 'outreach':
+        return (
+          <ComingSoon
+            title=""
+            description="Drafts queued for review. Stages: Draft → Sent → Replied → Booked → Live → Verified."
+          />
+        );
+      case 'production':
+        return (
+          <ComingSoon
+            title=""
+            description="Kanban of live content moving through creation."
+          />
+        );
+      case 'client-view':
+        return (
+          <ComingSoon
+            title=""
+            description="Snapshot view shared with the client."
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow={meta.eyebrow}
+        title={meta.title(campaign.name)}
+        subtitle={meta.subtitle}
+        actions={
+          <div className="flex items-center gap-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
+              style={{
+                background: campaign.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--bg-elevated)',
+                color: campaign.status === 'active' ? '#4ade80' : 'var(--text-muted)',
+              }}
+            >
+              {campaign.status}
+            </span>
+            <span>Owner: <span style={{ color: 'var(--text-primary)' }}>{campaign.owner_name}</span></span>
+          </div>
+        }
+      />
+      {renderStep()}
     </div>
   );
 }

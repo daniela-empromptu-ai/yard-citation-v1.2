@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ChevronLeft, ChevronRight, ChevronDown, ArrowLeft, Youtube, ExternalLink, X, Plus, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowLeft, ArrowRight, Youtube, ExternalLink, X, Plus, Sparkles, Loader2 } from 'lucide-react';
 
 // ─── Helpers ───
 
@@ -47,6 +47,8 @@ function parseJsonArray(val: unknown): string[] {
 interface CampaignCreator {
   id: string; creator_id: string; creator_name: string; creator_platform: string;
   creator_handle: string | null; source: string | null;
+  creator_subscriber_count?: number | null;
+  creator_categories?: string | null;
   pipeline_stage: string; scoring_status: string;
   overall_score: number | null; evidence_coverage: string | null;
   needs_manual_review: boolean | null; evaluated_at: string | null;
@@ -633,6 +635,249 @@ function DetailPanel({
 
 // ─── Main Component ───
 
+interface RowEvalData {
+  evaluation: Evaluation | null;
+  loading: boolean;
+}
+
+function CreatorRow({
+  cc, expanded, evalData, onToggle, onDismiss, onFindSimilar, findSimilarDisabled, onSelectForOutreach,
+}: {
+  cc: CampaignCreator;
+  expanded: boolean;
+  evalData?: RowEvalData;
+  onToggle: () => void;
+  onDismiss: () => void;
+  onFindSimilar: () => void;
+  findSimilarDisabled: boolean;
+  onSelectForOutreach: () => void;
+}) {
+  const isScored = cc.overall_score != null;
+  const handle = cc.creator_handle
+    ? (cc.creator_platform === 'youtube' || cc.creator_platform === 'medium'
+        ? `@${cc.creator_handle.replace(/^@/, '')}`
+        : cc.creator_handle)
+    : null;
+  const profileUrl = platformProfileUrl(cc.creator_platform, cc.creator_handle);
+  const score = cc.overall_score ?? 0;
+  const subsLabel = formatSubscribers(cc.creator_subscriber_count ?? null, cc.creator_platform);
+  const topics = (cc.creator_categories || '')
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden transition-colors"
+      style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+      }}
+    >
+      {/* Collapsed row */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-4 px-4 py-3 text-left transition-colors hover:opacity-90"
+        style={{ background: expanded ? 'var(--bg-surface-2)' : 'transparent' }}
+      >
+        <span
+          className="w-3.5 h-3.5 rounded-sm shrink-0"
+          style={{ border: '1px solid var(--border-default)' }}
+        />
+        <div className="min-w-0 flex-1">
+          {profileUrl ? (
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[13px] font-semibold hover:underline"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {cc.creator_name}
+            </a>
+          ) : (
+            <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {cc.creator_name}
+            </span>
+          )}
+          {(handle || subsLabel) && (
+            <div className="text-[12px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+              {handle}
+              {handle && subsLabel ? ' · ' : ''}
+              {subsLabel}
+            </div>
+          )}
+        </div>
+        <div className="shrink-0">
+          <PlatformBadge platform={cc.creator_platform} />
+        </div>
+        <div className="shrink-0 text-[12px] font-medium tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+          $TBD
+        </div>
+        {isScored && (
+          <div className="shrink-0 tabular-nums">
+            <span className="text-[15px] font-semibold" style={{ color: 'var(--accent)' }}>{score}</span>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>/100</span>
+          </div>
+        )}
+        <div className="shrink-0" style={{ color: 'var(--text-muted)' }}>
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </div>
+      </button>
+
+      {/* Expanded section */}
+      {expanded && (
+        <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          {evalData?.loading ? (
+            <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+              <Loader2 size={13} className="animate-spin" />
+              Loading evaluation…
+            </div>
+          ) : evalData?.evaluation ? (
+            <RowEvalBody evaluation={evalData.evaluation} topics={topics} />
+          ) : (
+            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              No evaluation available.
+            </div>
+          )}
+
+          <div
+            className="flex items-center justify-between mt-5 pt-4"
+            style={{ borderTop: '1px solid var(--border-subtle)' }}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                className="btn-secondary h-8 text-[12px]"
+              >
+                Exclude
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onFindSimilar(); }}
+                disabled={findSimilarDisabled || !cc.creator_handle}
+                className="btn-ghost h-8 text-[12px]"
+                title={cc.creator_handle ? 'Find more like this creator' : 'Cannot find similar — no handle'}
+              >
+                <Sparkles size={12} />
+                Find similar
+              </button>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelectForOutreach(); }}
+              className="btn-primary h-8 text-[12px]"
+            >
+              <Plus size={12} />
+              Select for outreach
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RowEvalBody({ evaluation, topics }: { evaluation: Evaluation; topics: string[] }) {
+  const strengths = parseJsonArray(evaluation.strengths_json);
+  const weaknesses = parseJsonArray(evaluation.weaknesses_json);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-widest mb-2"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Strengths
+          </div>
+          {strengths.length === 0 ? (
+            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>—</div>
+          ) : (
+            <ul className="space-y-1.5">
+              {strengths.map((s, i) => (
+                <li key={i} className="text-[12px] flex gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span style={{ color: 'var(--accent)' }}>•</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-widest mb-2"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Considerations
+          </div>
+          {weaknesses.length === 0 ? (
+            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>—</div>
+          ) : (
+            <ul className="space-y-1.5">
+              {weaknesses.map((w, i) => (
+                <li key={i} className="text-[12px] flex gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>•</span>
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {topics.length > 0 && (
+        <div>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-widest mb-2"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Topics
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {topics.map((t) => (
+              <span
+                key={t}
+                className="px-2 py-0.5 rounded-md text-[11px]"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-widest"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Rate history
+          </div>
+          <span
+            className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+          >
+            mock
+          </span>
+        </div>
+        <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>TBD</div>
+      </div>
+    </div>
+  );
+}
+
+function formatSubscribers(n: number | null, platform: string): string {
+  if (n == null || n <= 0) return '';
+  const label = platform === 'youtube' ? 'subs' : platform === 'medium' || platform === 'devto' ? 'followers' : 'subs';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M ${label}`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k ${label}`;
+  return `${n} ${label}`;
+}
+
 export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const { data: session } = useSession();
   const [selectedCc, setSelectedCc] = useState<CampaignCreator | null>(null);
@@ -648,6 +893,9 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [surfaceMoreRunning, setSurfaceMoreRunning] = useState(false);
   const [surfaceMoreError, setSurfaceMoreError] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [evalCache, setEvalCache] = useState<Map<string, RowEvalData>>(new Map());
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
 
@@ -725,10 +973,44 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     cc.pipeline_stage !== 'excluded' &&
     cc.pipeline_stage !== 'dismissed' &&
     cc.overall_score != null &&
-    !dismissedIds.has(cc.id)
+    !dismissedIds.has(cc.id) &&
+    (platformFilter === 'all' || cc.creator_platform === platformFilter)
   );
   const creatorsTotalPages = Math.max(1, Math.ceil(filteredCreators.length / CREATORS_PAGE_SIZE));
   const pagedCreators = filteredCreators.slice((creatorsPage - 1) * CREATORS_PAGE_SIZE, creatorsPage * CREATORS_PAGE_SIZE);
+
+  const handleToggleExpand = async (cc: CampaignCreator) => {
+    const next = new Set(expandedIds);
+    if (next.has(cc.id)) {
+      next.delete(cc.id);
+      setExpandedIds(next);
+      return;
+    }
+    next.add(cc.id);
+    setExpandedIds(next);
+    if (evalCache.has(cc.id)) return;
+    setEvalCache((prev) => {
+      const m = new Map(prev);
+      m.set(cc.id, { evaluation: null, loading: true });
+      return m;
+    });
+    try {
+      const res = await fetch(`/api/evaluations/${cc.id}`);
+      const data = await res.json();
+      const evalObj = (data?.evaluation as Evaluation | null) || null;
+      setEvalCache((prev) => {
+        const m = new Map(prev);
+        m.set(cc.id, { evaluation: evalObj, loading: false });
+        return m;
+      });
+    } catch {
+      setEvalCache((prev) => {
+        const m = new Map(prev);
+        m.set(cc.id, { evaluation: null, loading: false });
+        return m;
+      });
+    }
+  };
 
   const loadEvaluation = async (cc: CampaignCreator) => {
     setSelectedCc(cc);
@@ -821,12 +1103,12 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
             <button
               onClick={() => handleSurfaceMore()}
               disabled={surfaceMoreRunning}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60"
+              className="btn-primary text-[13px]"
             >
               {surfaceMoreRunning ? (
-                <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Finding more…</>
+                <><Loader2 size={13} className="animate-spin" />Finding more…</>
               ) : (
-                <><Plus size={14} />Surface More Creators</>
+                <><Sparkles size={13} />Find more opportunities</>
               )}
             </button>
           </div>
@@ -834,52 +1116,69 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
         </div>
       ) : (
         <>
-          {/* Header */}
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100">
-                {filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''} for {campaign.client_name || 'your brand'}
-              </h2>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Click any creator to view their evaluation.
-                Find similar creators with ✨.
-                Remove poor fits with ×.
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={() => handleSurfaceMore()}
-                disabled={surfaceMoreRunning}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {surfaceMoreRunning ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Finding more…
-                  </>
-                ) : (
-                  <>
-                    <Plus size={14} />
-                    Surface More Creators
-                  </>
+          {/* Subtitle + platform filter */}
+          {(() => {
+            const allPlatforms = (campaignCreators as CampaignCreator[])
+              .filter(cc => cc.overall_score != null && !dismissedIds.has(cc.id) && cc.pipeline_stage !== 'excluded' && cc.pipeline_stage !== 'dismissed')
+              .map(cc => cc.creator_platform);
+            const presentPlatforms = Array.from(new Set(allPlatforms));
+            const PLATFORM_CHIPS: { value: string; label: string }[] = [
+              { value: 'youtube', label: 'YT' },
+              { value: 'devto', label: 'DT' },
+              { value: 'twitter', label: 'X' },
+              { value: 'medium', label: 'MD' },
+              { value: 'newsletter', label: 'NL' },
+            ].filter(p => presentPlatforms.includes(p.value));
+            const showFilter = PLATFORM_CHIPS.length >= 2;
+            return (
+              <div className="flex items-start justify-between gap-6">
+                <div className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  Qualified experts for new content, scored on technical depth, audience fit, and brand alignment.
+                </div>
+                {showFilter && (
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                    <button
+                      onClick={() => { setPlatformFilter('all'); setCreatorsPage(1); }}
+                      className="h-7 px-3 rounded-full text-[11px] font-semibold tracking-wide transition-colors"
+                      style={platformFilter === 'all'
+                        ? { background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)' }
+                        : { background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }
+                      }
+                    >
+                      All platforms
+                    </button>
+                    {PLATFORM_CHIPS.map(p => (
+                      <button
+                        key={p.value}
+                        onClick={() => { setPlatformFilter(p.value); setCreatorsPage(1); }}
+                        className="h-7 px-3 rounded-full text-[11px] font-semibold tracking-wide transition-colors"
+                        style={platformFilter === p.value
+                          ? { background: 'transparent', color: 'var(--accent)', border: '1.5px solid var(--accent)' }
+                          : { background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }
+                        }
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </button>
-              {surfaceMoreError && (
-                <p className="text-xs text-red-400">{surfaceMoreError}</p>
-              )}
-            </div>
-          </div>
+              </div>
+            );
+          })()}
 
-          {/* Creator grid — always 3 columns */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Row list */}
+          <div className="space-y-2">
             {pagedCreators.map(cc => (
-              <CreatorCard
+              <CreatorRow
                 key={cc.id}
                 cc={cc}
-                onClick={() => loadEvaluation(cc)}
-                onDismiss={e => { e.stopPropagation(); setDismissTarget(cc); }}
-                onFindSimilar={e => { e.stopPropagation(); handleSurfaceMore(cc.creator_id); }}
+                expanded={expandedIds.has(cc.id)}
+                evalData={evalCache.get(cc.id)}
+                onToggle={() => handleToggleExpand(cc)}
+                onDismiss={() => setDismissTarget(cc)}
+                onFindSimilar={() => handleSurfaceMore(cc.creator_id)}
                 findSimilarDisabled={surfaceMoreRunning}
+                onSelectForOutreach={() => loadEvaluation(cc)}
               />
             ))}
           </div>
@@ -887,17 +1186,41 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
           {/* Pagination */}
           {creatorsTotalPages > 1 && (
             <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-slate-500">Page {creatorsPage} of {creatorsTotalPages}</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Page {creatorsPage} of {creatorsTotalPages}</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 text-slate-500 hover:bg-[#263044] rounded disabled:opacity-30">
+                <button onClick={() => setCreatorsPage(p => Math.max(1, p - 1))} disabled={creatorsPage <= 1} className="p-1 rounded disabled:opacity-30" style={{ color: 'var(--text-secondary)' }}>
                   <ChevronLeft size={14} />
                 </button>
-                <button onClick={() => setCreatorsPage(p => Math.min(creatorsTotalPages, p + 1))} disabled={creatorsPage >= creatorsTotalPages} className="p-1 text-slate-500 hover:bg-[#263044] rounded disabled:opacity-30">
+                <button onClick={() => setCreatorsPage(p => Math.min(creatorsTotalPages, p + 1))} disabled={creatorsPage >= creatorsTotalPages} className="p-1 rounded disabled:opacity-30" style={{ color: 'var(--text-secondary)' }}>
                   <ChevronRight size={14} />
                 </button>
               </div>
             </div>
           )}
+
+          {/* Find more opportunities */}
+          <div className="pt-2">
+            <button
+              onClick={() => handleSurfaceMore()}
+              disabled={surfaceMoreRunning}
+              className="btn-secondary h-8 text-[13px] font-semibold"
+            >
+              {surfaceMoreRunning ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  Finding more…
+                </>
+              ) : (
+                <>
+                  Find more opportunities
+                  <ArrowRight size={13} />
+                </>
+              )}
+            </button>
+            {surfaceMoreError && (
+              <p className="text-xs mt-1" style={{ color: '#f87171' }}>{surfaceMoreError}</p>
+            )}
+          </div>
         </>
       )}
 

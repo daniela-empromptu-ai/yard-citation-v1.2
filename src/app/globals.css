@@ -4,8 +4,25 @@
 @tailwind utilities;
 
 :root {
-  --sidebar-width: 264px;
+  --sidebar-width: 220px;
   --topbar-height: 56px;
+
+  /* Warm dark palette — matched to mock */
+  --bg-app: #0d0d0d;
+  --bg-surface: #1f1b1a;
+  --bg-surface-2: #2d2726;
+  --bg-elevated: #242220;
+  --border-subtle: rgba(229, 224, 201, 0.08);
+  --border-default: #292522;
+  --text-primary: #e5e0c9;
+  --text-secondary: #a4a190;
+  --text-muted: rgba(229, 224, 201, 0.3);
+
+  /* Brand accent: orange */
+  --accent: #ed7e08;
+  --accent-hover: #e8912d;
+  --accent-soft: rgba(237, 126, 8, 0.12);
+  --accent-ring: rgba(237, 126, 8, 0.4);
 }
 
 * {
@@ -14,8 +31,8 @@
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #111827;
-  color: #e2e8f0;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
   min-width: 1280px;
 }
 
@@ -38,9 +55,9 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #1e293b; }
-::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #64748b; }
+::-webkit-scrollbar-track { background: #191413; }
+::-webkit-scrollbar-thumb { background: #2d2726; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3432; }
 
 /* Dense table */
 .dense-table th {
@@ -179,20 +196,31 @@ body {
 /* ── Component classes (referenced across 16+ files) ── */
 @layer components {
   .card {
-    @apply bg-[#1e293b] border border-[#2d3748] rounded-xl;
+    @apply rounded-xl;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    color: #000;
+    background: var(--accent);
   }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 border border-[#2d3748] bg-[#1e293b] text-sm font-medium text-slate-300 rounded-lg hover:bg-[#263044] disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-primary);
   }
+  .btn-secondary:hover:not(:disabled) { background: var(--bg-elevated); }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-1.5 px-3 h-9 text-sm font-medium text-slate-400 rounded-lg hover:bg-[#263044] disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-1.5 px-3 h-9 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    color: var(--text-secondary);
   }
+  .btn-ghost:hover:not(:disabled) { background: var(--bg-elevated); color: var(--text-primary); }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
@@ -206,17 +234,17 @@ body {
     @apply flex items-center gap-2 px-4 py-2.5 bg-amber-900/20 border border-amber-700/40 rounded-lg text-sm text-amber-400;
   }
 
-  .input-field {
-    @apply w-full px-3 h-9 text-sm border border-[#2d3748] rounded-lg bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+  .input-field, .input, .select-field {
+    @apply w-full px-3 h-9 text-sm rounded-lg focus:outline-none focus:ring-2;
+    border: 1px solid var(--border-default);
+    background: var(--bg-app);
+    color: var(--text-primary);
   }
-
-  .input {
-    @apply px-3 h-9 text-sm border border-[#2d3748] rounded-lg bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+  .input-field:focus, .input:focus, .select-field:focus {
+    --tw-ring-color: var(--accent-ring);
+    border-color: var(--accent);
   }
-
-  .select-field {
-    @apply w-full px-3 h-9 text-sm border border-[#2d3748] rounded-lg bg-[#111827] text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none;
-  }
+  .select-field { appearance: none; }
 
   .label {
     @apply block text-sm font-medium text-slate-300 mb-1;
