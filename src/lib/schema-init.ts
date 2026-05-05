@@ -29,6 +29,7 @@ export async function initSchema(): Promise<void> {
     { id: IDS.USER_JACK,      name: 'Jack Scrivener',  email: 'jack@yard.live',     role: 'qualifier', password: process.env.USER_PASSWORD_JACK! },
     { id: IDS.USER_KARL,      name: 'Karl McCarthy',   email: 'karl@yard.live',     role: 'admin',     password: process.env.USER_PASSWORD_KARL! },
     { id: IDS.USER_EMPROMPTU, name: 'Empromptu Admin', email: 'admin@empromptu.ai', role: 'admin',     password: process.env.USER_PASSWORD_ADMIN! },
+    { id: IDS.USER_MICHAEL,   name: 'Michael Donnelly', email: 'michael@tryyard.com', role: 'admin', password: process.env.USER_PASSWORD_MICHAEL! },
   ]
   for (const u of users) {
     const hash = hashSync(u.password, 10)
