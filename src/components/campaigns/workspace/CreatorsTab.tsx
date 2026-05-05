@@ -841,7 +841,9 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 {filteredCreators.length} creator{filteredCreators.length !== 1 ? 's' : ''} for {campaign.client_name || 'your brand'}
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">
-                Click any creator to view their evaluation. Remove poor fits with ×.
+                Click any creator to view their evaluation.
+                Find similar creators with ✨.
+                Remove poor fits with ×.
               </p>
             </div>
             <div className="flex flex-col items-end gap-1">
