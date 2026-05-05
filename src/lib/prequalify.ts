@@ -199,12 +199,25 @@ export async function fetchCreatorTranscripts(
         continue
       }
 
-      console.log(`[transcript] ${creator.creator_name}: fetching transcripts for ${topVideos.length} videos`)
-
       base.video = topVideos[0]
       base.videos = topVideos
 
-      // Step 3: Fetch transcripts for top N videos (0.5s delay between requests)
+      // Step 3: Fetch transcripts for top N videos (cache-first, Supadata fallback)
+      // Cache hit: a previous campaign already transcribed this video → reuse raw_text from content_items.
+      // This skips the 1 req/sec Supadata rate limit for any video we've seen before.
+      const cacheRes = await dbQuery<{ url: string; raw_text: string; language: string | null }>(
+        `SELECT url, raw_text, language FROM ${t('content_items')} WHERE url = ANY($1)`,
+        [topVideos.map(v => v.url)]
+      )
+      const cache = new Map(
+        cacheRes.data
+          .filter(r => r.raw_text && r.raw_text.length > 0)
+          .map(r => [r.url, { fullText: r.raw_text, language: r.language || 'en' }])
+      )
+
+      const cacheHits = topVideos.filter(v => cache.has(v.url)).length
+      console.log(`[transcript] ${creator.creator_name}: ${cacheHits}/${topVideos.length} cached, fetching ${topVideos.length - cacheHits} via Supadata`)
+
       // Keep per-video transcripts separate so each gets its own content_item (fixes single-video evidence bug)
       const allSegments: { text: string; start: number; duration: number }[] = []
       const allFullTexts: string[] = []
@@ -213,10 +226,17 @@ export async function fetchCreatorTranscripts(
       let anyTranscript = false
 
       for (const video of topVideos) {
-        if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 500))
-        transcriptRequests++
+        const cached = cache.get(video.url)
+        let transcript: { videoId: string; language: string; segments: { text: string; start: number; duration: number }[]; fullText: string } | null = null
 
-        const transcript = await buildTranscriptFromTimedText(video.videoId)
+        if (cached) {
+          transcript = { videoId: video.videoId, language: cached.language, segments: [], fullText: cached.fullText }
+        } else {
+          if (transcriptRequests > 0) await new Promise(r => setTimeout(r, 500))
+          transcriptRequests++
+          transcript = await buildTranscriptFromTimedText(video.videoId)
+        }
+
         if (transcript) {
           anyTranscript = true
           allSegments.push(...transcript.segments)
