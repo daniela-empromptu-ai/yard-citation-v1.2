@@ -127,7 +127,7 @@ export default function CampaignWorkspace({
   const renderStep = () => {
     switch (step) {
       case 'setup':
-        return <SetupTab {...tabProps} />;
+        return <SetupTab {...tabProps} onPipelineStarted={handlePipelineStarted} />;
       case 'analysis':
         if (pipelineRunning || justStartedPipeline) {
           return (

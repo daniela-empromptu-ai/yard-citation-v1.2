@@ -13,10 +13,11 @@ interface Props {
     personas: string[]; client_name: string; product_category?: string;
   };
   topics: { id: string; topic: string; approved: boolean }[];
+  onPipelineStarted?: () => void;
   [key: string]: unknown;
 }
 
-export default function SetupTab({ campaign, topics: initialTopics }: Props) {
+export default function SetupTab({ campaign, topics: initialTopics, onPipelineStarted }: Props) {
   const router = useRouter();
   const { data: session } = useSession();
   const userId = session?.user?.id;
@@ -148,8 +149,12 @@ export default function SetupTab({ campaign, topics: initialTopics }: Props) {
       const data = await res.json();
       if (res.ok && data.ok) {
         showToast('success', 'Launching analysis…');
-        router.replace(`/campaigns/${campaign.id}/analysis`);
-        router.refresh();
+        if (onPipelineStarted) {
+          onPipelineStarted();
+        } else {
+          router.replace(`/campaigns/${campaign.id}/analysis`);
+          router.refresh();
+        }
       } else {
         showToast('error', 'Failed to launch analysis');
       }
