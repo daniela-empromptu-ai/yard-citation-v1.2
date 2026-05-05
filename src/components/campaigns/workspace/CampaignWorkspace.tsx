@@ -110,14 +110,14 @@ export default function CampaignWorkspace({
 
   const handlePipelineStarted = () => {
     setJustStartedPipeline(true);
-    setStep('analysis');
-    router.replace(`/campaigns/${campaign.id}/analysis`, { scroll: false });
+    setStep('opportunities');
+    router.replace(`/campaigns/${campaign.id}/opportunities`, { scroll: false });
     router.refresh();
   };
 
   const handleDiscoveryComplete = () => {
-    setStep('analysis');
-    router.replace(`/campaigns/${campaign.id}/analysis`, { scroll: false });
+    setStep('opportunities');
+    router.replace(`/campaigns/${campaign.id}/opportunities`, { scroll: false });
     router.refresh();
   };
 
@@ -129,6 +129,13 @@ export default function CampaignWorkspace({
       case 'setup':
         return <SetupTab {...tabProps} onPipelineStarted={handlePipelineStarted} />;
       case 'analysis':
+        return (
+          <ComingSoon
+            title=""
+            description="AI visibility score, category leaderboard, and gap topics — pulled from Gumshoe citation runs once the analysis is wired up."
+          />
+        );
+      case 'opportunities':
         if (pipelineRunning || justStartedPipeline) {
           return (
             <DiscoveryTab
@@ -138,13 +145,6 @@ export default function CampaignWorkspace({
             />
           );
         }
-        return (
-          <ComingSoon
-            title=""
-            description="AI visibility score, category leaderboard, and gap topics — pulled from Gumshoe citation runs once the analysis is wired up."
-          />
-        );
-      case 'opportunities':
         if (hasScoredCreators || pipelineCompleted) {
           return <CreatorsTab {...tabProps} pipelineJob={pipelineJob} />;
         }
