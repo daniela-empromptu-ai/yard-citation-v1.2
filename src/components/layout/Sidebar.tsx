@@ -6,9 +6,8 @@ import { useSession } from 'next-auth/react'
 import clsx from 'clsx'
 import {
   Megaphone, Inbox, UserSquare2, Bell,
-  Settings2, BarChart3, Sparkles, Send, Boxes, Eye, Check, LogOut,
+  Settings2, BarChart3, Sparkles, Send, Boxes, Eye, Check,
 } from 'lucide-react'
-import { signOut } from 'next-auth/react'
 import { useCampaignName } from './useCampaignName'
 import { useEffect, useState } from 'react'
 
@@ -219,14 +218,6 @@ export function Sidebar() {
               {user.role || 'Ops'} · Yard
             </div>
           </div>
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="shrink-0 p-1 rounded transition-opacity opacity-50 hover:opacity-100"
-            style={{ color: 'var(--text-muted)' }}
-            title="Sign out"
-          >
-            <LogOut size={13} />
-          </button>
         </div>
       )}
     </aside>

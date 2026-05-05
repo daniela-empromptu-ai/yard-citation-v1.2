@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Plus } from 'lucide-react'
+import { Search, Plus, LogOut } from 'lucide-react'
+import { signOut } from 'next-auth/react'
 import { useCampaignName } from './useCampaignName'
 
 function useBreadcrumb() {
@@ -108,6 +109,16 @@ export function TopBar() {
           New campaign
         </button>
       )}
+
+      {/* Sign out */}
+      <button
+        onClick={() => signOut({ callbackUrl: '/login' })}
+        className="p-1.5 rounded transition-opacity opacity-40 hover:opacity-100"
+        style={{ color: 'var(--text-muted)' }}
+        title="Sign out"
+      >
+        <LogOut size={14} />
+      </button>
     </header>
   )
 }

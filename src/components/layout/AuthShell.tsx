@@ -1,32 +1,24 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { usePathname, useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
   const pathname = usePathname()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (status === 'unauthenticated' && pathname !== '/login') {
-      router.replace('/login')
-    }
-  }, [status, pathname, router])
 
   // Login page renders without shell
   if (pathname === '/login') {
     return <>{children}</>
   }
 
-  // While checking session or redirecting unauthenticated user
-  if (status === 'loading' || status === 'unauthenticated') {
+  // While checking session, show minimal loading screen
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-app)' }}>
-        <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</div>
+      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+        <div className="text-slate-500 text-sm">Loading…</div>
       </div>
     )
   }
