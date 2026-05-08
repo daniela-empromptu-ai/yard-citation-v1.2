@@ -296,6 +296,24 @@ export async function aiEnrichEvaluation(params: {
   }
 }
 
+/**
+ * House style for outreach emails. Single canonical example (Michael's voice)
+ * that the LLM matches for tone, length, and structure. Bracketed merge
+ * fields are illustrative — the LLM should fill them with concrete values
+ * from the campaign / creator context, not output literal brackets.
+ */
+const OUTREACH_STYLE_EXAMPLE = `Hi [Name],
+
+Michael here, head of GTM @ Yard. I'd like to get one of our clients, [client.com], included in your article on [topic]. It's being cited by Claude and ChatGPT, so it's a strong fit.
+
+If you could share your rates and availability for adding the mention, that would be great. We pay within 24 hours of the article going live with the update.
+
+Happy to forward more info on the client if useful. They sit in there on merit alone.
+
+Any questions, just shout.
+
+Michael`
+
 // ---- AI: Generate Outreach Draft ----
 export async function aiGenerateOutreachDraft(params: {
   campaignName: string;
@@ -304,6 +322,8 @@ export async function aiGenerateOutreachDraft(params: {
   platforms: string[];
   selectedAngle: { title: string; format: string; key_points: string[] } | null;
   evidenceSnippets: Array<{ quote: string; url: string; why_it_matters: string }>;
+  /** Override the house style example. Defaults to OUTREACH_STYLE_EXAMPLE. */
+  styleExample?: string;
 }): Promise<{
   subject: string;
   body_md: string;
@@ -311,9 +331,14 @@ export async function aiGenerateOutreachDraft(params: {
     channel: string; label: string; day_offset: number; completed: boolean
   }>;
 }> {
+  const styleExample = params.styleExample || OUTREACH_STYLE_EXAMPLE
   try {
     const raw = await applyPrompt('generate_outreach_draft', {
-      campaign_context: `Campaign: ${params.campaignName}\n${params.campaignBrief.substring(0, 500)}`,
+      campaign_context:
+        `Campaign: ${params.campaignName}\n${params.campaignBrief.substring(0, 500)}\n\n` +
+        `STYLE REFERENCE — match this voice, length (under 120 words), and structure. ` +
+        `Replace bracketed merge fields with concrete values from the campaign and creator context; ` +
+        `do not output literal brackets:\n\n${styleExample}`,
       creator_info: `Creator: ${params.creatorName}\nPlatforms: ${params.platforms.join(', ')}`,
       angle_info: params.selectedAngle
         ? `Title: ${params.selectedAngle.title}\nFormat: ${params.selectedAngle.format}\nKey points: ${params.selectedAngle.key_points.join(', ')}`
