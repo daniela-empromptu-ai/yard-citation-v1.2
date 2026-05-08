@@ -9,6 +9,7 @@ import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useYouTubeQuotaGate } from '@/components/campaigns/YouTubeQuotaGate';
+import { showToast } from '@/components/ui/Toaster';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowLeft, ArrowRight, Youtube, ExternalLink, X, Plus, Sparkles, Loader2 } from 'lucide-react';
 
 // ─── Helpers ───
@@ -642,7 +643,7 @@ interface RowEvalData {
 }
 
 function CreatorRow({
-  cc, expanded, evalData, onToggle, onDismiss, onFindSimilar, findSimilarDisabled, onSelectForOutreach,
+  cc, expanded, evalData, onToggle, onDismiss, onFindSimilar, findSimilarDisabled, onAddToOutreach, addBusy, addDone,
 }: {
   cc: CampaignCreator;
   expanded: boolean;
@@ -651,7 +652,9 @@ function CreatorRow({
   onDismiss: () => void;
   onFindSimilar: () => void;
   findSimilarDisabled: boolean;
-  onSelectForOutreach: () => void;
+  onAddToOutreach: () => void;
+  addBusy: boolean;
+  addDone: boolean;
 }) {
   const isScored = cc.overall_score != null;
   const handle = cc.creator_handle
@@ -766,11 +769,13 @@ function CreatorRow({
               </button>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); onSelectForOutreach(); }}
-              className="btn-primary h-8 text-[12px]"
+              onClick={(e) => { e.stopPropagation(); onAddToOutreach(); }}
+              disabled={addBusy || addDone}
+              className="btn-primary h-8 text-[12px] disabled:opacity-60"
+              title={addDone ? 'Already in outreach queue' : 'Add to outreach and generate draft'}
             >
-              <Plus size={12} />
-              Select for outreach
+              {addBusy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              {addDone ? 'Added' : addBusy ? 'Drafting…' : 'Add to outreach'}
             </button>
           </div>
         </div>
@@ -895,6 +900,8 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [surfaceMoreRunning, setSurfaceMoreRunning] = useState(false);
   const [surfaceMoreError, setSurfaceMoreError] = useState<string | null>(null);
   const ytQuotaGate = useYouTubeQuotaGate();
+  const [addingToOutreach, setAddingToOutreach] = useState<Set<string>>(new Set());
+  const [addedToOutreach, setAddedToOutreach] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [evalCache, setEvalCache] = useState<Map<string, RowEvalData>>(new Map());
   const [platformFilter, setPlatformFilter] = useState<string>('all');
@@ -920,6 +927,41 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     }, 4000);
     return () => clearInterval(interval);
   }, [surfaceMoreRunning, campaign.id, router]);
+
+  async function handleAddToOutreach(cc: CampaignCreator) {
+    if (addedToOutreach.has(cc.id) || addingToOutreach.has(cc.id)) return;
+    let uid: string | null = (session?.user as { id?: string } | undefined)?.id ?? null;
+    if (!uid) {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
+      if (raw) { try { uid = (JSON.parse(raw) as { id: string }).id ?? raw; } catch { uid = raw; } }
+    }
+    if (!uid) { showToast('error', 'Not signed in'); return }
+    setAddingToOutreach(prev => new Set(prev).add(cc.id));
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/creators/${cc.id}/add-to-outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: uid }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAddedToOutreach(prev => new Set(prev).add(cc.id));
+        if (data.already_exists) {
+          showToast('info', 'Already in outreach queue');
+        } else if (data.status === 'draft_failed') {
+          showToast('error', 'Drafting failed — see Outreach tab');
+        } else {
+          showToast('success', 'Added to outreach · drafting email');
+        }
+      } else {
+        showToast('error', data.error || 'Failed to add to outreach');
+      }
+    } catch {
+      showToast('error', 'Network error');
+    } finally {
+      setAddingToOutreach(prev => { const n = new Set(prev); n.delete(cc.id); return n });
+    }
+  }
 
   async function handleSurfaceMore(seedCreatorId?: string) {
     setSurfaceMoreError(null);
@@ -1184,7 +1226,9 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 onDismiss={() => setDismissTarget(cc)}
                 onFindSimilar={() => handleSurfaceMore(cc.creator_id)}
                 findSimilarDisabled={surfaceMoreRunning}
-                onSelectForOutreach={() => loadEvaluation(cc)}
+                onAddToOutreach={() => handleAddToOutreach(cc)}
+                addBusy={addingToOutreach.has(cc.id)}
+                addDone={addedToOutreach.has(cc.id)}
               />
             ))}
           </div>

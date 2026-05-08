@@ -7,6 +7,8 @@ import { ComingSoon } from '@/components/ui/ComingSoon';
 import SetupTab from './SetupTab';
 import DiscoveryTab from './DiscoveryTab';
 import CreatorsTab from './CreatorsTab';
+import AnalysisTab from './AnalysisTab';
+import OutreachTab from './OutreachTab';
 
 interface CampaignCreatorRow {
   id: string; creator_id: string; creator_name: string; creator_platform: string;
@@ -129,12 +131,7 @@ export default function CampaignWorkspace({
       case 'setup':
         return <SetupTab {...tabProps} onPipelineStarted={handlePipelineStarted} />;
       case 'analysis':
-        return (
-          <ComingSoon
-            title=""
-            description="AI visibility score, category leaderboard, and gap topics — pulled from Gumshoe citation runs once the analysis is wired up."
-          />
-        );
+        return <AnalysisTab campaign={campaign} />;
       case 'opportunities':
         if (pipelineRunning || justStartedPipeline) {
           return (
@@ -155,12 +152,7 @@ export default function CampaignWorkspace({
           />
         );
       case 'outreach':
-        return (
-          <ComingSoon
-            title=""
-            description="Drafts queued for review. Stages: Draft → Sent → Replied → Booked → Live → Verified."
-          />
-        );
+        return <OutreachTab campaign={campaign} />;
       case 'production':
         return (
           <ComingSoon

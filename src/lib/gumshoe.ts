@@ -14,13 +14,33 @@ export interface GumshoeCreatorUrl {
   handle: string
 }
 
+interface GumshoeMention {
+  id?: number
+  rank?: number
+  brand?: { id?: number; name?: string; key?: string }
+  reason?: string
+}
+
+interface GumshoeAnswer {
+  model?: { id?: number; name?: string; provider?: string }
+  mentions?: GumshoeMention[]
+  citations?: Array<{ id: number; url: string; domain: string }>
+}
+
+interface GumshoeQuestion {
+  query?: string
+  topics?: Array<{ id?: number; key?: string; name?: string }>
+  answers?: GumshoeAnswer[]
+}
+
 interface GumshoeRawResponse {
+  report?: { id?: number; key?: string; title?: string; summary?: string }
+  run?: { id?: number; ordinal?: number; status?: string }
+  brand?: { id?: number; name?: string; url?: string; key?: string }
   personas?: Array<{
-    questions?: Array<{
-      answers?: Array<{
-        citations?: Array<{ id: number; url: string; domain: string }>
-      }>
-    }>
+    name?: string
+    description?: string
+    questions?: GumshoeQuestion[]
   }>
 }
 
@@ -269,6 +289,160 @@ export async function extractCreatorUrls(citations: Array<{ url: string; domain?
  * Given a Gumshoe report URL, fetch all citation creator URLs.
  * Returns empty array on any failure. Never throws.
  */
+// ─── Visibility analysis: aggregate mentions, topics, sources ───
+
+export interface VisibilityAnalysis {
+  brand: { name: string }
+  total_answers: number
+  /** Percentage of answers that mention our brand (0..100). */
+  visibility_score: number
+  /** Brand's rank against peers in the same dataset; 1 = top. Null if alone. */
+  category_rank: number | null
+  /** Brands ranked by mention count, with our brand flagged. */
+  leaderboard: Array<{ brand: string; mentions: number; share_pct: number; is_us: boolean }>
+  /** Per-topic share of voice: where we trail the leader. Sorted by largest gap first. */
+  gap_topics: Array<{
+    topic: string
+    my_share_pct: number
+    leader: string
+    leader_share_pct: number
+    gap: number
+  }>
+  /** Domains cited across all answers, with the count for this brand specifically. */
+  source_breakdown: Array<{ domain: string; total: number; my_cites: number }>
+  /** ISO timestamp of the run we pulled. */
+  generated_at: string
+}
+
+/**
+ * Fetch the latest run of a Gumshoe report and aggregate it into the
+ * visibility-analysis shape rendered by the Analysis tab. Returns null
+ * when the report URL is invalid, the API key is missing, or the API
+ * fails.
+ */
+export async function fetchVisibilityAnalysis(reportUrl: string): Promise<VisibilityAnalysis | null> {
+  const reportId = parseGumshoeUrl(reportUrl)
+  if (!reportId) return null
+
+  const latest = await fetchGumshoeLatestRun(reportId)
+  if (!latest) return null
+
+  const raw = await gumshoeGet<GumshoeRawResponse>(`/reports/${reportId}/runs/${latest.ordinal}/raw`)
+  if (!raw?.personas) return null
+
+  const myBrandKey = (raw.brand?.key || '').toLowerCase()
+  const myBrandName = raw.brand?.name || 'Us'
+
+  let totalAnswers = 0
+  let myAnswerHits = 0
+  const brandMentions = new Map<string, number>()
+  // Per topic: brand → mention count
+  const topicByBrand = new Map<string, Map<string, number>>()
+  // Per domain: total + my-brand-specific
+  const domainTotal = new Map<string, number>()
+
+  const isMyBrand = (b?: { key?: string; name?: string }) =>
+    (b?.key && b.key.toLowerCase() === myBrandKey) ||
+    (b?.name && b.name.toLowerCase() === myBrandName.toLowerCase())
+
+  for (const persona of raw.personas) {
+    for (const question of persona.questions || []) {
+      const topics = (question.topics || []).map(t => t.name || t.key || '').filter(Boolean)
+      for (const answer of question.answers || []) {
+        totalAnswers++
+        const mentions = answer.mentions || []
+        let answerHasUs = false
+        for (const m of mentions) {
+          const name = m.brand?.name?.trim()
+          if (!name) continue
+          brandMentions.set(name, (brandMentions.get(name) || 0) + 1)
+          if (isMyBrand(m.brand)) answerHasUs = true
+          for (const tname of topics) {
+            const inner = topicByBrand.get(tname) || new Map<string, number>()
+            inner.set(name, (inner.get(name) || 0) + 1)
+            topicByBrand.set(tname, inner)
+          }
+        }
+        if (answerHasUs) myAnswerHits++
+        for (const c of answer.citations || []) {
+          if (!c.domain) continue
+          if (c.url.includes('vertexaisearch.cloud.google.com')) continue
+          domainTotal.set(c.domain, (domainTotal.get(c.domain) || 0) + 1)
+        }
+      }
+    }
+  }
+
+  // Leaderboard: top 10 by mention count
+  const totalMentions = Array.from(brandMentions.values()).reduce((s, n) => s + n, 0) || 1
+  const leaderboardEntries = Array.from(brandMentions.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([brand, mentions]) => ({
+      brand,
+      mentions,
+      share_pct: Math.round((mentions / totalMentions) * 100),
+      is_us: brand.toLowerCase() === myBrandName.toLowerCase(),
+    }))
+
+  // Make sure my brand always appears in the leaderboard, even if not in top 10
+  if (!leaderboardEntries.some(e => e.is_us)) {
+    const myMentions = brandMentions.get(myBrandName) || 0
+    leaderboardEntries.push({
+      brand: myBrandName,
+      mentions: myMentions,
+      share_pct: Math.round((myMentions / totalMentions) * 100),
+      is_us: true,
+    })
+  }
+
+  const myRank = (() => {
+    const sorted = Array.from(brandMentions.entries()).sort((a, b) => b[1] - a[1])
+    const idx = sorted.findIndex(([b]) => b.toLowerCase() === myBrandName.toLowerCase())
+    return idx >= 0 ? idx + 1 : null
+  })()
+
+  // Gap topics: top 10 topics where we trail the leader by the most
+  const gapTopics: VisibilityAnalysis['gap_topics'] = []
+  topicByBrand.forEach((brands, topic) => {
+    const counts: number[] = Array.from(brands.values())
+    const totalForTopic = counts.reduce((s, n) => s + n, 0) || 1
+    const entries: Array<[string, number]> = Array.from(brands.entries())
+    entries.sort((a, b) => b[1] - a[1])
+    const leader = entries[0]
+    if (!leader) return
+    if (leader[0].toLowerCase() === myBrandName.toLowerCase()) return // we ARE the leader; skip
+    const myCount = brands.get(myBrandName) || 0
+    const myShare = Math.round((myCount / totalForTopic) * 100)
+    const leaderShare = Math.round((leader[1] / totalForTopic) * 100)
+    gapTopics.push({
+      topic,
+      my_share_pct: myShare,
+      leader: leader[0],
+      leader_share_pct: leaderShare,
+      gap: leaderShare - myShare,
+    })
+  })
+  gapTopics.sort((a, b) => b.gap - a.gap)
+
+  // Source breakdown: top 15 domains, with placeholder my_cites=0 (we don't have per-brand citation linkage)
+  const sourceBreakdown = Array.from(domainTotal.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([domain, total]) => ({ domain, total, my_cites: 0 }))
+
+  return {
+    brand: { name: myBrandName },
+    total_answers: totalAnswers,
+    visibility_score: totalAnswers > 0 ? Math.round((myAnswerHits / totalAnswers) * 100) : 0,
+    category_rank: myRank,
+    leaderboard: leaderboardEntries,
+    gap_topics: gapTopics.slice(0, 10),
+    source_breakdown: sourceBreakdown,
+    generated_at: new Date().toISOString(),
+  }
+}
+
 export async function extractCreatorsFromReport(reportUrl: string): Promise<GumshoeCreatorUrl[]> {
   try {
     const reportId = parseGumshoeUrl(reportUrl)
