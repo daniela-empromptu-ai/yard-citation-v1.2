@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, X, Upload, Sparkles, Loader2 } from 'lucide-react';
 import { showToast } from '@/components/ui/Toaster';
 import { useSession } from 'next-auth/react';
+import { useYouTubeQuotaGate } from '@/components/campaigns/YouTubeQuotaGate';
 
 interface Props {
   campaign: {
@@ -34,6 +35,7 @@ export default function SetupTab({ campaign, topics: initialTopics, onPipelineSt
   const [launching, setLaunching] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const ytQuotaGate = useYouTubeQuotaGate();
 
   useEffect(() => { setBrief(campaign.creative_brief || ''); }, [campaign.creative_brief]);
   useEffect(() => { setGumshoeUrl(campaign.gumshoe_notes || ''); }, [campaign.gumshoe_notes]);
@@ -119,6 +121,8 @@ export default function SetupTab({ campaign, topics: initialTopics, onPipelineSt
       showToast('error', 'Add at least one topic to track');
       return;
     }
+    const proceed = await ytQuotaGate.check();
+    if (!proceed) return;
     setLaunching(true);
     try {
       const ok = await persistAll();
@@ -165,6 +169,7 @@ export default function SetupTab({ campaign, topics: initialTopics, onPipelineSt
 
   return (
     <div className="max-w-[640px] mx-auto pb-12">
+      {ytQuotaGate.modal}
       <Field
         label="Brand URL"
         mock

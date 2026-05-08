@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/utils';
 import EvidenceCard from '@/components/ui/EvidenceCard';
 import ScoreGauge from '@/components/ui/ScoreGauge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useYouTubeQuotaGate } from '@/components/campaigns/YouTubeQuotaGate';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowLeft, ArrowRight, Youtube, ExternalLink, X, Plus, Sparkles, Loader2 } from 'lucide-react';
 
 // ─── Helpers ───
@@ -893,6 +894,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [surfaceMoreRunning, setSurfaceMoreRunning] = useState(false);
   const [surfaceMoreError, setSurfaceMoreError] = useState<string | null>(null);
+  const ytQuotaGate = useYouTubeQuotaGate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [evalCache, setEvalCache] = useState<Map<string, RowEvalData>>(new Map());
   const [platformFilter, setPlatformFilter] = useState<string>('all');
@@ -921,6 +923,8 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
 
   async function handleSurfaceMore(seedCreatorId?: string) {
     setSurfaceMoreError(null);
+    const proceed = await ytQuotaGate.check();
+    if (!proceed) return;
     let userId: string | null = (session?.user as { id?: string } | undefined)?.id ?? null;
     if (!userId) {
       const rawUser = typeof window !== 'undefined' ? localStorage.getItem('yard_current_user') : null;
@@ -1055,6 +1059,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   if (selectedCc) {
     return (
       <div>
+        {ytQuotaGate.modal}
         {/* Back nav */}
         <button
           onClick={() => setSelectedCc(null)}
@@ -1082,6 +1087,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   // ── Grid view ──
   return (
     <div className="space-y-5">
+      {ytQuotaGate.modal}
       {pagedCreators.length === 0 ? (
         <div className="card">
           <EmptyState
