@@ -59,6 +59,7 @@ export default function AnalysisTab({ campaign }: Props) {
   }
 
   const a = data.analysis!
+  const brandName = a.brand?.name || 'Us'
 
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-5">
@@ -87,7 +88,7 @@ export default function AnalysisTab({ campaign }: Props) {
             <p className="text-xs text-slate-500 mt-2">↓ {ordinal(a.category_rank)} in category</p>
           )}
           <div className="mt-4 p-3 rounded-lg bg-[#0f172a] text-xs text-slate-400">
-            Only {a.visibility_score}% of answers mention {a.brand.name}. Every uncited source is a placement opportunity.
+            Only {a.visibility_score}% of answers mention {brandName}. Every uncited source is a placement opportunity.
           </div>
         </Card>
 
@@ -108,7 +109,7 @@ export default function AnalysisTab({ campaign }: Props) {
       </div>
 
       {/* Gap topics */}
-      <Card title="Gap topics" subtitle={`Topics where ${a.brand.name} trails the leader.`}>
+      <Card title="Gap topics" subtitle={`Topics where ${brandName} trails the leader.`}>
         {a.gap_topics.length === 0 ? (
           <p className="text-sm text-slate-500 mt-3">No clear topical gaps — you appear in topics at parity or better.</p>
         ) : (
@@ -124,7 +125,7 @@ export default function AnalysisTab({ campaign }: Props) {
                   <span className="col-span-4 text-sm text-slate-200 truncate">{t.topic}</span>
                   <div className="col-span-7 space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400 w-14 truncate">{a.brand.name}</span>
+                      <span className="text-[10px] text-slate-400 w-14 truncate">{brandName}</span>
                       <Bar pct={t.my_share_pct} highlight />
                       <span className="text-[10px] text-slate-400 w-8 text-right">{t.my_share_pct}%</span>
                     </div>
