@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { Loader2, Send, Check, Copy, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import { Loader2, Send, Check, Copy, ChevronDown, ChevronUp, FileText, Trash2 } from 'lucide-react'
 import { showToast } from '@/components/ui/Toaster'
 
 interface Props {
@@ -81,6 +81,22 @@ export default function OutreachTab({ campaign }: Props) {
         await load()
       } else {
         showToast('error', 'Failed to mark sent')
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const onDelete = async (p: Packet) => {
+    if (!confirm(`Delete outreach draft for ${p.creator_name}? This cannot be undone.`)) return
+    setBusy(p.id)
+    try {
+      const res = await fetch(`/api/outreach-packets/${p.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        showToast('success', 'Draft deleted')
+        await load()
+      } else {
+        showToast('error', 'Delete failed')
       }
     } finally {
       setBusy(null)
@@ -173,6 +189,14 @@ export default function OutreachTab({ campaign }: Props) {
                           Approve
                         </button>
                       )}
+                      <button
+                        onClick={() => onDelete(p)}
+                        disabled={busy === p.id}
+                        className="p-1 text-slate-500 hover:text-red-400 disabled:opacity-40"
+                        title="Delete draft"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                       <button onClick={() => toggle(p.id)} className="p-1 text-slate-400 hover:text-slate-200">
                         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>

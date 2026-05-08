@@ -23,6 +23,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const { user_id } = await req.json().catch(() => ({}))
   if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 })
 
+  const ownerRes = await dbQuery<{ name: string }>(
+    `SELECT u.name FROM ${t('app_users')} u JOIN ${t('campaigns')} c ON c.owner_user_id = u.id WHERE c.id = $1`,
+    [campaignId]
+  )
+  const rawName = ownerRes.data[0]?.name || ''
+  const rawFirst = rawName.split(' ')[0]
+  const senderName = (rawFirst && !/admin/i.test(rawName)) ? rawFirst : 'Michael'
+
   // Idempotency
   const existing = await dbQuery<{ id: string }>(
     `SELECT id FROM ${t('outreach_packets')} WHERE campaign_creator_id = $1`,
@@ -108,6 +116,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       platforms: [cc.platform],
       selectedAngle: topAngle,
       evidenceSnippets: snippets,
+      senderName,
     })
 
     await dbQuery(

@@ -1,13 +1,11 @@
 /**
- * Stage 2 enrichment: generates evidence snippets + content angles for a
- * previously-scored creator. Called lazily from the UI when a user opens
- * a detail panel for a creator scoring >= ENRICH_SCORE_THRESHOLD.
+ * Stage 2 enrichment: generates evidence snippets + content angles.
+ * Called from scoreCreator after Stage 1 completes, for all scored creators.
  */
 
 import { dbQuery, dbInsertMany, t } from '@/lib/db'
 import { aiEnrichEvaluation } from '@/lib/ai-actions'
 
-export const ENRICH_SCORE_THRESHOLD = 80
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -50,10 +48,6 @@ export async function enrichEvaluation(campaignCreatorId: string): Promise<Enric
     return { ok: false, error: 'Evaluation not found for this campaign creator' }
   }
   const ctx = ctxRes.data[0]
-
-  if (ctx.overall_score < ENRICH_SCORE_THRESHOLD) {
-    return { ok: true, skipped: true, evidence_coverage: ctx.evidence_coverage }
-  }
 
   // Idempotent: if already enriched (coverage != pending), re-run cleans and regenerates.
   const topicsRes = await dbQuery<{ topic: string }>(

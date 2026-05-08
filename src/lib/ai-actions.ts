@@ -5,10 +5,21 @@ import JSON5 from 'json5'
 
 async function applyPrompt(name: string, inputData: Record<string, string>, returnType: string, retries = 2): Promise<unknown> {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const result = await callAIApi('/apply_prompt_to_data', {
-      prompt_name: name,
-      input_data: { ...inputData, return_type: returnType },
-    }) as { value: unknown }
+    let result: { value: unknown }
+    try {
+      result = await callAIApi('/apply_prompt_to_data', {
+        prompt_name: name,
+        input_data: { ...inputData, return_type: returnType },
+      }) as { value: unknown }
+    } catch (e) {
+      const msg = (e as Error).message
+      if ((msg.includes('500') || msg.includes('Prompt execution returned no result')) && attempt < retries) {
+        console.warn(`[applyPrompt] ${name}: transient 500, retrying (${attempt + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, 3000 * (attempt + 1)))
+        continue
+      }
+      throw e
+    }
 
     const value = result.value
 
@@ -304,15 +315,13 @@ export async function aiEnrichEvaluation(params: {
  */
 const OUTREACH_STYLE_EXAMPLE = `Hi [Name],
 
-Michael here, head of GTM @ Yard. I'd like to get one of our clients, [client.com], included in your article on [topic]. It's being cited by Claude and ChatGPT, so it's a strong fit.
+[Specific reference to something they actually wrote/covered — one sentence, shows you read it.]
 
-If you could share your rates and availability for adding the mention, that would be great. We pay within 24 hours of the article going live with the update.
+I work with [client], [one-line description of what it does and why it's relevant to their audience]. [One concrete detail that makes it a natural fit — a stat, a feature, a gap in their piece.]
 
-Happy to forward more info on the client if useful. They sit in there on merit alone.
+Would you be open to [specific ask — a mention, a section addition, a collaboration]? [Brief, easy CTA — happy to share X, or just reply to this.]
 
-Any questions, just shout.
-
-Michael`
+— [SENDER_NAME]`
 
 // ---- AI: Generate Outreach Draft ----
 export async function aiGenerateOutreachDraft(params: {
@@ -322,6 +331,7 @@ export async function aiGenerateOutreachDraft(params: {
   platforms: string[];
   selectedAngle: { title: string; format: string; key_points: string[] } | null;
   evidenceSnippets: Array<{ quote: string; url: string; why_it_matters: string }>;
+  senderName?: string;
   /** Override the house style example. Defaults to OUTREACH_STYLE_EXAMPLE. */
   styleExample?: string;
 }): Promise<{
@@ -331,19 +341,27 @@ export async function aiGenerateOutreachDraft(params: {
     channel: string; label: string; day_offset: number; completed: boolean
   }>;
 }> {
-  const styleExample = params.styleExample || OUTREACH_STYLE_EXAMPLE
+  const senderName = params.senderName || 'Michael'
+  const styleExample = (params.styleExample || OUTREACH_STYLE_EXAMPLE).replace(/\[SENDER_NAME\]/g, senderName)
   try {
     const raw = await applyPrompt('generate_outreach_draft', {
       campaign_context:
         `Campaign: ${params.campaignName}\n${params.campaignBrief.substring(0, 500)}\n\n` +
-        `STYLE REFERENCE — match this voice, length (under 120 words), and structure. ` +
-        `Replace bracketed merge fields with concrete values from the campaign and creator context; ` +
-        `do not output literal brackets:\n\n${styleExample}`,
+        `STYLE REFERENCE — match this voice, length (under 100 words), and structure exactly. Rules:\n` +
+        `1. Open with a SPECIFIC reference to something the creator actually wrote/covered (use the evidence snippets — quote a title, a specific point they made, or a topic they covered). Do NOT open with "I'd like to..." or introduce yourself first.\n` +
+        `2. Introduce the client in one line with a concrete detail (stat, feature, why it fits their audience).\n` +
+        `3. Make a single clear ask. Keep it easy to say yes to.\n` +
+        `4. Sign off with just the sender name — no title, no company.\n` +
+        `5. Replace ALL bracketed placeholders with real values from context. Never output literal brackets.\n\n` +
+        `STYLE TEMPLATE:\n${styleExample}`,
       creator_info: `Creator: ${params.creatorName}\nPlatforms: ${params.platforms.join(', ')}`,
       angle_info: params.selectedAngle
         ? `Title: ${params.selectedAngle.title}\nFormat: ${params.selectedAngle.format}\nKey points: ${params.selectedAngle.key_points.join(', ')}`
         : 'No specific angle selected',
-      evidence_info: params.evidenceSnippets.map(e => `Quote: "${e.quote}" — ${e.why_it_matters}`).join('\n'),
+      evidence_info: params.evidenceSnippets.length > 0
+        ? `Evidence from the creator's actual content (use these to personalize the opener):\n` +
+          params.evidenceSnippets.map((e, i) => `${i + 1}. "${e.quote}"${e.url ? ` (${e.url})` : ''} — ${e.why_it_matters}`).join('\n')
+        : 'No specific evidence available — reference their general platform and topic focus.',
     }, 'raw_text') as string
 
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()

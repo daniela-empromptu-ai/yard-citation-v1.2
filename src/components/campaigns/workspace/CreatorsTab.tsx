@@ -908,6 +908,18 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const CREATORS_PAGE_SIZE = 25;
   const router = useRouter();
 
+  // On mount: check if a pipeline is already running and start polling if so
+  useEffect(() => {
+    fetch(`/api/campaigns/${campaign.id}/pipeline-status`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.job?.status === 'running' || data.job?.status === 'queued') {
+          setSurfaceMoreRunning(true);
+        }
+      })
+      .catch(() => {});
+  }, [campaign.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Poll for surface-more job completion
   useEffect(() => {
     if (!surfaceMoreRunning) return;
@@ -1049,6 +1061,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
         m.set(cc.id, { evaluation: evalObj, loading: false });
         return m;
       });
+
     } catch {
       setEvalCache((prev) => {
         const m = new Map(prev);
@@ -1130,6 +1143,12 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   return (
     <div className="space-y-5">
       {ytQuotaGate.modal}
+      {surfaceMoreRunning && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-sm">
+          <Loader2 size={15} className="animate-spin shrink-0" />
+          <span>Pipeline running — finding and scoring new creators. This takes a few minutes.</span>
+        </div>
+      )}
       {pagedCreators.length === 0 ? (
         <div className="card">
           <EmptyState

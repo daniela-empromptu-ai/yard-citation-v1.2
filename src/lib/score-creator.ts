@@ -6,6 +6,7 @@
 
 import { dbQuery, t } from '@/lib/db'
 import { aiScoreCreator } from '@/lib/ai-actions'
+import { enrichEvaluation } from '@/lib/enrich-evaluation'
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -135,6 +136,13 @@ export async function scoreCreator(campaignCreatorId: string): Promise<ScoreCrea
      FROM ${t('campaign_creators')} cc WHERE cc.id = $1`,
     [campaignCreatorId, JSON.stringify({ score: computedScore, coverage, needs_manual_review: needsManualReview }), now]
   )
+
+  // Stage 2: evidence snippets + content angles for all scored creators
+  try {
+    await enrichEvaluation(campaignCreatorId)
+  } catch (e) {
+    console.error(`[score-creator] Stage 2 enrichment failed for ${ctx.creator_name}:`, (e as Error).message)
+  }
 
   return { ok: true, evaluation_id: evalId, overall_score: computedScore, evidence_coverage: coverage, needs_manual_review: needsManualReview }
 }
