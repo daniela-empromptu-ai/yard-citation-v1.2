@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { dbQuery, t } from '@/lib/db'
 import { v4 as uuidv4 } from 'uuid'
 import { runSurfaceMorePipeline } from '@/lib/pipeline'
+import { reapStaleJobs } from '@/lib/jobs'
 
 interface RouteContext {
   params: { id: string }
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     if (!user_id) {
       return NextResponse.json({ error: 'user_id is required' }, { status: 400 })
     }
+
+    // Self-heal: clear jobs stuck in queued/running for >30min (process died)
+    await reapStaleJobs(campaignId)
 
     // Block if any pipeline job is already running for this campaign
     const existingRes = await dbQuery<{ id: string }>(

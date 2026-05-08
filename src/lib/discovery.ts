@@ -21,7 +21,7 @@ import { aiDiscoverCreators } from '@/lib/ai-actions'
 import { isBrandOwned } from '@/lib/creator-guardrails'
 import { extractCreatorsFromReport, parseGumshoeUrl } from '@/lib/gumshoe'
 import { verifyCreator, VerificationResult } from '@/lib/verify-creator'
-import { searchYouTubeVideosByTerms, VideoDiscoveryResult } from '@/lib/youtube'
+import { searchYouTubeVideosByTerms, VideoDiscoveryResult, getYouTubeKey, isUsingBackupKey } from '@/lib/youtube'
 import { isYouTubeConfigured } from '@/lib/anthropic'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -41,6 +41,8 @@ export interface DiscoveryResult {
   llm_rejected: number
   gumshoe_extracted: number
   total_linked: number
+  yt_failed?: boolean
+  yt_using_backup_key?: boolean
 }
 
 interface CampaignContext {
@@ -348,8 +350,8 @@ async function linkCreatorsToCampaign(
 async function discoverByYouTubeSearch(
   campaignId: string,
   topics: string[]
-): Promise<{ creators: MatchedCreator[]; newInserted: number }> {
-  const apiKey = process.env.YOUTUBE_API_KEY || ''
+): Promise<{ creators: MatchedCreator[]; newInserted: number; failed?: boolean }> {
+  const apiKey = getYouTubeKey()
 
   // Load campaign search terms
   const termsRes = await dbQuery<{ term: string }>(
@@ -471,7 +473,7 @@ async function discoverByYouTubeSearch(
     return { creators, newInserted }
   } catch (e) {
     console.error('[discovery] YouTube Search failed:', (e as Error).message)
-    return { creators: [], newInserted: 0 }
+    return { creators: [], newInserted: 0, failed: true }
   }
 }
 
@@ -784,7 +786,7 @@ export async function discoverCreatorsByCategories(
   if (searchTerms.length === 0) throw new Error('Failed to generate search terms from categories')
 
   // Step 3: YouTube Search API — external, no credit cost
-  const apiKey = process.env.YOUTUBE_API_KEY || ''
+  const apiKey = getYouTubeKey()
   const results = await searchYouTubeVideosByTerms(searchTerms, apiKey, {
     resultsPerTerm: 5,
     maxChannels: 100,
@@ -1012,10 +1014,12 @@ export async function runDiscovery(
   // Phase B: YouTube Video Search — find creators through their content, not channel names
   let ytSearchCreators: MatchedCreator[] = []
   let ytSearchNew = 0
+  let ytFailed = false
   if (isYouTubeConfigured()) {
     const ytResult = await discoverByYouTubeSearch(campaignId, topics)
     ytSearchCreators = ytResult.creators
     ytSearchNew = ytResult.newInserted
+    ytFailed = ytResult.failed === true
     console.log(`[discovery] YouTube Video Search: ${ytResult.creators.length} channels found (${ytResult.newInserted} new)`)
   } else {
     console.log('[discovery] YouTube API key not configured, skipping YouTube search')
@@ -1073,6 +1077,8 @@ export async function runDiscovery(
     llm_rejected: llmResult.rejected,
     gumshoe_extracted: gumshoeCreators.length,
     total_linked: totalLinked,
+    yt_failed: ytFailed,
+    yt_using_backup_key: isUsingBackupKey(),
   }
 
   if (ytSearchCreators.length > 0) {

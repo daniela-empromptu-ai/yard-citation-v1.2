@@ -24,6 +24,7 @@ import {
   searchChannelVideos,
   buildTranscriptFromTimedText,
   CreatorTranscriptResult,
+  getYouTubeKey,
 } from '@/lib/youtube'
 import { fetchCreatorArticles, CreatorArticleResult } from '@/lib/ingest-articles'
 
@@ -100,7 +101,7 @@ export async function fetchCreatorTranscripts(
   creators: CreatorRow[],
   campaignTopics: string[] = []
 ): Promise<CreatorTranscriptResult[]> {
-  const apiKey = process.env.YOUTUBE_API_KEY || ''
+  const apiKey = getYouTubeKey()
   const videosPerCreator = parseInt(process.env.VIDEOS_PER_CREATOR || '3', 10)
   const concurrency = parseInt(process.env.SUPADATA_CONCURRENCY || '8', 10)
 

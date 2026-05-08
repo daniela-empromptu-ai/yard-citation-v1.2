@@ -136,6 +136,12 @@ export async function runSurfaceMorePipeline(
       ? await runSimilarDiscovery(campaignId, userId, seedCreatorId)
       : await runDiscovery(campaignId, userId)
     await logJobEvent(jobId, 'info', `Discovery complete: ${discoveryResult.total_linked} new creators linked`, discoveryResult as unknown as Record<string, unknown>)
+    if (discoveryResult.yt_failed) {
+      await logJobEvent(jobId, 'warn', 'YouTube discovery failed — likely API quota exhausted; only Medium/Dev.to creators surfaced')
+    }
+    if (discoveryResult.yt_using_backup_key) {
+      await logJobEvent(jobId, 'warn', 'YouTube primary key quota exhausted — running on backup key')
+    }
 
     if (discoveryResult.total_linked === 0) {
       await logJobEvent(jobId, 'warn', 'No new creators discovered')
@@ -201,6 +207,13 @@ export async function runFullPipeline(campaignId: string, userId: string, jobId:
 
     const discoveryResult = await runDiscovery(campaignId, userId)
     await logJobEvent(jobId, 'info', `Discovery complete: ${discoveryResult.total_linked} creators linked`, discoveryResult as unknown as Record<string, unknown>)
+
+    if (discoveryResult.yt_failed) {
+      await logJobEvent(jobId, 'warn', 'YouTube discovery failed — likely API quota exhausted; only Medium/Dev.to creators surfaced')
+    }
+    if (discoveryResult.yt_using_backup_key) {
+      await logJobEvent(jobId, 'warn', 'YouTube primary key quota exhausted — running on backup key')
+    }
 
     if (discoveryResult.total_linked === 0) {
       await logJobEvent(jobId, 'warn', 'No creators discovered — pipeline ending early')

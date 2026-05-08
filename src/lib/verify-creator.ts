@@ -110,11 +110,10 @@ async function verifyYouTube(
   creator: CreatorToVerify,
   handle: string
 ): Promise<VerificationResult> {
-  const apiKey = process.env.YOUTUBE_API_KEY || ''
   const url = creator.url || `https://www.youtube.com/@${handle}`
 
   // Step 1: Does the channel exist?
-  const resolution = await resolveChannelId(url, apiKey)
+  const resolution = await resolveChannelId(url)
   if (!resolution.channelId) {
     return { verified: false, reason: `YouTube channel not found for @${handle}` }
   }

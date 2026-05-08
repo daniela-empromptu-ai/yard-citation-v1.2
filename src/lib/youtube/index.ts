@@ -13,3 +13,4 @@ export type {
   PerVideoTranscript,
 } from './types'
 export type { YouTubeSearchResult } from './search'
+export { getYouTubeKey, hasBackupKey, isUsingBackupKey, reportQuotaExhausted, isQuotaExceeded } from './api-key'

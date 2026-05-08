@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, t } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import { runFullPipeline } from '@/lib/pipeline';
+import { reapStaleJobs } from '@/lib/jobs';
 
 export async function POST(req: NextRequest) {
   const { campaign_id, user_id } = await req.json();
@@ -12,6 +13,9 @@ export async function POST(req: NextRequest) {
     `UPDATE ${t('campaign_search_terms')} SET approved=true, approved_by_user_id=$1, approved_at=$2, updated_at=$3 WHERE campaign_id=$4`,
     [user_id, now, now, campaign_id]
   );
+
+  // Self-heal: clear jobs stuck in queued/running for >30min (process died)
+  await reapStaleJobs(campaign_id);
 
   // Check for already-running pipeline
   const existingRes = await dbQuery<{ id: string }>(

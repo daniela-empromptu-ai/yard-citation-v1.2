@@ -6,6 +6,7 @@
  */
 
 import { ChannelResolution } from './types'
+import { getYouTubeKey, reportQuotaExhausted, isQuotaExceeded } from './api-key'
 
 const CHANNEL_ID_RE = /\/channel\/(UC[\w-]{22})/
 const HANDLE_RE = /\/@([\w.-]+)/
@@ -40,9 +41,16 @@ function parseHandleFromUrl(url: string): string | null {
  * Resolve channel ID via YouTube Data API channels.list (1 unit).
  * Also fetches subscriberCount from statistics — same call, no extra quota.
  */
-async function resolveHandleViaApi(handle: string, apiKey: string): Promise<{ channelId: string; subscriberCount?: number } | null> {
-  const url = `https://www.googleapis.com/youtube/v3/channels?forHandle=${encodeURIComponent(handle)}&part=id,statistics&key=${apiKey}`
-  const res = await fetch(url)
+async function resolveHandleViaApi(handle: string): Promise<{ channelId: string; subscriberCount?: number } | null> {
+  const buildUrl = (key: string) =>
+    `https://www.googleapis.com/youtube/v3/channels?forHandle=${encodeURIComponent(handle)}&part=id,statistics&key=${key}`
+  let res = await fetch(buildUrl(getYouTubeKey()))
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => ({}))
+    if (isQuotaExceeded(res.status, body) && reportQuotaExhausted('resolveHandleViaApi')) {
+      res = await fetch(buildUrl(getYouTubeKey()))
+    }
+  }
   if (!res.ok) return null
 
   const data = await res.json()
@@ -62,7 +70,7 @@ async function resolveHandleViaApi(handle: string, apiKey: string): Promise<{ ch
  */
 export async function resolveChannelId(
   platformUrl: string,
-  apiKey: string
+  _apiKey?: string
 ): Promise<ChannelResolution> {
   // Tier 0: Direct parse
   const directId = parseChannelIdFromUrl(platformUrl)
@@ -74,7 +82,7 @@ export async function resolveChannelId(
   const handle = parseHandleFromUrl(platformUrl)
   if (handle) {
     try {
-      const resolved = await resolveHandleViaApi(handle, apiKey)
+      const resolved = await resolveHandleViaApi(handle)
       if (resolved) {
         return { channelId: resolved.channelId, method: 'api_handle', subscriberCount: resolved.subscriberCount }
       }

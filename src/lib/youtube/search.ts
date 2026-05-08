@@ -10,6 +10,24 @@
  * Budget: ~50 search calls + 50 channel lookups per day = ~5,050 units
  */
 
+import { getYouTubeKey, reportQuotaExhausted, isQuotaExceeded } from './api-key'
+
+/**
+ * Fetch a YouTube API URL with automatic primary→backup key failover on
+ * 403/quotaExceeded. The buildUrl callback receives the active key so the
+ * retry can be issued with the new one.
+ */
+async function youtubeFetch(buildUrl: (key: string) => string, ctx: string): Promise<Response> {
+  let res = await fetch(buildUrl(getYouTubeKey()), { signal: AbortSignal.timeout(10000) })
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => ({}))
+    if (isQuotaExceeded(res.status, body) && reportQuotaExhausted(ctx)) {
+      res = await fetch(buildUrl(getYouTubeKey()), { signal: AbortSignal.timeout(10000) })
+    }
+  }
+  return res
+}
+
 export interface YouTubeSearchResult {
   channelId: string
   channelTitle: string
@@ -57,15 +75,16 @@ export async function searchYouTubeChannels(
   maxResults = 5
 ): Promise<YouTubeSearchResult[]> {
   // Step 1: Search for channels (100 units)
-  const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
-  searchUrl.searchParams.set('part', 'snippet')
-  searchUrl.searchParams.set('q', query)
-  searchUrl.searchParams.set('type', 'channel')
-  searchUrl.searchParams.set('maxResults', String(maxResults))
-  searchUrl.searchParams.set('relevanceLanguage', 'en')
-  searchUrl.searchParams.set('key', apiKey)
-
-  const searchRes = await fetch(searchUrl.toString(), { signal: AbortSignal.timeout(10000) })
+  const searchRes = await youtubeFetch(key => {
+    const u = new URL('https://www.googleapis.com/youtube/v3/search')
+    u.searchParams.set('part', 'snippet')
+    u.searchParams.set('q', query)
+    u.searchParams.set('type', 'channel')
+    u.searchParams.set('maxResults', String(maxResults))
+    u.searchParams.set('relevanceLanguage', 'en')
+    u.searchParams.set('key', key)
+    return u.toString()
+  }, 'searchYouTubeChannels')
   if (!searchRes.ok) {
     const text = await searchRes.text()
     throw new Error(`YouTube search failed (${searchRes.status}): ${text.slice(0, 200)}`)
@@ -120,13 +139,14 @@ async function getChannelDetails(
     const batch = channelIds.slice(i, i + 50)
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const url = new URL('https://www.googleapis.com/youtube/v3/channels')
-      url.searchParams.set('part', 'snippet,statistics')
-      url.searchParams.set('id', batch.join(','))
-      url.searchParams.set('key', apiKey)
-
       try {
-        const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
+        const res = await youtubeFetch(key => {
+          const url = new URL('https://www.googleapis.com/youtube/v3/channels')
+          url.searchParams.set('part', 'snippet,statistics')
+          url.searchParams.set('id', batch.join(','))
+          url.searchParams.set('key', key)
+          return url.toString()
+        }, 'getChannelDetails')
         if (!res.ok) {
           const errText = await res.text().catch(() => '')
           console.log(`[yt-search] Channel details batch failed (attempt ${attempt + 1}): ${res.status} — ${errText.slice(0, 100)}`)
@@ -185,19 +205,20 @@ export async function searchChannelVideos(
 ): Promise<ChannelVideoResult[]> {
   const { maxResults = 3, publishedAfter } = options
 
-  const url = new URL('https://www.googleapis.com/youtube/v3/search')
-  url.searchParams.set('part', 'snippet')
-  url.searchParams.set('channelId', channelId)
-  url.searchParams.set('q', query)
-  url.searchParams.set('type', 'video')
-  url.searchParams.set('order', 'relevance')
-  url.searchParams.set('maxResults', String(maxResults))
-  url.searchParams.set('key', apiKey)
-  if (publishedAfter) {
-    url.searchParams.set('publishedAfter', publishedAfter)
-  }
-
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
+  const res = await youtubeFetch(key => {
+    const url = new URL('https://www.googleapis.com/youtube/v3/search')
+    url.searchParams.set('part', 'snippet')
+    url.searchParams.set('channelId', channelId)
+    url.searchParams.set('q', query)
+    url.searchParams.set('type', 'video')
+    url.searchParams.set('order', 'relevance')
+    url.searchParams.set('maxResults', String(maxResults))
+    url.searchParams.set('key', key)
+    if (publishedAfter) {
+      url.searchParams.set('publishedAfter', publishedAfter)
+    }
+    return url.toString()
+  }, 'searchChannelVideos')
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`YouTube channel video search failed (${res.status}): ${text.slice(0, 200)}`)
@@ -305,21 +326,27 @@ export async function searchYouTubeVideosByTerms(
   // Collect all video results, grouped by channel
   const channelVideos = new Map<string, { videoId: string; title: string; publishedAt: string }[]>()
   const channelTitles = new Map<string, string>()
+  let failedTerms = 0
+  let lastError = ''
 
   for (const term of terms) {
     try {
-      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
-      searchUrl.searchParams.set('part', 'snippet')
-      searchUrl.searchParams.set('q', term)
-      searchUrl.searchParams.set('type', 'video')
-      searchUrl.searchParams.set('order', 'relevance')
-      searchUrl.searchParams.set('maxResults', String(resultsPerTerm))
-      searchUrl.searchParams.set('relevanceLanguage', 'en')
-      searchUrl.searchParams.set('key', apiKey)
-
-      const res = await fetch(searchUrl.toString(), { signal: AbortSignal.timeout(10000) })
+      const res = await youtubeFetch(key => {
+        const u = new URL('https://www.googleapis.com/youtube/v3/search')
+        u.searchParams.set('part', 'snippet')
+        u.searchParams.set('q', term)
+        u.searchParams.set('type', 'video')
+        u.searchParams.set('order', 'relevance')
+        u.searchParams.set('maxResults', String(resultsPerTerm))
+        u.searchParams.set('relevanceLanguage', 'en')
+        u.searchParams.set('key', key)
+        return u.toString()
+      }, 'searchYouTubeVideosByTerms')
       if (!res.ok) {
-        console.error(`[yt-search] Video search failed for "${term}": ${res.status}`)
+        const errBody = await res.text().catch(() => '')
+        lastError = `HTTP ${res.status} ${errBody.slice(0, 120)}`
+        console.error(`[yt-search] Video search failed for "${term}": ${lastError}`)
+        failedTerms++
         continue
       }
 
@@ -350,10 +377,16 @@ export async function searchYouTubeVideosByTerms(
         channelVideos.set(chId, videos)
       }
     } catch (e) {
-      console.error(`[yt-search] Video search failed for "${term}":`, (e as Error).message)
+      lastError = (e as Error).message
+      failedTerms++
+      console.error(`[yt-search] Video search failed for "${term}":`, lastError)
     }
 
     if (channelVideos.size >= maxChannels * 2) break // rough cap, will filter below
+  }
+
+  if (failedTerms === terms.length && terms.length > 0) {
+    throw new Error(`YouTube search failed for all ${terms.length} terms (last: ${lastError})`)
   }
 
   if (channelVideos.size === 0) return []
