@@ -24,10 +24,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ available: false, reason: 'No Gumshoe report URL on this campaign.' })
   }
 
-  // Serve fresh cached value
+  // Serve fresh cached value — but validate shape first; stale cache from older
+  // code versions may be missing fields (brand, leaderboard, etc.)
+  const isValidCache = (v: unknown): v is VisibilityAnalysis =>
+    !!v && typeof v === 'object' &&
+    'brand' in v && 'leaderboard' in v && 'gap_topics' in v && 'source_breakdown' in v
+
   if (!force && camp.visibility_analysis_json && camp.visibility_analysis_at) {
     const ageMs = Date.now() - new Date(camp.visibility_analysis_at).getTime()
-    if (ageMs < CACHE_MAX_AGE_MS) {
+    if (ageMs < CACHE_MAX_AGE_MS && isValidCache(camp.visibility_analysis_json)) {
       return NextResponse.json({
         available: true,
         cached: true,
