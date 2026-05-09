@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, RefreshCw, Loader2, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Loader2, AlertTriangle } from 'lucide-react'
 import type { VisibilityAnalysis } from '@/lib/gumshoe'
 
 interface Props {
@@ -11,8 +11,6 @@ interface Props {
 
 interface ApiResponse {
   available: boolean
-  cached?: boolean
-  age_ms?: number
   analysis?: VisibilityAnalysis
   reason?: string
 }
@@ -21,20 +19,14 @@ export default function AnalysisTab({ campaign }: Props) {
   const router = useRouter()
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [refetching, setRefetching] = useState(false)
 
-  const load = async (force: boolean) => {
-    if (force) setRefetching(true); else setLoading(true)
-    try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/visibility-analysis${force ? '?force=1' : ''}`, { cache: 'no-store' })
-      const json = (await res.json()) as ApiResponse
-      setData(json)
-    } finally {
-      setLoading(false); setRefetching(false)
-    }
-  }
-
-  useEffect(() => { load(false) }, [campaign.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/campaigns/${campaign.id}/visibility-analysis`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(json => setData(json as ApiResponse))
+      .finally(() => setLoading(false))
+  }, [campaign.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -66,15 +58,8 @@ export default function AnalysisTab({ campaign }: Props) {
       {/* Header strip */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">
-          Generated {new Date(a.generated_at).toLocaleString()} {data.cached ? '· cached' : ''}
+          Generated {new Date(a.generated_at).toLocaleString()}
         </p>
-        <button
-          onClick={() => load(true)}
-          disabled={refetching}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-md border border-[#2d3748] text-slate-300 hover:bg-[#263044] disabled:opacity-50"
-        >
-          <RefreshCw size={12} className={refetching ? 'animate-spin' : ''} /> Re-run
-        </button>
       </div>
 
       {/* Score + Leaderboard */}
