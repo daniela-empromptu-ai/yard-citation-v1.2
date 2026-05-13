@@ -114,55 +114,88 @@ function PlatformLogo({ platform, color }: { platform: string; color: string }) 
   );
 }
 
-// ─── Dismiss Modal ───
+// ─── Note Modal (Exclude / Select for outreach) ───
 
-const DISMISS_REASONS = ['Too expensive', 'Wrong audience', 'Brand conflict', 'Already in talks', 'Other'];
+const EXCLUDE_PRESETS = ['Dead channel', 'Too expensive', 'Wrong audience', 'Brand conflict', 'Already in talks'];
+const SELECT_PRESETS = ['Strong topical match', 'Active and growing', 'Past collaborator', 'Audience fit'];
 
-function DismissModal({
+function NoteModal({
   cc,
+  mode,
   onConfirm,
   onCancel,
   loading,
 }: {
   cc: CampaignCreator;
-  onConfirm: (reason: string) => void;
+  mode: 'exclude' | 'select';
+  onConfirm: (note: string) => void;
   onCancel: () => void;
   loading: boolean;
 }) {
-  const [reason, setReason] = useState('');
-  const [custom, setCustom] = useState('');
+  const [note, setNote] = useState('');
+  const presets = mode === 'exclude' ? EXCLUDE_PRESETS : SELECT_PRESETS;
+
+  const copy = mode === 'exclude'
+    ? {
+        title: 'Why exclude this creator?',
+        body: `Help us learn — your reasoning trains the search. ${cc.creator_name} won't appear in this campaign again.`,
+        confirm: 'Exclude',
+        confirming: 'Excluding…',
+        confirmClass: 'bg-red-600 hover:bg-red-500 text-white',
+        chipActive: 'bg-red-900/40 border-red-600/60 text-red-300',
+      }
+    : {
+        title: 'Add to outreach',
+        body: `Quick note on why ${cc.creator_name} is a fit — this helps refine future searches.`,
+        confirm: 'Add to outreach',
+        confirming: 'Adding…',
+        confirmClass: 'bg-orange-500 hover:bg-orange-400 text-black',
+        chipActive: 'bg-orange-900/40 border-orange-600/60 text-orange-300',
+      };
+
+  function applyPreset(p: string) {
+    setNote(prev => {
+      if (!prev.trim()) return p;
+      if (prev.includes(p)) return prev;
+      return `${prev.replace(/\s+$/, '')}; ${p}`;
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-[#1e293b] border border-[#2d3748] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h3 className="text-base font-semibold text-slate-100 mb-1">Remove from campaign?</h3>
-        <p className="text-sm text-slate-400 mb-4">{cc.creator_name} won&apos;t appear in this campaign again.</p>
+      <div className="bg-[#1e293b] border border-[#2d3748] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <h3 className="text-base font-semibold text-slate-100 mb-1">{copy.title}</h3>
+        <p className="text-sm text-slate-400 mb-4">{copy.body}</p>
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          {DISMISS_REASONS.map(r => (
-            <button
-              key={r}
-              onClick={() => setReason(reason === r ? '' : r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                reason === r
-                  ? 'bg-red-900/40 border-red-600/60 text-red-300'
-                  : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-slate-500'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+        <textarea
+          autoFocus
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          rows={3}
+          placeholder={mode === 'exclude'
+            ? 'e.g. last few videos are getting 2k views, channel feels flatlined…'
+            : 'e.g. strong DevOps coverage, just published a Kubernetes deep-dive…'}
+          className="w-full bg-[#111827] border border-[#2d3748] rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-blue-500/50 mb-3"
+        />
+
+        <div className="flex flex-wrap gap-2 mb-5">
+          {presets.map(p => {
+            const active = note.includes(p);
+            return (
+              <button
+                key={p}
+                onClick={() => applyPreset(p)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                  active
+                    ? copy.chipActive
+                    : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                + {p}
+              </button>
+            );
+          })}
         </div>
-
-        {reason === 'Other' && (
-          <input
-            autoFocus
-            value={custom}
-            onChange={e => setCustom(e.target.value)}
-            placeholder="Describe the reason…"
-            className="w-full bg-[#111827] border border-[#2d3748] rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50 mb-4"
-          />
-        )}
 
         <div className="flex gap-2 justify-end">
           <button
@@ -173,11 +206,11 @@ function DismissModal({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(reason === 'Other' ? custom : reason)}
+            onClick={() => onConfirm(note.trim())}
             disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-500 text-white transition-all disabled:opacity-50"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 ${copy.confirmClass}`}
           >
-            {loading ? 'Removing…' : 'Remove'}
+            {loading ? copy.confirming : copy.confirm}
           </button>
         </div>
       </div>
@@ -295,71 +328,6 @@ function getVerdict(score: number): string {
 }
 
 // ─── Detail Panel ───
-
-function FeedbackBox({ cc }: { cc: CampaignCreator }) {
-  const [rating, setRating] = useState<string | null>(cc.client_rating ?? null)
-  const [notes, setNotes] = useState(cc.client_feedback ?? '')
-  const [saving, setSaving] = useState(false)
-
-  async function save(newRating?: string | null, newNotes?: string) {
-    setSaving(true)
-    await fetch(`/api/campaign-creators/${cc.id}/feedback`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        feedback: (newNotes ?? notes) || null,
-        rating: newRating !== undefined ? newRating : rating,
-      }),
-    })
-    setSaving(false)
-  }
-
-  function toggleRating(val: 'good' | 'bad') {
-    const next = rating === val ? null : val
-    setRating(next)
-    save(next)
-  }
-
-  return (
-    <div className="space-y-3">
-      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rate Creator</h3>
-      <div className="flex gap-2">
-        <button
-          onClick={() => toggleRating('good')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-            rating === 'good'
-              ? 'bg-green-600 border-green-500 text-white'
-              : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-green-600/50 hover:text-green-400'
-          }`}
-        >
-          👍 Good
-        </button>
-        <button
-          onClick={() => toggleRating('bad')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-            rating === 'bad'
-              ? 'bg-red-600 border-red-500 text-white'
-              : 'bg-transparent border-[#2d3748] text-slate-400 hover:border-red-600/50 hover:text-red-400'
-          }`}
-        >
-          👎 Bad
-        </button>
-      </div>
-      <div>
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notes</h3>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          onBlur={() => save()}
-          rows={3}
-          placeholder="Any concerns or context… (auto-saves)"
-          className="w-full bg-[#111827] border border-[#2d3748] rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-blue-500/50"
-        />
-      </div>
-      {saving && <p className="text-xs text-slate-500">Saving…</p>}
-    </div>
-  )
-}
 
 function DetailPanel({
   cc, evaluation, evidence, contentItems, angles, loading, enriching,
@@ -629,8 +597,6 @@ function DetailPanel({
         </div>
       )}
 
-      {/* Client feedback */}
-      <FeedbackBox cc={cc} />
     </div>
   );
 }
@@ -897,6 +863,8 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
   const [dismissTarget, setDismissTarget] = useState<CampaignCreator | null>(null);
   const [dismissing, setDismissing] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [selectTarget, setSelectTarget] = useState<CampaignCreator | null>(null);
+  const [selecting, setSelecting] = useState(false);
   const [surfaceMoreRunning, setSurfaceMoreRunning] = useState(false);
   const [surfaceMoreError, setSurfaceMoreError] = useState<string | null>(null);
   const ytQuotaGate = useYouTubeQuotaGate();
@@ -940,7 +908,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
     return () => clearInterval(interval);
   }, [surfaceMoreRunning, campaign.id, router]);
 
-  async function handleAddToOutreach(cc: CampaignCreator) {
+  async function handleAddToOutreach(cc: CampaignCreator, note: string) {
     if (addedToOutreach.has(cc.id) || addingToOutreach.has(cc.id)) return;
     let uid: string | null = (session?.user as { id?: string } | undefined)?.id ?? null;
     if (!uid) {
@@ -953,7 +921,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
       const res = await fetch(`/api/campaigns/${campaign.id}/creators/${cc.id}/add-to-outreach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: uid }),
+        body: JSON.stringify({ user_id: uid, selection_note: note || null }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -1245,7 +1213,7 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
                 onDismiss={() => setDismissTarget(cc)}
                 onFindSimilar={() => handleSurfaceMore(cc.creator_id)}
                 findSimilarDisabled={surfaceMoreRunning}
-                onAddToOutreach={() => handleAddToOutreach(cc)}
+                onAddToOutreach={() => setSelectTarget(cc)}
                 addBusy={addingToOutreach.has(cc.id)}
                 addDone={addedToOutreach.has(cc.id)}
               />
@@ -1293,13 +1261,34 @@ export default function CreatorsTab({ campaign, campaignCreators }: Props) {
         </>
       )}
 
-      {/* Dismiss modal */}
+      {/* Exclude modal */}
       {dismissTarget && (
-        <DismissModal
+        <NoteModal
           cc={dismissTarget}
+          mode="exclude"
           onConfirm={confirmDismiss}
           onCancel={() => setDismissTarget(null)}
           loading={dismissing}
+        />
+      )}
+
+      {/* Select-for-outreach modal */}
+      {selectTarget && (
+        <NoteModal
+          cc={selectTarget}
+          mode="select"
+          onConfirm={async note => {
+            const target = selectTarget;
+            setSelecting(true);
+            try {
+              await handleAddToOutreach(target, note);
+            } finally {
+              setSelecting(false);
+              setSelectTarget(null);
+            }
+          }}
+          onCancel={() => setSelectTarget(null)}
+          loading={selecting}
         />
       )}
     </div>

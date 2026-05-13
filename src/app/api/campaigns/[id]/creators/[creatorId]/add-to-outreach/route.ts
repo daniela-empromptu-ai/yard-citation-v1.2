@@ -20,8 +20,16 @@ interface RouteContext {
  */
 export async function POST(req: NextRequest, { params }: RouteContext) {
   const { id: campaignId, creatorId: ccId } = params
-  const { user_id } = await req.json().catch(() => ({}))
+  const { user_id, selection_note } = await req.json().catch(() => ({}))
   if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 })
+
+  if (selection_note && typeof selection_note === 'string' && selection_note.trim()) {
+    await dbQuery(
+      `INSERT INTO ${t('activity_log')} (campaign_id, campaign_creator_id, actor_user_id, event_type, event_data_json, created_at)
+       VALUES ($1, $2, $3, 'creator_selected_note', $4::jsonb, now())`,
+      [campaignId, ccId, user_id, JSON.stringify({ note: selection_note.trim() })]
+    )
+  }
 
   const ownerRes = await dbQuery<{ name: string }>(
     `SELECT u.name FROM ${t('app_users')} u JOIN ${t('campaigns')} c ON c.owner_user_id = u.id WHERE c.id = $1`,
