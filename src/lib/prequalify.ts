@@ -27,6 +27,7 @@ import {
   getYouTubeKey,
 } from '@/lib/youtube'
 import { fetchCreatorArticles, CreatorArticleResult } from '@/lib/ingest-articles'
+import { logJobEvent } from '@/lib/jobs'
 
 // ─── Types ───
 
@@ -59,11 +60,6 @@ interface Stage2Selection {
   score: number
   rationale: string
   key_quote: string
-}
-
-interface Stage2Result {
-  selected: Stage2Selection[]
-  rejected: { creator_id: string; reason: string }[]
 }
 
 interface PrequalifyResult {
@@ -316,7 +312,8 @@ async function applyPrompt(name: string, inputData: Record<string, string>, retu
 
 export async function aiNarrowCreators(
   transcriptResults: CreatorTranscriptResult[],
-  campaignContext: CampaignContext
+  campaignContext: CampaignContext,
+  opts?: { jobId?: string; campaignId?: string }
 ): Promise<{ selected: Stage2Selection[]; allStage1Scores: Stage1Score[] }> {
   // ── Stage 1: Batch score ──
   const allStage1Scores: Stage1Score[] = []
@@ -382,69 +379,102 @@ export async function aiNarrowCreators(
     console.log(`[prequalify] Stage 1 batch ${Math.floor(i / 10) + 1}/${Math.ceil(transcriptResults.length / 10)} scored`)
   }
 
-  // ── Stage 2: Rank top 40 → pick 20 ──
-  allStage1Scores.sort((a, b) => b.score - a.score)
-  const top20Ids = new Set(allStage1Scores.slice(0, 40).map(s => s.creator_id))
-  const top20Results = transcriptResults.filter(r => top20Ids.has(r.creatorId))
+  // ── Stage 2: per-creator deep ranking ──
+  // One LLM call per candidate, run with concurrency cap. The previous "send all 40
+  // in one prompt" approach exceeded the model's 272k input-token limit on transcript-
+  // heavy campaigns and silently fell back to Stage 1 results. Per-creator calls scale
+  // cleanly and let the model see each creator's full content within the per-call budget.
+  const STAGE2_MAX_CHARS_PER_CREATOR = 50_000
+  const STAGE2_CONCURRENCY = 5
 
-  const candidatesBlock = top20Results.map(cr => {
+  allStage1Scores.sort((a, b) => b.score - a.score)
+  const top40Ids = new Set(allStage1Scores.slice(0, 40).map(s => s.creator_id))
+  const top40Results = transcriptResults.filter(r => top40Ids.has(r.creatorId))
+
+  async function rankOneCreator(cr: CreatorTranscriptResult): Promise<Stage2Selection | null> {
     const stage1 = allStage1Scores.find(s => s.creator_id === cr.creatorId)
     const followersStr = cr.followerCount ? `${cr.followerCount} followers` : 'unknown followers'
     const topicsStr = (cr.topics || []).join(', ')
-    const transcriptText = cr.transcript?.fullText || '(no transcript)'
+    const fullText = cr.transcript?.fullText || '(no transcript)'
+    const transcriptText = fullText.length > STAGE2_MAX_CHARS_PER_CREATOR
+      ? fullText.slice(0, STAGE2_MAX_CHARS_PER_CREATOR) + `\n…[truncated ${fullText.length - STAGE2_MAX_CHARS_PER_CREATOR} chars]`
+      : fullText
 
-    return `--- ${cr.creatorName} (id: ${cr.creatorId}) | ${followersStr} | Topics: ${topicsStr} | Stage 1 score: ${stage1?.score ?? 0} ---
-${transcriptText}
----`
-  }).join('\n\n')
+    try {
+      const raw = await applyPrompt('prequalify_stage2', {
+        campaign_brief: campaignContext.brief,
+        campaign_topics: campaignContext.topics.join(', '),
+        creator_name: cr.creatorName,
+        creator_id: cr.creatorId,
+        followers: followersStr,
+        topics: topicsStr,
+        stage1_score: String(stage1?.score ?? 0),
+        transcript: transcriptText,
+      }, 'raw_text') as string
 
-  try {
-    const raw = await applyPrompt('prequalify_stage2', {
-      campaign_brief: campaignContext.brief,
-      campaign_topics: campaignContext.topics.join(', '),
-      candidates_block: candidatesBlock,
-      candidate_count: String(top20Results.length),
-    }, 'raw_text') as string
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const parsed = parseJsonFromResponse<{ score: number; rationale: string; key_quote: string }>(cleaned)
+      if (!parsed || typeof parsed.score !== 'number') return null
 
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const result = parseJsonFromResponse<Stage2Result>(cleaned)
-    if (result?.selected && result.selected.length > 0) {
-      // Fix garbled IDs from Stage 2
-      for (const sel of result.selected) {
-        if (!transcriptResults.some(t => t.creatorId === sel.creator_id)) {
-          const byPrefix = top20Results.find(r => r.creatorId.startsWith(sel.creator_id))
-          if (byPrefix) {
-            console.log(`[prequalify] Stage 2 fixed truncated ID: "${sel.creator_id}" → ${byPrefix.creatorId} (${byPrefix.creatorName})`)
-            sel.creator_id = byPrefix.creatorId
-          } else {
-            const byName = top20Results.find(r =>
-              sel.creator_id.toLowerCase().includes(r.creatorName.toLowerCase()) ||
-              r.creatorName.toLowerCase().includes(sel.creator_id.toLowerCase())
-            )
-            if (byName) {
-              console.log(`[prequalify] Stage 2 fixed garbled ID: "${sel.creator_id}" → ${byName.creatorId} (${byName.creatorName})`)
-              sel.creator_id = byName.creatorId
-            }
-          }
-        }
+      return {
+        creator_id: cr.creatorId,
+        rank: 0, // assigned after global sort
+        score: parsed.score,
+        rationale: parsed.rationale || '',
+        key_quote: parsed.key_quote || '',
       }
-      console.log(`[prequalify] Stage 2 selected ${result.selected.length} creators`)
-      return { selected: result.selected, allStage1Scores }
+    } catch (e) {
+      console.error(`[prequalify] Stage 2 failed for ${cr.creatorName}:`, e)
+      if (opts?.jobId) {
+        await logJobEvent(opts.jobId, 'warn',
+          `Stage 2 call failed for ${cr.creatorName}`,
+          { campaign_id: opts.campaignId ?? null, creator_id: cr.creatorId, error: (e as Error)?.message ?? String(e) })
+      }
+      return null
     }
-  } catch (e) {
-    console.error('[prequalify] Stage 2 failed:', e)
   }
 
-  // Fallback: use Stage 1 top 20
-  console.log('[prequalify] Stage 2 failed, falling back to Stage 1 top 20')
-  const fallbackSelected = allStage1Scores.slice(0, 20).map((s, i) => ({
-    creator_id: s.creator_id,
-    rank: i + 1,
-    score: s.score,
-    rationale: s.reason,
-    key_quote: '',
-  }))
-  return { selected: fallbackSelected, allStage1Scores }
+  // Run with concurrency cap of STAGE2_CONCURRENCY
+  const stage2Results: Array<Stage2Selection | null> = []
+  for (let i = 0; i < top40Results.length; i += STAGE2_CONCURRENCY) {
+    const wave = top40Results.slice(i, i + STAGE2_CONCURRENCY)
+    const waveResults = await Promise.all(wave.map(rankOneCreator))
+    stage2Results.push(...waveResults)
+  }
+
+  const ranked = stage2Results
+    .filter((r): r is Stage2Selection => r !== null)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20)
+    .map((r, i) => ({ ...r, rank: i + 1 }))
+
+  const failureCount = stage2Results.filter(r => r === null).length
+  if (failureCount > 0 && opts?.jobId) {
+    await logJobEvent(opts.jobId, 'warn',
+      `Stage 2: ${failureCount}/${top40Results.length} per-creator calls failed; ranking proceeded with successful results`,
+      { campaign_id: opts.campaignId ?? null, failure_count: failureCount, total: top40Results.length })
+  }
+
+  if (ranked.length === 0) {
+    // Total failure — loud fallback (not silent like the old code)
+    console.log('[prequalify] Stage 2 failed for all candidates, falling back to Stage 1 top 20')
+    if (opts?.jobId) {
+      await logJobEvent(opts.jobId, 'error',
+        'Stage 2 failed for all candidates — falling back to Stage 1 top 20',
+        { campaign_id: opts.campaignId ?? null, candidate_count: top40Results.length })
+    }
+    const fallbackSelected = allStage1Scores.slice(0, 20).map((s, i) => ({
+      creator_id: s.creator_id,
+      rank: i + 1,
+      score: s.score,
+      rationale: s.reason,
+      key_quote: '',
+    }))
+    return { selected: fallbackSelected, allStage1Scores }
+  }
+
+  console.log(`[prequalify] Stage 2 ranked ${ranked.length}/${top40Results.length} creators (${failureCount} failed)`)
+  return { selected: ranked, allStage1Scores }
 }
 
 /**
@@ -673,7 +703,8 @@ export async function persistResults(
 export async function runPrequalifyPipeline(
   campaignId: string,
   userId: string,
-  campaignContext: CampaignContext
+  campaignContext: CampaignContext,
+  jobId?: string
 ): Promise<PrequalifyResult> {
   // Load discovered creators (V2: creator IS the platform presence)
   const creatorsRes = await dbQuery<{
@@ -863,7 +894,7 @@ export async function runPrequalifyPipeline(
   let selected: Stage2Selection[]
 
   try {
-    const aiResult = await aiNarrowCreators(allResults, campaignContext)
+    const aiResult = await aiNarrowCreators(allResults, campaignContext, { jobId, campaignId })
     selected = aiResult.selected
   } catch (e) {
     console.error('[prequalify] AI scoring failed, using fallback:', e)

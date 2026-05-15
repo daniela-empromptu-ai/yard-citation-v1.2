@@ -1,4 +1,22 @@
+import { v4 as uuidv4 } from 'uuid'
 import { dbQuery, t } from '@/lib/db'
+
+export async function logJobEvent(
+  jobId: string,
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  meta?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await dbQuery(
+      `INSERT INTO ${t('job_events')} (id, job_id, level, message, meta, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
+      [uuidv4(), jobId, level, message, meta ? JSON.stringify(meta) : null]
+    )
+  } catch (e) {
+    console.error('[jobs] failed to log job event:', e)
+  }
+}
 
 /**
  * Mark queued/running jobs as failed if their `updated_at` is older than the

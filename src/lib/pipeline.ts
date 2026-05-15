@@ -5,20 +5,12 @@
  */
 
 import { dbQuery, t } from '@/lib/db'
-import { v4 as uuidv4 } from 'uuid'
 import { runDiscovery, runSimilarDiscovery } from '@/lib/discovery'
 import { runPrequalifyPipeline } from '@/lib/prequalify'
 import { scoreCreator } from '@/lib/score-creator'
+import { logJobEvent } from '@/lib/jobs'
 
 // ─── Job Helpers ───
-
-async function logJobEvent(jobId: string, level: string, message: string, meta?: Record<string, unknown>) {
-  await dbQuery(
-    `INSERT INTO ${t('job_events')} (id, job_id, level, message, meta, created_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
-    [uuidv4(), jobId, level, message, meta ? JSON.stringify(meta) : null]
-  )
-}
 
 async function updateJobStatus(jobId: string, status: string, errorMessage?: string) {
   const fields = [`status=$1`, `updated_at=now()`]
@@ -164,7 +156,7 @@ export async function runSurfaceMorePipeline(
       const prequalResult = await runPrequalifyPipeline(campaignId, userId, {
         brief: campRes.data[0]?.creative_brief || '',
         topics: topicsRes.data.map(r => r.topic),
-      })
+      }, jobId)
       await logJobEvent(jobId, 'info', `Pre-qualification complete: ${prequalResult.selected_count} selected from ${prequalResult.total_discovered}`)
     } catch (e) {
       await logJobEvent(jobId, 'warn', `Pre-qualification failed: ${(e as Error).message} — continuing to scoring`)
@@ -238,7 +230,7 @@ export async function runFullPipeline(campaignId: string, userId: string, jobId:
       const prequalResult = await runPrequalifyPipeline(campaignId, userId, {
         brief: campRes.data[0]?.creative_brief || '',
         topics: topicsRes.data.map(r => r.topic),
-      })
+      }, jobId)
       await logJobEvent(jobId, 'info', `Pre-qualification complete: ${prequalResult.selected_count} selected from ${prequalResult.total_discovered}`, {
         ...prequalResult,
         selected_creators: undefined,
